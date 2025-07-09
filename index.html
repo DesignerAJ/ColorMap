@@ -11,9 +11,34 @@
 </head>
 
 <body>
+    <div id='country-selector-container'>
+        <div class="control-group">
+            <label for="country-select">국가</label>
+            <select id="country-select"></select>
+        </div>
+
+        <div class="control-group">
+            <label for="highlight-color-picker">국가색</label>
+            <input type="color" id="highlight-color-picker" value="#FF2211">
+        </div>
+
+        <div class="control-group">
+            <label for="land-color-picker">육지색</label>
+            <input type="color" id="land-color-picker" value="#f2f2f2">
+        </div>
+
+        <div class="control-group">
+            <label for="water-color-picker">바다색</label>
+            <input type="color" id="water-color-picker" value="#a9deef">
+        </div>
+
+        <div class="control-group"> <label for="projection-select">투영법</label>
+            <select id="projection-select"></select>
+        </div>
+    </div>
     <div id='map'></div>
 
-    <script src='token.js'></script>
+    <script src='config.js'></script>
     <script src='script.js'></script>
 </body>
 

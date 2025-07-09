@@ -1,8 +1,74 @@
+/* style.css */
+
 html,
 body,
 #map {
     height: 100%;
     margin: 0;
     padding: 0;
-    /* padding이 있으면 지도가 100%를 차지하지 않을 수 있으므로 추가 */
+}
+
+#country-selector-container {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: white;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    /* 그룹들 간의 간격 */
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* 라벨과 입력 필드 사이의 간격 */
+    width: 100%;
+}
+
+/* 드롭다운 (country-select, projection-select) 공통 스타일 */
+select {
+    flex-grow: 1;
+    width: auto;
+    padding: 8px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: #fff;
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%23333" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px top 50%;
+    background-size: 16px auto;
+    cursor: pointer;
+}
+
+/* 드롭다운 내부 옵션 (country-select, projection-select) 공통 스타일 */
+select option {
+    font-size: 14px;
+    padding: 5px;
+}
+
+#country-selector-container label {
+    font-size: 14px;
+    color: #333;
+    white-space: nowrap;
+}
+
+input[type="color"] {
+    flex-shrink: 0;
+    width: 50px;
+    height: 30px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    background: none;
 }
