@@ -1,0 +1,8 @@
+html,
+body,
+#map {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    /* padding이 있으면 지도가 100%를 차지하지 않을 수 있으므로 추가 */
+}
