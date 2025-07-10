@@ -18,13 +18,15 @@ map.addControl(new mapboxgl.NavigationControl(), 'top-left');
 const countries = COUNTRIES_DATA;
 
 // UI 요소 가져오기
-const countrySelect = document.getElementById('country-select');
+const countrySelect1 = document.getElementById('country-select-1');
+const countrySelect2 = document.getElementById('country-select-2');
+const countrySelect3 = document.getElementById('country-select-3');
 const highlightColorPicker = document.getElementById('highlight-color-picker'); // 국가 강조색 피커
 const landColorPicker = document.getElementById('land-color-picker');       // 육지색 피커
 const waterColorPicker = document.getElementById('water-color-picker');     // 바다색 피커
 const projectionSelect = document.getElementById('projection-select');      // 투영법 선택 드롭다운
 
-let currentSelectedCountryIso = 'KOR'; // 현재 선택된 국가 ISO 코드 (초기값은 한국)
+let currentSelectedCountryIsos = []; // 현재 선택된 국가 ISO 코드 배열
 
 // 지원하는 투영법 목록 (Mapbox GL JS v2.x 기준)
 const projections = [
@@ -38,23 +40,37 @@ const projections = [
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
+// 드롭다운 리스트 채우기 함수
+function populateCountryDropdown(selectElement) {
+    // "-- 선택 없음 --" 옵션 추가
+    const defaultOption = document.createElement('option');
+    defaultOption.value = ''; // 빈 값으로 설정
+    defaultOption.textContent = '-- 선택 없음 --';
+    selectElement.appendChild(defaultOption);
 
-// 드롭다운 리스트 채우기 (국가)
-countries.forEach(country => {
-    const option = document.createElement('option');
-    option.value = country.iso;
-    option.textContent = country.name;
-    if (country.tag) {
-        option.textContent += ` ${country.tag}`;
-    }
-    if (country.tagColor) {
-        option.style.color = country.tagColor;
-    }
-    countrySelect.appendChild(option);
-});
+    countries.forEach(country => {
+        const option = document.createElement('option');
+        option.value = country.iso;
+        option.textContent = country.name;
+        if (country.tag) {
+            option.textContent += ` ${country.tag}`;
+        }
+        if (country.tagColor) {
+            option.style.color = country.tagColor;
+        }
+        selectElement.appendChild(option);
+    });
+}
 
-// 초기 선택 국가 설정 (드롭다운을 한국으로 설정)
-countrySelect.value = 'KOR';
+// 각 국가 드롭다운 채우기
+populateCountryDropdown(countrySelect1);
+populateCountryDropdown(countrySelect2);
+populateCountryDropdown(countrySelect3);
+
+// 초기 선택 국가 설정 (드롭다운을 비워둠)
+countrySelect1.value = '';
+countrySelect2.value = '';
+countrySelect3.value = '';
 
 
 // 드롭다운 리스트 채우기 (투영법)
@@ -67,6 +83,37 @@ projections.forEach(proj => {
 
 // 초기 투영법 설정 (드롭다운을 'mercator'로 설정)
 projectionSelect.value = 'mercator';
+
+// 지도 필터 및 이동 업데이트 함수
+function updateMapFilterAndFlyTo() {
+    currentSelectedCountryIsos = [
+        countrySelect1.value,
+        countrySelect2.value,
+        countrySelect3.value
+    ].filter(iso => iso !== ''); // 빈 값 필터링
+
+    if (currentSelectedCountryIsos.length > 0) {
+        map.setFilter('country-color-fill', [
+            "in",
+            "iso_3166_1_alpha_3",
+            ...currentSelectedCountryIsos
+        ]);
+
+        // 첫 번째 선택된 국가로 지도를 이동 (또는 모든 선택된 국가의 평균 중심 등으로 개선 가능)
+        const firstSelectedCountry = countries.find(c => c.iso === currentSelectedCountryIsos[0]);
+        if (firstSelectedCountry) {
+            map.flyTo({
+                center: firstSelectedCountry.center,
+                zoom: firstSelectedCountry.zoom,
+                essential: true
+            });
+        }
+    } else {
+        // 선택된 국가가 없으면 필터를 제거하여 모든 국가를 표시하지 않음
+        map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]);
+    }
+}
+
 
 map.on('load', function () {
     // 1. 국가 경계 데이터 소스 추가
@@ -117,44 +164,15 @@ map.on('load', function () {
         console.warn(`Layer with ID '${backgroundLayerId}' (background/water) not found in the map style. Check Mapbox Studio.`);
     }
 
-    // 초기 로드 시, 현재 선택된 국가(기본값: 한국)를 지도에 색칠
-    map.setFilter('country-color-fill', [
-        "in",
-        "iso_3166_1_alpha_3",
-        currentSelectedCountryIso
-    ]);
-
-    // 초기 로드 시, 선택된 국가로 지도를 이동
-    const initialCountry = countries.find(c => c.iso === currentSelectedCountryIso);
-    if (initialCountry) {
-        map.flyTo({
-            center: initialCountry.center,
-            zoom: initialCountry.zoom,
-            essential: true
-        });
-    }
+    // 초기 로드 시, 필터 및 지도 이동 업데이트
+    updateMapFilterAndFlyTo();
 
     // --- 이벤트 리스너 ---
 
     // 국가 드롭다운 변경 이벤트
-    countrySelect.addEventListener('change', function () {
-        currentSelectedCountryIso = this.value;
-
-        map.setFilter('country-color-fill', [
-            "in",
-            "iso_3166_1_alpha_3",
-            currentSelectedCountryIso
-        ]);
-
-        const selectedCountry = countries.find(country => country.iso === currentSelectedCountryIso);
-        if (selectedCountry) {
-            map.flyTo({
-                center: selectedCountry.center,
-                zoom: selectedCountry.zoom,
-                essential: true
-            });
-        }
-    });
+    countrySelect1.addEventListener('change', updateMapFilterAndFlyTo);
+    countrySelect2.addEventListener('change', updateMapFilterAndFlyTo);
+    countrySelect3.addEventListener('change', updateMapFilterAndFlyTo);
 
     // 국가 강조색 선택기 변경 이벤트
     highlightColorPicker.addEventListener('input', function () {
@@ -196,7 +214,7 @@ map.on('load', function () {
 
         // 투영법 변경 시, 지도를 선택된 국가 중심으로 다시 이동시키는 것이 좋습니다.
         // 현재 선택된 국가의 정보로 다시 flyTo를 호출합니다.
-        const selectedCountry = countries.find(country => country.iso === currentSelectedCountryIso);
+        const selectedCountry = countries.find(country => country.iso === currentSelectedCountryIsos[0]); // 첫 번째 선택된 국가
         if (selectedCountry) {
             map.flyTo({
                 center: selectedCountry.center,
@@ -213,7 +231,4 @@ map.on('load', function () {
     map.on('mouseleave', 'country-color-fill', function () {
         map.getCanvas().style.cursor = '';
     });
-
-    // 지도가 로드된 후 초기 국가 선택 이벤트를 강제로 발생시켜 초기 상태 설정
-    countrySelect.dispatchEvent(new Event('change'));
 });
