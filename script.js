@@ -72,10 +72,10 @@ populateCountryDropdown(countrySelect1);
 populateCountryDropdown(countrySelect2);
 populateCountryDropdown(countrySelect3);
 
-// 초기 선택 국가 설정 (드롭다운을 비워둠)
+// 초기 선택 국가 설정
 countrySelect1.value = 'KOR';
-countrySelect2.value = 'JPN';
-countrySelect3.value = 'CHN';
+countrySelect2.value = '';
+countrySelect3.value = '';
 
 
 // 드롭다운 리스트 채우기 (투영법)
@@ -97,31 +97,39 @@ mapStyles.forEach(style => {
     styleSelect.appendChild(option);
 });
 
-// 초기 맵 스타일 설정 (사용자의 커스텀 스타일 URL로 설정)
-// map.on('load', function () {
-//     styleSelect.value = map.getStyle().metadata['mapbox:origin']; // 현재 스타일의 원본 URL을 가져와 설정
-// });
-
-
-// 지도 필터 및 이동 업데이트 함수
-function updateMapFilterAndFlyTo() {
+// 지도 색상 및 필터 업데이트 함수
+function updateMapPaintAndFilter() {
     const selectedCountry1 = countrySelect1.value;
     const selectedCountry2 = countrySelect2.value;
     const selectedCountry3 = countrySelect3.value;
+    const currentStyleValue = styleSelect.value; // 현재 선택된 스타일 값 가져오기
 
     // Mapbox 'match' 표현식을 사용하여 단일 레이어의 색상 업데이트
     if (map.getLayer('country-color-fill')) {
-        map.setPaintProperty('country-color-fill', 'fill-color', [
-            'match',
-            ['get', 'iso_3166_1_alpha_3'],
-            selectedCountry1, highlightColorPicker1.value,
-            selectedCountry2, highlightColorPicker2.value,
-            selectedCountry3, highlightColorPicker3.value,
-            'rgba(0, 0, 0, 0)' // 기본값 (투명)
-        ]);
+        const paintExpression = ['match', ['get', 'iso_3166_1_alpha_3']];
+        currentSelectedCountryIsos = [];
+
+        if (selectedCountry1) {
+            paintExpression.push(selectedCountry1, highlightColorPicker1.value);
+            currentSelectedCountryIsos.push(selectedCountry1);
+        }
+        if (selectedCountry2) {
+            paintExpression.push(selectedCountry2, highlightColorPicker2.value);
+            currentSelectedCountryIsos.push(selectedCountry2);
+        }
+        if (selectedCountry3) {
+            paintExpression.push(selectedCountry3, highlightColorPicker3.value);
+            currentSelectedCountryIsos.push(selectedCountry3);
+        }
+        paintExpression.push('rgba(0, 0, 0, 0)'); // 기본값 (투명)
+
+        map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
+
+        // fill-opacity를 스타일이 '위성'일 때 0.5, 그 외에는 0.4로 설정
+        const newOpacity = (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') ? 0.4 : 1;
+        map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
 
         // 필터는 모든 선택된 국가를 포함하도록 업데이트
-        currentSelectedCountryIsos = [selectedCountry1, selectedCountry2, selectedCountry3].filter(iso => iso !== '');
         if (currentSelectedCountryIsos.length > 0) {
             map.setFilter('country-color-fill', [
                 "in",
@@ -132,14 +140,47 @@ function updateMapFilterAndFlyTo() {
             map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]); // 선택된 국가가 없으면 숨김
         }
     }
+}
 
-    // 첫 번째 선택된 국가로 지도를 이동
+// 선택된 국가들의 위치 중간값으로 이동 및 줌 조정 함수
+function flyToSelectedCountries() {
     if (currentSelectedCountryIsos.length > 0) {
-        const firstSelectedCountry = countries.find(c => c.iso === currentSelectedCountryIsos[0]);
-        if (firstSelectedCountry) {
+        let totalLat = 0;
+        let totalLng = 0;
+        let count = 0;
+        let minZoom = Infinity; // 가장 작은 줌 레벨 (가장 넓은 범위)
+
+        currentSelectedCountryIsos.forEach(iso => {
+            const country = countries.find(c => c.iso === iso);
+            if (country && country.center) {
+                totalLng += country.center[0];
+                totalLat += country.center[1];
+                count++;
+                if (country.zoom < minZoom) {
+                    minZoom = country.zoom;
+                }
+            }
+        });
+
+        if (count > 0) {
+            const avgLng = totalLng / count;
+            const avgLat = totalLat / count;
+            const newCenter = [avgLng, avgLat];
+
+            let newZoom = 4; // 기본 줌 레벨
+            if (count === 1) {
+                const selectedCountry = countries.find(c => c.iso === currentSelectedCountryIsos[0]);
+                if (selectedCountry) {
+                    newZoom = selectedCountry.zoom; // 단일 국가일 경우 해당 국가의 줌 레벨 사용
+                }
+            } else {
+                // 여러 국가일 경우, 가장 작은 줌 레벨을 기준으로 약간 더 축소
+                newZoom = Math.max(minZoom - 1, 2); // 최소 줌 레벨은 2로 제한
+            }
+
             map.flyTo({
-                center: firstSelectedCountry.center,
-                zoom: firstSelectedCountry.zoom,
+                center: newCenter,
+                zoom: newZoom,
                 essential: true
             });
         }
@@ -162,22 +203,15 @@ map.on('load', function () {
             'source-layer': 'country_boundaries',
             type: 'fill',
             paint: {
-                'fill-color': [
-                    'match',
-                    ['get', 'iso_3166_1_alpha_3'],
-                    countrySelect1.value, highlightColorPicker1.value,
-                    countrySelect2.value, highlightColorPicker2.value,
-                    countrySelect3.value, highlightColorPicker3.value,
-                    'rgba(0, 0, 0, 0)' // 기본값 (투명)
-                ],
-                'fill-opacity': 0.4,
+                'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
+                'fill-opacity': 0.4, // 초기값 0.4로 설정
             },
         },
         'water' // 'water' 레이어 아래에 삽입
     );
 
-    // 3. 육지색 변경을 위한 레이어 설정 ('base' 레이어)
-    const landLayerId = 'landColor'; // 사용자의 요청에 따라 'base'로 설정. 실제 ID를 확인하세요!
+    // 3. 육지색 변경을 위한 레이어 설정
+    const landLayerId = 'landColor';
 
     if (map.getLayer(landLayerId)) {
         const layerType = map.getLayer(landLayerId).type;
@@ -190,8 +224,8 @@ map.on('load', function () {
         console.warn(`Layer with ID '${landLayerId}' (land) not found in the map style. Check Mapbox Studio.`);
     }
 
-    // 4. 바다색 변경을 위한 레이어 설정 ('background' 레이어)
-    const backgroundLayerId = 'baseColor'; // 사용자가 확인해준 바다색 레이어 ID
+    // 4. 바다색 변경을 위한 레이어 설정
+    const backgroundLayerId = 'baseColor';
 
     if (map.getLayer(backgroundLayerId)) {
         if (map.getLayer(backgroundLayerId).type === 'background') {
@@ -204,19 +238,29 @@ map.on('load', function () {
     }
 
     // 초기 로드 시, 필터 및 지도 이동 업데이트
-    updateMapFilterAndFlyTo();
+    updateMapPaintAndFilter(); // 이름 변경
+    flyToSelectedCountries(); // 새로 추가
 
     // --- 이벤트 리스너 ---
 
     // 국가 드롭다운 변경 이벤트
-    countrySelect1.addEventListener('change', updateMapFilterAndFlyTo);
-    countrySelect2.addEventListener('change', updateMapFilterAndFlyTo);
-    countrySelect3.addEventListener('change', updateMapFilterAndFlyTo);
+    countrySelect1.addEventListener('change', function () {
+        updateMapPaintAndFilter();
+        flyToSelectedCountries();
+    });
+    countrySelect2.addEventListener('change', function () {
+        updateMapPaintAndFilter();
+        flyToSelectedCountries();
+    });
+    countrySelect3.addEventListener('change', function () {
+        updateMapPaintAndFilter();
+        flyToSelectedCountries();
+    });
 
     // 국가 강조색 선택기 변경 이벤트
-    highlightColorPicker1.addEventListener('input', updateMapFilterAndFlyTo);
-    highlightColorPicker2.addEventListener('input', updateMapFilterAndFlyTo);
-    highlightColorPicker3.addEventListener('input', updateMapFilterAndFlyTo);
+    highlightColorPicker1.addEventListener('input', updateMapPaintAndFilter);
+    highlightColorPicker2.addEventListener('input', updateMapPaintAndFilter);
+    highlightColorPicker3.addEventListener('input', updateMapPaintAndFilter);
 
     // 육지색 선택기 변경 이벤트
     landColorPicker.addEventListener('input', function () {
@@ -250,14 +294,7 @@ map.on('load', function () {
 
         // 투영법 변경 시, 지도를 선택된 국가 중심으로 다시 이동시키는 것이 좋습니다.
         // 현재 선택된 국가의 정보로 다시 flyTo를 호출합니다.
-        const selectedCountry = countries.find(country => country.iso === currentSelectedCountryIsos[0]); // 첫 번째 선택된 국가
-        if (selectedCountry) {
-            map.flyTo({
-                center: selectedCountry.center,
-                zoom: selectedCountry.zoom,
-                essential: true
-            });
-        }
+        flyToSelectedCountries(); // 변경
     });
 
     // 맵 스타일 선택 드롭다운 변경 이벤트
@@ -282,15 +319,8 @@ map.on('load', function () {
                 'source-layer': 'country_boundaries',
                 type: 'fill',
                 paint: {
-                    'fill-color': [
-                        'match',
-                        ['get', 'iso_3166_1_alpha_3'],
-                        countrySelect1.value, highlightColorPicker1.value,
-                        countrySelect2.value, highlightColorPicker2.value,
-                        countrySelect3.value, highlightColorPicker3.value,
-                        'rgba(0, 0, 0, 0)' // 기본값 (투명)
-                    ],
-                    'fill-opacity': 0.4,
+                    'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
+                    'fill-opacity': 1, // 초기값 0.4로 설정
                 },
             },
             'water' // 'water' 레이어 아래에 삽입
@@ -314,7 +344,9 @@ map.on('load', function () {
             }
         }
 
-        updateMapFilterAndFlyTo(); // 필터 및 지도 이동 업데이트
+        // 필터 및 지도 이동 업데이트
+        updateMapPaintAndFilter(); // 레이어 추가 후 색상 및 필터 적용
+        flyToSelectedCountries(); // 지도 이동
     });
 
 });

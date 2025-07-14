@@ -3,30 +3,34 @@
 html,
 body,
 #map {
+    font-family: "Nanum Gothic Coding", monospace;
+    font-weight: 400;
     height: 100%;
     margin: 0;
     padding: 0;
 }
 
 #country-selector-container {
+    font-weight: 700;
+    font-size: 20px;
     position: absolute;
     top: 10px;
     right: 10px;
     background-color: white;
-    padding: 10px;
-    border-radius: 5px;
+    padding: 14px;
+    border-radius: 8px;
     z-index: 10;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
     /* 그룹들 간의 간격 */
 }
 
 .control-group {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     /* 라벨과 입력 필드 사이의 간격 */
     width: 100%;
 }
@@ -38,7 +42,7 @@ select {
     padding: 8px;
     font-size: 16px;
     border: 1px solid #ccc;
-    border-radius: 4px;
+    border-radius: 6px;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
@@ -52,24 +56,25 @@ select {
 
 /* 드롭다운 내부 옵션 (country-select, projection-select) 공통 스타일 */
 select option {
-    font-size: 14px;
+    font-weight: 400;
+    font-size: 16px;
     padding: 5px;
 }
 
 #country-selector-container label {
-    font-size: 14px;
+    font-size: 16px;
     color: #333;
     white-space: nowrap;
 }
 
 input[type="color"] {
     flex-shrink: 0;
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 34px;
     border: 1px solid #ccc;
     border-radius: 4px;
     cursor: pointer;
-    padding: 1;
+    padding: 1px;
     background: none;
 }
 
