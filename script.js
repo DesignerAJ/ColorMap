@@ -24,10 +24,16 @@ const countrySelect3 = document.getElementById('country-select-3');
 const highlightColorPicker1 = document.getElementById('highlight-color-picker-1'); // 국가 강조색 피커
 const highlightColorPicker2 = document.getElementById('highlight-color-picker-2'); // 국가 강조색 피커
 const highlightColorPicker3 = document.getElementById('highlight-color-picker-3'); // 국가 강조색 피커
-const landColorPicker = document.getElementById('land-color-picker');       // 육지색 피커
-const waterColorPicker = document.getElementById('water-color-picker');     // 바다색 피커
-const projectionSelect = document.getElementById('projection-select');      // 투영법 선택 드롭다운
-const styleSelect = document.getElementById('style-select');                // 맵 스타일 선택 드롭다운
+const borderColorPicker = document.getElementById('border-color-picker');       // 국경 색상 피커
+const adminColorPicker = document.getElementById('admin-color-picker');         // 행정구역 색상 피커
+const landColorPicker = document.getElementById('land-color-picker');           // 육지색 피커
+const waterColorPicker = document.getElementById('water-color-picker');         // 바다색 피커
+const projectionSelect = document.getElementById('projection-select');          // 투영법 선택 드롭다운
+const styleSelect = document.getElementById('style-select');                    // 맵 스타일 선택 드롭다운
+
+// 육지/바다 색상 UI 그룹
+const landColorGroup = document.getElementById('land-color-group');
+const waterColorGroup = document.getElementById('water-color-group');
 
 let currentSelectedCountryIsos = []; // 현재 선택된 국가 ISO 코드 배열
 
@@ -97,6 +103,27 @@ mapStyles.forEach(style => {
     styleSelect.appendChild(option);
 });
 
+// 육지/바다 색상 UI 가시성 제어 함수
+function handleColorUIVisibility() {
+    const currentStyleValue = styleSelect.value;
+    const isDefaultStyle = (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf');
+
+    if (landColorGroup) {
+        if (isDefaultStyle) {
+            landColorGroup.classList.remove('hidden');
+        } else {
+            landColorGroup.classList.add('hidden');
+        }
+    }
+    if (waterColorGroup) {
+        if (isDefaultStyle) {
+            waterColorGroup.classList.remove('hidden');
+        } else {
+            waterColorGroup.classList.add('hidden');
+        }
+    }
+}
+
 // 지도 색상 및 필터 업데이트 함수
 function updateMapPaintAndFilter() {
     const selectedCountry1 = countrySelect1.value;
@@ -125,9 +152,19 @@ function updateMapPaintAndFilter() {
 
         map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
 
-        // fill-opacity를 스타일이 '위성'일 때 0.5, 그 외에는 0.4로 설정
-        const newOpacity = (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') ? 0.4 : 1;
+        // fill-opacity를 스타일이 '위성'일 때 0.5, 그 외에는 1로 설정
+        const newOpacity = (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') ? 0.5 : 1;
         map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
+
+        // 국경 색상 업데이트
+        if (map.getLayer('country-border')) {
+            map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
+        }
+
+        // 행정구역 색상 업데이트
+        if (map.getLayer('admin-boundaries')) {
+            map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
+        }
 
         // 필터는 모든 선택된 국가를 포함하도록 업데이트
         if (currentSelectedCountryIsos.length > 0) {
@@ -210,7 +247,13 @@ map.on('load', function () {
         'water' // 'water' 레이어 아래에 삽입
     );
 
-    // 3. 육지색 변경을 위한 레이어 설정
+    // 3. 행정구역 데이터 소스 추가 (kor_adm1.json 데이터 아직 불확실 추후 업데이트)
+    // map.addSource('kor-adm1', {
+    //     type: 'geojson',
+    //     data: 'data/kor_adm1.json' // 로컬 GeoJSON 파일 경로
+    // });
+
+    // 4. 육지색 변경을 위한 레이어 설정
     const landLayerId = 'landColor';
 
     if (map.getLayer(landLayerId)) {
@@ -224,7 +267,7 @@ map.on('load', function () {
         console.warn(`Layer with ID '${landLayerId}' (land) not found in the map style. Check Mapbox Studio.`);
     }
 
-    // 4. 바다색 변경을 위한 레이어 설정
+    // 5. 바다색 변경을 위한 레이어 설정
     const backgroundLayerId = 'baseColor';
 
     if (map.getLayer(backgroundLayerId)) {
@@ -238,8 +281,9 @@ map.on('load', function () {
     }
 
     // 초기 로드 시, 필터 및 지도 이동 업데이트
-    updateMapPaintAndFilter(); // 이름 변경
-    flyToSelectedCountries(); // 새로 추가
+    updateMapPaintAndFilter();
+    flyToSelectedCountries();
+    handleColorUIVisibility(); // 초기 UI 가시성 설정
 
     // --- 이벤트 리스너 ---
 
@@ -262,6 +306,12 @@ map.on('load', function () {
     highlightColorPicker2.addEventListener('input', updateMapPaintAndFilter);
     highlightColorPicker3.addEventListener('input', updateMapPaintAndFilter);
 
+    // 국경 색상 선택기 변경 이벤트
+    borderColorPicker.addEventListener('input', updateMapPaintAndFilter);
+
+    // 행정구역 색상 선택기 변경 이벤트
+    adminColorPicker.addEventListener('input', updateMapPaintAndFilter);
+
     // 육지색 선택기 변경 이벤트
     landColorPicker.addEventListener('input', function () {
         const newColor = this.value;
@@ -281,8 +331,6 @@ map.on('load', function () {
         if (map.getLayer(backgroundLayerId)) {
             if (map.getLayer(backgroundLayerId).type === 'background') {
                 map.setPaintProperty(backgroundLayerId, 'background-color', newColor);
-            } else {
-                console.warn(`Layer with ID '${backgroundLayerId}' is not of 'background' type. Cannot set 'background-color'.`);
             }
         }
     });
@@ -294,13 +342,14 @@ map.on('load', function () {
 
         // 투영법 변경 시, 지도를 선택된 국가 중심으로 다시 이동시키는 것이 좋습니다.
         // 현재 선택된 국가의 정보로 다시 flyTo를 호출합니다.
-        flyToSelectedCountries(); // 변경
+        flyToSelectedCountries();
     });
 
     // 맵 스타일 선택 드롭다운 변경 이벤트
     styleSelect.addEventListener('change', function () {
         const newStyle = this.value;
         map.setStyle(newStyle);
+        handleColorUIVisibility(); // 스타일 변경 시 UI 가시성 업데이트
     });
 
     // 스타일이 변경될 때마다 레이어를 다시 추가하고 필터를 업데이트
@@ -320,7 +369,7 @@ map.on('load', function () {
                 type: 'fill',
                 paint: {
                     'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
-                    'fill-opacity': 1, // 초기값 0.4로 설정
+                    'fill-opacity': 0.4, // 초기값 0.4로 설정
                 },
             },
             'water' // 'water' 레이어 아래에 삽입
@@ -347,6 +396,7 @@ map.on('load', function () {
         // 필터 및 지도 이동 업데이트
         updateMapPaintAndFilter(); // 레이어 추가 후 색상 및 필터 적용
         flyToSelectedCountries(); // 지도 이동
+        handleColorUIVisibility(); // 스타일 변경 시 UI 가시성 업데이트
     });
 
 });
