@@ -16,50 +16,60 @@
 
 <body>
     <div id='country-selector-container'>
-        <div class="control-group">
-            <label for="country-select-1">국가1</label>
-            <input type="color" id="highlight-color-picker-1" value="#2eca89">
-            <select id="country-select-1"></select>
+        <div class="control-group-box" id="county-addminus-group">
+            <div class="control-group">
+                <label for="country-select-1">국가1</label>
+                <input type="color" id="highlight-color-picker-1" value="#2eca89">
+                <select id="country-select-1"></select>
+            </div>
+
+            <div class="control-group hidden" id="country-group-2">
+                <label for="country-select-2">국가2</label>
+                <input type="color" id="highlight-color-picker-2" value="#29dff2">
+                <select id="country-select-2"></select>
+            </div>
+
+            <div class="control-group hidden" id="country-group-3">
+                <label for="country-select-3">국가3</label>
+                <input type="color" id="highlight-color-picker-3" value="#fcec26">
+                <select id="country-select-3"></select>
+            </div>
+
+            <div class="control-group" id="country-buttons">
+                <button id="add-country">＋ <span class="max-text">(MAX: 3)</span></button>
+                <button id="remove-country">－</button>
+            </div>
         </div>
 
-        <div class="control-group">
-            <label for="country-select-2">국가2</label>
-            <input type="color" id="highlight-color-picker-2" value="#29dff2">
-            <select id="country-select-2"></select>
+        <div class="control-group-box horizontal-group">
+            <div class="control-group">
+                <label for="border-color-picker">국경선</label>
+                <input type="color" id="border-color-picker" value="#ffffff">
+            </div>
+
+            <div class="control-group">
+                <label for="admin-color-picker">행정구역선</label>
+                <input type="color" id="admin-color-picker" value="#ededed">
+            </div>
         </div>
 
-        <div class="control-group">
-            <label for="country-select-3">국가3</label>
-            <input type="color" id="highlight-color-picker-3" value="#fcec26">
-            <select id="country-select-3"></select>
+        <div class="control-group-box horizontal-group" id="landwater-color-group">
+            <div class="control-group" id="land-color-group">
+                <label for="land-color-picker">육지색</label>
+                <input type="color" id="land-color-picker" value="#8896a1">
+            </div>
+            <div class="control-group" id="water-color-group">
+                <label for="water-color-picker">바다색</label>
+                <input type="color" id="water-color-picker" value="#172c4d">
+            </div>
         </div>
 
-        <div class="control-group">
-            <label for="border-color-picker">국경선</label>
-            <input type="color" id="border-color-picker" value="#ffffff">
-        </div>
-
-        <div class="control-group">
-            <label for="admin-color-picker">행정구역선</label>
-            <input type="color" id="admin-color-picker" value="#ededed">
-        </div>
-
-        <div class="control-group" id="land-color-group">
-            <label for="land-color-picker">육 지</label>
-            <input type="color" id="land-color-picker" value="#8896a1">
-        </div>
-
-        <div class="control-group" id="water-color-group">
-            <label for="water-color-picker">바 다</label>
-            <input type="color" id="water-color-picker" value="#172c4d">
-        </div>
-
-        <div class="control-group"> <label for="projection-select">투 영</label>
-            <select id="projection-select"></select>
-        </div>
-        <div class="control-group">
-            <label for="style-select">타 입</label>
-            <select id="style-select"></select>
+        <div class="control-group-box horizontal-group">
+            <div class="control-group">
+                <label for="style-select">스타일</label>
+                <select id="style-select"></select>
+                <select id="projection-select"></select>
+            </div>
         </div>
     </div>
     <div id='map'></div>

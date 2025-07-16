@@ -17,14 +17,49 @@ body,
     top: 10px;
     right: 10px;
     background-color: white;
-    padding: 14px;
-    border-radius: 8px;
+    padding: 10px;
+    border-radius: 10px;
     z-index: 10;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    /* 그룹들 간의 간격 */
+    gap: 8px;
+    /* 그룹 박스들 간의 간격 */
+    max-height: 600px;
+    /* 충분히 큰 값으로 설정 */
+    overflow: hidden;
+}
+
+#county-addminus-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    /* control-group 내부 간격 */
+}
+
+.control-group-box {
+    border: 1px solid #f0f0f0;
+    border-radius: 6px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+    background-color: #f7f7f7;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    /* control-group 내부 간격 */
+    max-height: 600px;
+    /* 충분히 큰 값으로 설정 */
+    overflow: hidden;
+    transition: max-height 0.2s ease-in-out, opacity 0.2s ease-in-out, padding 0.2s ease-in-out, border 0.2s ease-in-out, margin 0.2s ease-in-out;
+}
+
+.control-group-box.horizontal-group {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 10px;
+    /* 가로 그룹 내 control-group 간격 */
 }
 
 .control-group {
@@ -32,7 +67,9 @@ body,
     align-items: center;
     gap: 6px;
     /* 라벨과 입력 필드 사이의 간격 */
-    width: 100%;
+    flex-grow: 1;
+    /* 가로 그룹에서 공간을 균등하게 차지하도록 */
+    transition: max-height 0.2s ease-in-out, opacity 0.2s ease-in-out, padding 0.2s ease-in-out, border 0.2s ease-in-out, margin 0.2s ease-in-out;
 }
 
 /* 드롭다운 (country-select, projection-select) 공통 스타일 */
@@ -41,7 +78,7 @@ select {
     width: auto;
     padding: 8px;
     font-size: 16px;
-    border: 1px solid #ccc;
+    border: 1px solid #dbdbdb;
     border-radius: 6px;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -67,16 +104,45 @@ select option {
     white-space: nowrap;
 }
 
-input[type="color"] {
-    flex-shrink: 0;
-    width: 32px;
-    height: 34px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    cursor: pointer;
-    padding: 1px;
+input[type="color"]:first-child {
+    padding: 0;
+    margin: 0;
+    border: none;
+    box-shadow: none;
     background: none;
 }
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 1px;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    height: 20px;
+    width: 20px;
+    border: none;
+    border-radius: 10px;
+}
+
+input[type="color"]:nth-child(2) {
+    padding: 0;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    border-radius: 100px;
+    cursor: pointer;
+    background: #b9b9b9;
+    outline: none;
+}
+
+input[type="color" i] {
+    border-radius: 100px;
+    border: none;
+    height: 22px;
+    width: 22px;
+    cursor: pointer;
+    display: block;
+}
+
 
 /* 줌 컨트롤 크기 조절 */
 .mapboxgl-ctrl-group button {
@@ -86,5 +152,73 @@ input[type="color"] {
 
 /* 숨김 클래스 */
 .hidden {
-    display: none !important;
+    max-height: 0 !important;
+    opacity: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border: 0 !important;
+    margin-top: -8px !important;
+    /* county-addminus-group의 gap 상쇄 */
+    overflow: hidden !important;
+    /* 내용 잘리도록 */
+}
+
+/* +,- 버튼 스타일 */
+#country-buttons {
+    display: flex;
+    gap: 6px;
+    /* 버튼 사이의 간격 */
+}
+
+#add-country,
+#remove-country {
+    flex-grow: 1;
+    width: 49%;
+    height: 36px;
+    font-size: 20px;
+    /* 폰트 크기 조정 */
+    font-weight: 700;
+    line-height: 0;
+    color: white;
+    background-color: #7e98b4;
+    border: none;
+    border-radius: 4px;
+    /* 둥근 네모형 디자인 */
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    transition: transform 0.1s ease-in-out;
+    /* 클릭 시 부드러운 전환 효과 */
+}
+
+#add-country:hover {
+    background-color: #0a69cf;
+}
+
+#remove-country:hover {
+    background-color: #9c0f1e;
+}
+
+#add-country:active,
+#remove-country:active {
+    transform: scale(0.9);
+    /* 클릭 시 90%로 작아짐 */
+}
+
+/* 비활성화된 버튼 스타일 */
+#add-country:disabled,
+#remove-country:disabled {
+    background-color: #cccccc;
+    /* 비활성화 색상 */
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.max-text {
+    font-size: 12px;
+    font-weight: 400;
+    margin-left: 6px;
+    opacity: 0.8;
 }
