@@ -38,16 +38,16 @@ const waterColorGroup = document.getElementById('water-color-group');
 let currentSelectedCountryIsos = []; // 현재 선택된 국가 ISO 코드 배열
 
 const projections = [
-    { name: '메르카토르 (기본)', value: 'mercator' },
-    { name: '구형 지구 (3D)', value: 'globe' },
-    { name: '내추럴어스', value: 'naturalEarth' }
+    { name: '메르카토르', value: 'mercator' },
+    { name: '구형 지구', value: 'globe' },
+    { name: '내추럴', value: 'naturalEarth' }
     // 필요에 따라 다른 지원되는 투영법을 추가할 수 있습니다.
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
 const mapStyles = [
     { name: '기본', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
-    { name: '표준', value: 'mapbox://styles/mapbox/standard' },
+    { name: '지형', value: 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw' },
     { name: '위성', value: 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5' }
 ];
 
@@ -152,8 +152,17 @@ function updateMapPaintAndFilter() {
 
         map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
 
-        // fill-opacity를 스타일이 '위성'일 때 0.5, 그 외에는 1로 설정
-        const newOpacity = (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') ? 0.5 : 1;
+        // fill-opacity를 스타일이 '기본': 1, '지형': 0.4, '위성': 0.5으로 설정
+        let newOpacity;
+        if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 기본
+            newOpacity = 1;
+        } else if (currentStyleValue === 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw') { // 지형
+            newOpacity = 0.4;
+        } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') { // 위성
+            newOpacity = 0.5;
+        } else {
+            newOpacity = 1; // 기본값
+        }
         map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
 
         // 국경 색상 업데이트
@@ -247,13 +256,7 @@ map.on('load', function () {
         'water' // 'water' 레이어 아래에 삽입
     );
 
-    // 3. 행정구역 데이터 소스 추가 (kor_adm1.json 데이터 아직 불확실 추후 업데이트)
-    // map.addSource('kor-adm1', {
-    //     type: 'geojson',
-    //     data: 'data/kor_adm1.json' // 로컬 GeoJSON 파일 경로
-    // });
-
-    // 4. 육지색 변경을 위한 레이어 설정
+    // 3. 육지색 변경을 위한 레이어 설정
     const landLayerId = 'landColor';
 
     if (map.getLayer(landLayerId)) {
@@ -267,7 +270,7 @@ map.on('load', function () {
         console.warn(`Layer with ID '${landLayerId}' (land) not found in the map style. Check Mapbox Studio.`);
     }
 
-    // 5. 바다색 변경을 위한 레이어 설정
+    // 4. 바다색 변경을 위한 레이어 설정
     const backgroundLayerId = 'baseColor';
 
     if (map.getLayer(backgroundLayerId)) {
