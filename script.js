@@ -116,6 +116,34 @@ function updateCountryGroupVisibility() {
 
     updateMapPaintAndFilter(); // UI 변경 후 지도 업데이트
     flyToSelectedCountries(); // UI 변경 후 지도 이동
+    updateDropdownOptions(); // 드롭다운 옵션 업데이트
+}
+
+// 드롭다운 옵션 업데이트 함수
+function updateDropdownOptions() {
+    const allSelects = [countrySelect1, countrySelect2, countrySelect3];
+    const selectedValues = allSelects.map(select => select.value).filter(value => value !== '');
+
+    allSelects.forEach(selectElement => {
+        Array.from(selectElement.options).forEach(option => {
+            if (option.value === '') {
+                option.disabled = false; // "-- 선택 없음 --" 옵션은 항상 활성화
+                option.style.textDecoration = 'none';
+                return;
+            }
+
+            // 현재 드롭다운의 선택된 값은 제외하고 다른 드롭다운에서 선택된 값인지 확인
+            const isSelectedInOtherDropdown = selectedValues.includes(option.value) && option.value !== selectElement.value;
+
+            if (isSelectedInOtherDropdown) {
+                option.disabled = true;
+                option.style.textDecoration = 'line-through';
+            } else {
+                option.disabled = false;
+                option.style.textDecoration = 'none';
+            }
+        });
+    });
 }
 
 
@@ -225,8 +253,17 @@ function flyToSelectedCountries() {
         const selectedCountry = countries.find(c => c.iso === lastSelectedIso);
 
         if (selectedCountry && selectedCountry.center) {
-            const newCenter = selectedCountry.center;
-            const newZoom = selectedCountry.zoom;
+            const newCenter = [...selectedCountry.center]; // 원본 배열을 수정하지 않도록 복사
+            let newZoom = selectedCountry.zoom;
+
+            // 모바일 화면 (768px 이하)에서만 오프셋과 줌 아웃 적용
+            if (window.innerWidth <= 768) {
+                newZoom = selectedCountry.zoom - 1;
+                newZoom = Math.max(2, newZoom);
+                const centerOffset = -24.95 / newZoom + 2.475;
+                newCenter[1] += centerOffset;
+                newCenter[1] = Math.max(-90, newCenter[1]); // 위도값이 -90보다 작아지지 않도록 보정
+            }
 
             map.flyTo({
                 center: newCenter,

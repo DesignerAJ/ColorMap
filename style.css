@@ -25,9 +25,24 @@ body,
     flex-direction: column;
     gap: 8px;
     /* 그룹 박스들 간의 간격 */
+    width: 360px;
     max-height: 600px;
     /* 충분히 큰 값으로 설정 */
     overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    #country-selector-container {
+        top: auto;
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        max-height: 50%;
+        /* 모바일 화면에서 높이 제한 */
+        overflow-y: auto;
+        /* 내용이 많을 경우 스크롤 가능하도록 */
+    }
 }
 
 #county-addminus-group {
