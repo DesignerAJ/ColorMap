@@ -10,11 +10,12 @@ body,
     padding: 0;
 }
 
-#country-selector-container {
+#country-selector-container,
+#korea-admin-selector-container {
     font-weight: 700;
     font-size: 20px;
     position: absolute;
-    top: 10px;
+    top: 50px; /* 탭 버튼 높이만큼 아래로 내림 */
     right: 10px;
     background-color: white;
     padding: 10px;
@@ -29,6 +30,36 @@ body,
     max-height: 600px;
     /* 충분히 큰 값으로 설정 */
     overflow: hidden;
+}
+
+.tab-buttons-container {
+    position: absolute;
+    top: 10px;
+    right: 188px;
+    z-index: 11; /* 컨테이너보다 위에 오도록 */
+    display: flex;
+    gap: 5px;
+}
+
+.tab-button {
+    padding: 8px 15px;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 6px 6px 0px 0px; /* 이미지와 유사하게 둥근 모서리 */
+    background-color: rgb(190, 196, 199); /* 비활성화된 탭은 흰색 배경 */
+    color: #555; /* 비활성화된 탭 텍스트 색상 */
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tab-button.active {
+    background-color: #ffffff; /* 활성화된 탭 배경색 (이미지에서 약간 회색빛) */
+    color: #333; /* 활성화된 탭 텍스트 색상 */
+}
+
+.tab-button:hover:not(.active) {
+    background-color: #b3d0e4; /* 호버 시 약간 밝아지도록 */
 }
 
 @media (max-width: 768px) {

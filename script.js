@@ -43,18 +43,18 @@ const landWaterColorGroup = document.getElementById('landwater-color-group');
 let currentSelectedCountryIsos = []; // 현재 선택된 국가 ISO 코드 배열
 let activeCountryGroups = 1; // 초기에 국가1만 활성화
 
-const projections = [
-    { name: '메르카토르', value: 'mercator' },
-    { name: 'WGS84', value: 'equirectangular' },
-    { name: '구형(3D)', value: 'globe' }
-    // 필요에 따라 다른 지원되는 투영법을 추가할 수 있습니다.
-    // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
-];
-
 const mapStyles = [
-    { name: '기본', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
+    { name: '기본 단색', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
     { name: '지형도', value: 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw' },
     { name: '위성사진', value: 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5' }
+];
+
+const projections = [
+    { name: '2D / 메르카토르', value: 'mercator' },
+    { name: '2D / WGS84', value: 'equirectangular' },
+    { name: '3D / 지구본', value: 'globe' }
+    // 필요에 따라 다른 지원되는 투영법을 추가할 수 있습니다.
+    // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
 // 드롭다운 리스트 채우기 함수
@@ -276,6 +276,34 @@ function flyToSelectedCountries() {
 
 
 map.on('load', function () {
+    // 탭 버튼 및 컨테이너 요소 가져오기
+    const tabCountry = document.getElementById('tab-country');
+    const tabKoreaAdmin = document.getElementById('tab-korea-admin');
+    const countrySelectorContainer = document.getElementById('country-selector-container');
+    const koreaAdminSelectorContainer = document.getElementById('korea-admin-selector-container');
+
+    // 탭 전환 함수
+    function switchTab(activeTabId) {
+        if (activeTabId === 'tab-country') {
+            tabCountry.classList.add('active');
+            tabKoreaAdmin.classList.remove('active');
+            countrySelectorContainer.classList.remove('hidden');
+            koreaAdminSelectorContainer.classList.add('hidden');
+        } else if (activeTabId === 'tab-korea-admin') {
+            tabKoreaAdmin.classList.add('active');
+            tabCountry.classList.remove('active');
+            koreaAdminSelectorContainer.classList.remove('hidden');
+            countrySelectorContainer.classList.add('hidden');
+        }
+    }
+
+    // 탭 버튼 이벤트 리스너
+    tabCountry.addEventListener('click', () => switchTab('tab-country'));
+    tabKoreaAdmin.addEventListener('click', () => switchTab('tab-korea-admin'));
+
+    // 초기 탭 설정 (국가 탭 활성화)
+    switchTab('tab-country');
+
     // 1. 국가 경계 데이터 소스 추가
     map.addSource('country-boundaries', {
         type: 'vector',
