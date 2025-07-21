@@ -45,7 +45,9 @@ body,
     }
 }
 
-#county-addminus-group {
+/* 국가 및 시도 추가/삭제 그룹 공통 스타일 */
+#country-tab-content .control-group-box,
+#province-tab-content .control-group-box {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -190,14 +192,13 @@ input[type="range"] {
 }
 
 /* +,- 버튼 스타일 */
-#country-buttons {
+#country-buttons, #province-buttons {
     display: flex;
     gap: 6px;
     /* 버튼 사이의 간격 */
 }
 
-#add-country,
-#remove-country {
+#add-country, #remove-country, #add-province, #remove-province {
     flex-grow: 1;
     width: 49%;
     height: 36px;
@@ -219,23 +220,21 @@ input[type="range"] {
     /* 클릭 시 부드러운 전환 효과 */
 }
 
-#add-country:hover {
+#add-country:hover, #add-province:hover {
     background-color: #0a69cf;
 }
 
-#remove-country:hover {
+#remove-country:hover, #remove-province:hover {
     background-color: #9c0f1e;
 }
 
-#add-country:active,
-#remove-country:active {
+#add-country:active, #remove-country:active, #add-province:active, #remove-province:active {
     transform: scale(0.9);
     /* 클릭 시 90%로 작아짐 */
 }
 
 /* 비활성화된 버튼 스타일 */
-#add-country:disabled,
-#remove-country:disabled {
+#add-country:disabled, #remove-country:disabled, #add-province:disabled, #remove-province:disabled {
     background-color: #cccccc;
     /* 비활성화 색상 */
     cursor: not-allowed;

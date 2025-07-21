@@ -32,9 +32,27 @@ const countryGroup3 = document.getElementById('country-group-3');
 
 const landWaterColorGroup = document.getElementById('landwater-color-group');
 
+// 대한민국 시도 관련 HTML 요소 가져오기
+const provinceSelect1 = document.getElementById('province-select-1');
+const provinceSelect2 = document.getElementById('province-select-2');
+const provinceSelect3 = document.getElementById('province-select-3');
+const provinceGroup2 = document.getElementById('province-group-2');
+const provinceGroup3 = document.getElementById('province-group-3');
+const addProvinceButton = document.getElementById('add-province');
+const removeProvinceButton = document.getElementById('remove-province');
+
+// 탭 관련 요소
+const tabButtons = document.querySelectorAll('.tab-button');
+const countryTabContent = document.getElementById('country-tab-content');
+const provinceTabContent = document.getElementById('province-tab-content');
+
+
 // 전역 상태 변수
 let activeCountryGroups = 1;
+let activeProvinceGroups = 1;
 let currentSelectedCountryIsos = [];
+let currentSelectedProvinceCodes = []; // 시도 코드 저장을 위한 새 변수
+let activeTab = 'country'; // 현재 활성화된 탭을 추적하는 변수 (초기값 'country')
 let isFirstGlobeProjection = true; // 지구본 투영법에서 초기 줌 조정을 위한 플래그
 
 const map = new mapboxgl.Map({
@@ -90,6 +108,29 @@ populateCountryDropdown(countrySelect1);
 populateCountryDropdown(countrySelect2);
 populateCountryDropdown(countrySelect3);
 
+// 대한민국 시도 목록 데이터는 config.js에서 가져옵니다.
+const provinces = PROVINCES_DATA;
+
+// 시도 드롭다운 리스트 채우기 함수
+function populateProvinceDropdown(selectElement) {
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '-- 선택 없음 --';
+    selectElement.appendChild(defaultOption);
+
+    provinces.forEach(province => {
+        const option = document.createElement('option');
+        option.value = province.code;
+        option.textContent = province.name;
+        selectElement.appendChild(option);
+    });
+}
+
+// 각 시도 드롭다운 채우기
+populateProvinceDropdown(provinceSelect1);
+populateProvinceDropdown(provinceSelect2);
+populateProvinceDropdown(provinceSelect3);
+
 // 초기 선택 국가 설정
 countrySelect1.value = 'KOR';
 countrySelect2.value = ''; // 초기에는 선택되지 않음
@@ -121,9 +162,30 @@ function updateCountryGroupVisibility() {
     }
 
     updateMapPaintAndFilter(); // UI 변경 후 지도 업데이트
-    flyToSelectedCountries(); // UI 변경 후 지도 이동
+    if (activeTab === 'country') {
+        flyToSelectedCountries(); // UI 변경 후 지도 이동
+    }
     updateDropdownOptions(); // 드롭다운 옵션 업데이트
 }
+
+// 동적 시도 그룹 가시성 및 버튼 상태 업데이트 함수
+function updateProvinceGroupVisibility() {
+    provinceGroup2.classList.toggle('hidden', activeProvinceGroups < 2);
+    provinceGroup3.classList.toggle('hidden', activeProvinceGroups < 3);
+
+    addProvinceButton.disabled = (activeProvinceGroups >= 3);
+    removeProvinceButton.disabled = (activeProvinceGroups <= 1);
+
+    if (provinceGroup2.classList.contains('hidden')) provinceSelect2.value = '';
+    if (provinceGroup3.classList.contains('hidden')) provinceSelect3.value = '';
+
+    updateMapPaintAndFilter(); // UI 변경 후 지도 업데이트
+    if (activeTab === 'province') {
+        flyToSelectedProvinces(); // UI 변경 후 지도 이동
+    }
+    updateProvinceDropdownOptions(); // 드롭다운 옵션 업데이트
+}
+
 
 // 드롭다운 옵션 업데이트 함수
 function updateDropdownOptions() {
@@ -166,6 +228,37 @@ function updateDropdownOptions() {
     });
 }
 
+// 시도 드롭다운 옵션 업데이트 함수
+function updateProvinceDropdownOptions() {
+    const allSelects = [provinceSelect1];
+    if (activeProvinceGroups >= 2) allSelects.push(provinceSelect2);
+    if (activeProvinceGroups >= 3) allSelects.push(provinceSelect3);
+
+    const selectedValues = allSelects.map(select => select.value).filter(value => value !== '');
+
+    [provinceSelect1, provinceSelect2, provinceSelect3].forEach(selectElement => {
+        Array.from(selectElement.options).forEach(option => {
+            option.disabled = false;
+            option.style.textDecoration = 'none';
+        });
+    });
+
+    allSelects.forEach(selectElement => {
+        Array.from(selectElement.options).forEach(option => {
+            if (option.value === '') {
+                option.disabled = false;
+                option.style.textDecoration = 'none';
+                return;
+            }
+            const isSelectedInOtherActiveDropdown = selectedValues.includes(option.value) && option.value !== selectElement.value;
+            if (isSelectedInOtherActiveDropdown) {
+                option.disabled = true;
+                option.style.textDecoration = 'line-through';
+            }
+        });
+    });
+}
+
 
 // 드롭다운 리스트 채우기 (투영법)
 projections.forEach(proj => {
@@ -201,66 +294,112 @@ function handleColorUIVisibility() {
 
 // 지도 색상 및 필터 업데이트 함수
 function updateMapPaintAndFilter() {
-    const selectedCountry1 = countrySelect1.value;
-    const selectedCountry2 = countrySelect2.value;
-    const selectedCountry3 = countrySelect3.value;
     const currentStyleValue = styleSelect.value; // 현재 선택된 스타일 값 가져오기
 
-    // Mapbox 'match' 표현식을 사용하여 단일 레이어의 색상 업데이트
-    if (map.getLayer('country-color-fill')) {
-        const paintExpression = ['match', ['get', 'iso_3166_1_alpha_3']];
-        currentSelectedCountryIsos = [];
+    // fill-opacity를 스타일이 '기본': 1, '지형': 0.4, '위성': 0.5으로 설정
+    let newOpacity;
+    if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 기본
+        newOpacity = 1;
+    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw') { // 지형
+        newOpacity = 0.4;
+    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') { // 위성
+        newOpacity = 0.5;
+    } else {
+        newOpacity = 1; // 기본값
+    }
 
-        if (selectedCountry1) {
-            paintExpression.push(selectedCountry1, highlightColorPicker1.value);
-            currentSelectedCountryIsos.push(selectedCountry1);
-        }
-        if (selectedCountry2) {
-            paintExpression.push(selectedCountry2, highlightColorPicker2.value);
-            currentSelectedCountryIsos.push(selectedCountry2);
-        }
-        if (selectedCountry3) {
-            paintExpression.push(selectedCountry3, highlightColorPicker3.value);
-            currentSelectedCountryIsos.push(selectedCountry3);
-        }
-        paintExpression.push('rgba(0, 0, 0, 0)'); // 기본값 (투명)
+    // 국경선 색상 및 투명도 업데이트
+    if (map.getLayer('country-border')) {
+        map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
+        map.setPaintProperty('country-border', 'line-opacity', parseFloat(borderOpacitySlider.value));
+    }
 
-        map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
+    // 행정구역선 색상 및 투명도 업데이트
+    if (map.getLayer('admin-boundaries')) {
+        map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
+        map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
+    }
 
-        // fill-opacity를 스타일이 '기본': 1, '지형': 0.4, '위성': 0.5으로 설정
-        let newOpacity;
-        if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 기본
-            newOpacity = 1;
-        } else if (currentStyleValue === 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw') { // 지형
-            newOpacity = 0.4;
-        } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') { // 위성
-            newOpacity = 0.5;
-        } else {
-            newOpacity = 1; // 기본값
+    if (activeTab === 'country') {
+        const selectedCountry1 = countrySelect1.value;
+        const selectedCountry2 = countrySelect2.value;
+        const selectedCountry3 = countrySelect3.value;
+
+        if (map.getLayer('country-color-fill')) {
+            const paintExpression = ['match', ['get', 'iso_3166_1_alpha_3']];
+            currentSelectedCountryIsos = [];
+
+            if (selectedCountry1) {
+                paintExpression.push(selectedCountry1, highlightColorPicker1.value);
+                currentSelectedCountryIsos.push(selectedCountry1);
+            }
+            if (selectedCountry2) {
+                paintExpression.push(selectedCountry2, highlightColorPicker2.value);
+                currentSelectedCountryIsos.push(selectedCountry2);
+            }
+            if (selectedCountry3) {
+                paintExpression.push(selectedCountry3, highlightColorPicker3.value);
+                currentSelectedCountryIsos.push(selectedCountry3);
+            }
+            paintExpression.push('rgba(0, 0, 0, 0)'); // 기본값 (투명)
+
+            map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
+            map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
+
+            if (currentSelectedCountryIsos.length > 0) {
+                map.setFilter('country-color-fill', [
+                    "in",
+                    "iso_3166_1_alpha_3",
+                    ...currentSelectedCountryIsos
+                ]);
+            } else {
+                map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]); // 선택된 국가가 없으면 숨김
+            }
         }
-        map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
-
-        // 국경선 색상 및 투명도 업데이트
-        if (map.getLayer('country-border')) {
-            map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
-            map.setPaintProperty('country-border', 'line-opacity', parseFloat(borderOpacitySlider.value));
+        // 시도 레이어 숨김
+        if (map.getLayer('province-color-fill')) {
+            map.setFilter('province-color-fill', ["==", "neme", ""]);
         }
 
-        // 행정구역선 색상 및 투명도 업데이트
-        if (map.getLayer('admin-boundaries')) {
-            map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
-            map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
-        }
+    } else if (activeTab === 'province') {
+        const selectedProvince1 = provinceSelect1.value;
+        const selectedProvince2 = provinceSelect2.value;
+        const selectedProvince3 = provinceSelect3.value;
 
-        // 필터는 모든 선택된 국가를 포함하도록 업데이트
-        if (currentSelectedCountryIsos.length > 0) {
-            map.setFilter('country-color-fill', [
-                "in",
-                "iso_3166_1_alpha_3",
-                ...currentSelectedCountryIsos
-            ]);
-        } else {
-            map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]); // 선택된 국가가 없으면 숨김
+        if (map.getLayer('province-color-fill')) {
+            const proPaintExpression = ['match', ['get', 'name']];
+            currentSelectedProvinceCodes = [];
+
+            if (selectedProvince1) {
+                proPaintExpression.push(selectedProvince1, highlightColorPickerProvince1.value);
+                currentSelectedProvinceCodes.push(selectedProvince1);
+            }
+            if (selectedProvince2) {
+                proPaintExpression.push(selectedProvince2, highlightColorPickerProvince2.value);
+                currentSelectedProvinceCodes.push(selectedProvince2);
+            }
+            if (selectedProvince3) {
+                proPaintExpression.push(selectedProvince3, highlightColorPickerProvince3.value);
+                currentSelectedProvinceCodes.push(selectedProvince3);
+            }
+            proPaintExpression.push('rgba(0, 0, 0, 0)'); // 기본값 (투명)
+
+            map.setPaintProperty('province-color-fill', 'fill-color', proPaintExpression);
+            map.setPaintProperty('province-color-fill', 'fill-opacity', newOpacity);
+
+            if (currentSelectedProvinceCodes.length > 0) {
+                map.setFilter('province-color-fill', [
+                    "in",
+                    "name",
+                    ...currentSelectedProvinceCodes
+                ]);
+            } else {
+                map.setFilter('province-color-fill', ["==", "name", ""]); // 선택된 시도가 없으면 숨김
+            }
+        }
+        // 국가 레이어 숨김
+        if (map.getLayer('country-color-fill')) {
+            map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]);
         }
     }
 }
@@ -289,8 +428,42 @@ function flyToSelectedCountries() {
                     const centerOffset = -24.95 / newZoom + 2.475;
                     newCenter[1] += centerOffset;
                     newCenter[1] = Math.max(-90, newCenter[1]);
+    }
+}
+
+// 선택된 시도들의 위치 중간값으로 이동 및 줌 조정 함수
+function flyToSelectedProvinces() {
+    if (currentSelectedProvinceCodes.length > 0) {
+        const lastSelectedCode = currentSelectedProvinceCodes[currentSelectedProvinceCodes.length - 1];
+        const selectedProvince = provinces.find(p => p.code === lastSelectedCode);
+
+        if (selectedProvince && selectedProvince.center) {
+            const newCenter = [...selectedProvince.center];
+            let newZoom = selectedProvince.zoom;
+
+            const currentProjection = map.getProjection().name;
+
+            if (currentProjection === 'globe' && isFirstGlobeProjection) {
+                newZoom = 2.5;
+                isFirstGlobeProjection = false;
+            } else {
+                if (window.innerWidth <= 768) {
+                    newZoom = selectedProvince.zoom - 1;
+                    newZoom = Math.max(2, newZoom);
+                    const centerOffset = -24.95 / newZoom + 2.475;
+                    newCenter[1] += centerOffset;
+                    newCenter[1] = Math.max(-90, newCenter[1]);
                 }
             }
+
+            map.flyTo({
+                center: newCenter,
+                zoom: newZoom,
+                essential: true
+            });
+        }
+    }
+}
 
             map.flyTo({
                 center: newCenter,
@@ -324,7 +497,33 @@ map.on('load', function () {
         'water' // 'water' 레이어 아래에 삽입
     );
 
-    // 3. 육지색 변경을 위한 레이어 설정
+    // 3. 대한민국 시도 경계 데이터 소스 추가 (Mapbox Studio에서 생성한 타일셋 URL)
+    // 이 URL은 Mapbox Studio에서 대한민국 시도 경계 데이터를 업로드하여 생성해야 합니다.
+    // 예시: 'mapbox://styles/your-username/your-tileset-id'
+    // 현재는 임시로 Mapbox의 일반 admin-0-boundary 레이어를 사용합니다.
+    // TODO: 실제 대한민국 시도 타일셋 URL로 변경 필요
+    map.addSource('province-boundaries', {
+        type: 'vector',
+        url: 'mapbox://mapbox.country-boundaries-v1', // 임시로 국가 경계 사용
+    });
+
+    // 4. 대한민국 시도 경계 레이어 추가 및 색칠
+    map.addLayer(
+        {
+            id: 'province-color-fill',
+            source: 'province-boundaries',
+            'source-layer': 'country_boundaries', // 임시로 국가 경계 레이어 사용
+            type: 'fill',
+            paint: {
+                'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명
+                'fill-opacity': 0.4,
+            },
+            filter: ["==", "code", ""] // 초기에는 아무것도 선택되지 않도록 필터링
+        },
+        'water' // 'water' 레이어 아래에 삽입
+    );
+
+    // 5. 육지색 변경을 위한 레이어 설정
     const landLayerId = 'landColor';
 
     if (map.getLayer(landLayerId)) {
@@ -338,7 +537,7 @@ map.on('load', function () {
         console.warn(`Layer with ID '${landLayerId}' (land) not found in the map style. Check Mapbox Studio.`);
     }
 
-    // 4. 바다색 변경을 위한 레이어 설정
+    // 6. 바다색 변경을 위한 레이어 설정
     const backgroundLayerId = 'baseColor';
 
     if (map.getLayer(backgroundLayerId)) {
@@ -356,8 +555,46 @@ map.on('load', function () {
     flyToSelectedCountries();
     handleColorUIVisibility(); // 초기 UI 가시성 설정
     updateCountryGroupVisibility(); // 초기 국가 그룹 가시성 설정
+    updateProvinceGroupVisibility(); // 초기 시도 그룹 가시성 설정
 
     // --- 이벤트 리스너 ---
+
+    // 탭 버튼 클릭 이벤트
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabName = button.dataset.tab;
+
+            // 모든 탭 버튼과 콘텐츠에서 'active' 클래스 제거
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+                content.classList.add('hidden'); // 모든 탭 콘텐츠를 숨김
+            });
+
+            // 클릭된 탭에 'active' 클래스 추가하고 'hidden' 클래스 제거
+            button.classList.add('active');
+            const activeContent = document.getElementById(`${tabName}-tab-content`);
+            activeContent.classList.add('active');
+            activeContent.classList.remove('hidden'); // 활성화된 탭 콘텐츠를 보이게 함
+
+            activeTab = tabName; // 활성 탭 업데이트
+
+            // 탭 전환 시 데이터 초기화 및 지도 업데이트
+            if (activeTab === 'country') {
+                activeProvinceGroups = 1; // 다른 탭의 그룹 수를 1로 초기화
+                provinceSelect1.value = ''; // 시도1 드롭다운 초기화
+                updateProvinceGroupVisibility();
+                updateMapPaintAndFilter(); // 국가 탭에 맞게 지도 업데이트
+                flyToSelectedCountries(); // 국가 탭에 맞게 지도 이동
+            } else if (activeTab === 'province') {
+                activeCountryGroups = 1; // 다른 탭의 그룹 수를 1로 초기화
+                countrySelect1.value = ''; // 국가1 드롭다운 초기화
+                updateCountryGroupVisibility();
+                updateMapPaintAndFilter(); // 시도 탭에 맞게 지도 업데이트
+                flyToSelectedProvinces(); // 시도 탭에 맞게 지도 이동
+            }
+        });
+    });
 
     // '+' 버튼 클릭 이벤트
     addCountryButton.addEventListener('click', () => {
@@ -372,6 +609,22 @@ map.on('load', function () {
         if (activeCountryGroups > 1) {
             activeCountryGroups--;
             updateCountryGroupVisibility();
+        }
+    });
+
+    // 시도 '+' 버튼 클릭 이벤트
+    addProvinceButton.addEventListener('click', () => {
+        if (activeProvinceGroups < 3) {
+            activeProvinceGroups++;
+            updateProvinceGroupVisibility();
+        }
+    });
+
+    // 시도 '-' 버튼 클릭 이벤트
+    removeProvinceButton.addEventListener('click', () => {
+        if (activeProvinceGroups > 1) {
+            activeProvinceGroups--;
+            updateProvinceGroupVisibility();
         }
     });
 
@@ -390,6 +643,23 @@ map.on('load', function () {
         updateMapPaintAndFilter();
         updateDropdownOptions(); // 추가
         flyToSelectedCountries();
+    });
+
+    // 시도 드롭다운 변경 이벤트
+    provinceSelect1.addEventListener('change', function () {
+        updateMapPaintAndFilter();
+        updateProvinceDropdownOptions();
+        flyToSelectedProvinces();
+    });
+    provinceSelect2.addEventListener('change', function () {
+        updateMapPaintAndFilter();
+        updateProvinceDropdownOptions();
+        flyToSelectedProvinces();
+    });
+    provinceSelect3.addEventListener('change', function () {
+        updateMapPaintAndFilter();
+        updateProvinceDropdownOptions();
+        flyToSelectedProvinces();
     });
 
     // 국가 강조색 선택기 변경 이벤트
@@ -458,8 +728,11 @@ map.on('load', function () {
 
     // 스타일이 변경될 때마다 레이어를 다시 추가하고 필터를 업데이트
     map.on('style.load', function () {
+        // 기존 레이어 및 소스 제거
         if (map.getLayer('country-color-fill')) map.removeLayer('country-color-fill');
         if (map.getSource('country-boundaries')) map.removeSource('country-boundaries');
+        if (map.getLayer('province-color-fill')) map.removeLayer('province-color-fill');
+        if (map.getSource('province-boundaries')) map.removeSource('province-boundaries');
 
         // 1. 국가 경계 데이터 소스 추가 (스타일 변경 시 다시 추가)
         map.addSource('country-boundaries', {
@@ -478,6 +751,28 @@ map.on('load', function () {
                     'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
                     'fill-opacity': 0.4, // 초기값 0.4로 설정
                 },
+            },
+            'water' // 'water' 레이어 아래에 삽입
+        );
+
+        // 3. 대한민국 시도 경계 데이터 소스 추가 (Mapbox Studio에서 생성한 타일셋 URL)
+        map.addSource('province-boundaries', {
+            type: 'vector',
+            url: 'mapbox://mapbox.country-boundaries-v1', // 임시로 국가 경계 사용
+        });
+
+        // 4. 대한민국 시도 경계 레이어 추가 및 색칠
+        map.addLayer(
+            {
+                id: 'province-color-fill',
+                source: 'province-boundaries',
+                'source-layer': 'country_boundaries', // 임시로 국가 경계 레이어 사용
+                type: 'fill',
+                paint: {
+                    'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명
+                    'fill-opacity': 0.4,
+                },
+                filter: ["==", "code", ""] // 초기에는 아무것도 선택되지 않도록 필터링
             },
             'water' // 'water' 레이어 아래에 삽입
         );
