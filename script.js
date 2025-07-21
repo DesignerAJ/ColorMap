@@ -124,24 +124,40 @@ function updateCountryGroupVisibility() {
 
 // 드롭다운 옵션 업데이트 함수
 function updateDropdownOptions() {
-    const allSelects = [countrySelect1, countrySelect2, countrySelect3];
+    const allSelects = [countrySelect1];
+    if (activeCountryGroups >= 2) {
+        allSelects.push(countrySelect2);
+    }
+    if (activeCountryGroups >= 3) {
+        allSelects.push(countrySelect3);
+    }
+
     const selectedValues = allSelects.map(select => select.value).filter(value => value !== '');
 
+    // 모든 드롭다운의 모든 옵션을 먼저 활성화 상태로 초기화
+    [countrySelect1, countrySelect2, countrySelect3].forEach(selectElement => {
+        Array.from(selectElement.options).forEach(option => {
+            option.disabled = false;
+            option.style.textDecoration = 'none';
+        });
+    });
+
+    // 활성화된 드롭다운에 대해서만 중복 옵션 비활성화 로직 적용
     allSelects.forEach(selectElement => {
         Array.from(selectElement.options).forEach(option => {
             if (option.value === '') {
-                option.disabled = false; // "-- 선택 없음 --" 옵션은 항상 활성화
+                // "-- 선택 없음 --" 옵션은 항상 활성화
+                option.disabled = false;
                 option.style.textDecoration = 'none';
                 return;
             }
 
-            // 현재 드롭다운의 선택된 값은 제외하고 다른 드롭다운에서 선택된 값인지 확인
-            const isSelectedInOtherDropdown = selectedValues.includes(option.value) && option.value !== selectElement.value;
+            // 현재 드롭다운의 선택된 값은 제외하고, 다른 활성화된 드롭다운에서 선택된 값인지 확인
+            const isSelectedInOtherActiveDropdown = selectedValues.includes(option.value) && option.value !== selectElement.value;
 
-            if (isSelectedInOtherDropdown) {
+            if (isSelectedInOtherActiveDropdown) {
                 option.disabled = true;
-            } else {
-                option.disabled = false;
+                option.style.textDecoration = 'line-through'; // 추가
             }
         });
     });
@@ -392,14 +408,17 @@ map.on('load', function () {
     // 국가 드롭다운 변경 이벤트
     countrySelect1.addEventListener('change', function () {
         updateMapPaintAndFilter();
+        updateDropdownOptions(); // 추가
         flyToSelectedCountries();
     });
     countrySelect2.addEventListener('change', function () {
         updateMapPaintAndFilter();
+        updateDropdownOptions(); // 추가
         flyToSelectedCountries();
     });
     countrySelect3.addEventListener('change', function () {
         updateMapPaintAndFilter();
+        updateDropdownOptions(); // 추가
         flyToSelectedCountries();
     });
 
