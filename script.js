@@ -26,6 +26,8 @@ const highlightColorPicker2 = document.getElementById('highlight-color-picker-2'
 const highlightColorPicker3 = document.getElementById('highlight-color-picker-3'); // 국가 강조색 피커
 const borderColorPicker = document.getElementById('border-color-picker');       // 국경 색상 피커
 const adminColorPicker = document.getElementById('admin-color-picker');         // 행정구역 색상 피커
+const borderOpacitySlider = document.getElementById('border-opacity-slider');   // 국경선 투명도 슬라이더
+const adminOpacitySlider = document.getElementById('admin-opacity-slider');     // 행정구역선 투명도 슬라이더
 const landColorPicker = document.getElementById('land-color-picker');           // 육지색 피커
 const waterColorPicker = document.getElementById('water-color-picker');         // 바다색 피커
 const projectionSelect = document.getElementById('projection-select');          // 투영법 선택 드롭다운
@@ -42,26 +44,27 @@ const landWaterColorGroup = document.getElementById('landwater-color-group');
 
 let currentSelectedCountryIsos = []; // 현재 선택된 국가 ISO 코드 배열
 let activeCountryGroups = 1; // 초기에 국가1만 활성화
+let isFirstGlobeProjection = true; // globe 투영법으로 처음 전환되었는지 추적
+
 
 const mapStyles = [
     { name: '기본 단색', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
     { name: '지형도', value: 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw' },
     { name: '위성사진', value: 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5' }
 ];
-
 const projections = [
     { name: '2D / 메르카토르', value: 'mercator' },
     { name: '2D / WGS84', value: 'equirectangular' },
-    { name: '3D / 지구본', value: 'globe' }
+    { name: '3D / 구형', value: 'globe' }
     // 필요에 따라 다른 지원되는 투영법을 추가할 수 있습니다.
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
+
 // 드롭다운 리스트 채우기 함수
 function populateCountryDropdown(selectElement) {
-    // "-- 선택 없음 --" 옵션 추가
     const defaultOption = document.createElement('option');
-    defaultOption.value = ''; // 빈 값으로 설정
+    defaultOption.value = '';
     defaultOption.textContent = '-- 선택 없음 --';
     selectElement.appendChild(defaultOption);
 
@@ -137,10 +140,8 @@ function updateDropdownOptions() {
 
             if (isSelectedInOtherDropdown) {
                 option.disabled = true;
-                option.style.textDecoration = 'line-through';
             } else {
                 option.disabled = false;
-                option.style.textDecoration = 'none';
             }
         });
     });
@@ -155,8 +156,7 @@ projections.forEach(proj => {
     projectionSelect.appendChild(option);
 });
 
-// 초기 투영법 설정 (드롭다운을 'mercator'로 설정)
-projectionSelect.value = 'mercator';
+projectionSelect.value = 'mercator'; // 초기 투영법 설정 (드롭다운을 'mercator'로 설정)
 
 // 드롭다운 리스트 채우기 (맵 스타일)
 mapStyles.forEach(style => {
@@ -221,14 +221,16 @@ function updateMapPaintAndFilter() {
         }
         map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
 
-        // 국경 색상 업데이트
+        // 국경선 색상 및 투명도 업데이트
         if (map.getLayer('country-border')) {
             map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
+            map.setPaintProperty('country-border', 'line-opacity', parseFloat(borderOpacitySlider.value));
         }
 
-        // 행정구역 색상 업데이트
+        // 행정구역선 색상 및 투명도 업데이트
         if (map.getLayer('admin-boundaries')) {
             map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
+            map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
         }
 
         // 필터는 모든 선택된 국가를 포함하도록 업데이트
@@ -245,24 +247,30 @@ function updateMapPaintAndFilter() {
 }
 
 // 선택된 국가들의 위치 중간값으로 이동 및 줌 조정 함수
-// 선택된 국가들의 위치 중간값으로 이동 및 줌 조정 함수
 function flyToSelectedCountries() {
     if (currentSelectedCountryIsos.length > 0) {
-        // 마지막으로 선택된 국가의 ISO 코드를 가져옵니다.
         const lastSelectedIso = currentSelectedCountryIsos[currentSelectedCountryIsos.length - 1];
         const selectedCountry = countries.find(c => c.iso === lastSelectedIso);
 
         if (selectedCountry && selectedCountry.center) {
-            const newCenter = [...selectedCountry.center]; // 원본 배열을 수정하지 않도록 복사
+            const newCenter = [...selectedCountry.center];
             let newZoom = selectedCountry.zoom;
 
-            // 모바일 화면 (768px 이하)에서만 오프셋과 줌 아웃 적용
-            if (window.innerWidth <= 768) {
-                newZoom = selectedCountry.zoom - 1;
-                newZoom = Math.max(2, newZoom);
-                const centerOffset = -24.95 / newZoom + 2.475;
-                newCenter[1] += centerOffset;
-                newCenter[1] = Math.max(-90, newCenter[1]); // 위도값이 -90보다 작아지지 않도록 보정
+            // 현재 투영법이 'globe'인지 확인
+            const currentProjection = map.getProjection().name;
+
+            if (currentProjection === 'globe' && isFirstGlobeProjection) {
+                newZoom = 2.5; // globe 투영법으로 처음 전환 시 줌 레벨을 2.5로 설정
+                isFirstGlobeProjection = false; // 플래그를 false로 설정하여 다음부터는 적용되지 않도록 함
+            } else {
+                // 모바일 화면 (768px 이하)에서만 오프셋과 줌 아웃 적용
+                if (window.innerWidth <= 768) {
+                    newZoom = selectedCountry.zoom - 1;
+                    newZoom = Math.max(2, newZoom);
+                    const centerOffset = -24.95 / newZoom + 2.475;
+                    newCenter[1] += centerOffset;
+                    newCenter[1] = Math.max(-90, newCenter[1]);
+                }
             }
 
             map.flyTo({
@@ -276,34 +284,6 @@ function flyToSelectedCountries() {
 
 
 map.on('load', function () {
-    // 탭 버튼 및 컨테이너 요소 가져오기
-    const tabCountry = document.getElementById('tab-country');
-    const tabKoreaAdmin = document.getElementById('tab-korea-admin');
-    const countrySelectorContainer = document.getElementById('country-selector-container');
-    const koreaAdminSelectorContainer = document.getElementById('korea-admin-selector-container');
-
-    // 탭 전환 함수
-    function switchTab(activeTabId) {
-        if (activeTabId === 'tab-country') {
-            tabCountry.classList.add('active');
-            tabKoreaAdmin.classList.remove('active');
-            countrySelectorContainer.classList.remove('hidden');
-            koreaAdminSelectorContainer.classList.add('hidden');
-        } else if (activeTabId === 'tab-korea-admin') {
-            tabKoreaAdmin.classList.add('active');
-            tabCountry.classList.remove('active');
-            koreaAdminSelectorContainer.classList.remove('hidden');
-            countrySelectorContainer.classList.add('hidden');
-        }
-    }
-
-    // 탭 버튼 이벤트 리스너
-    tabCountry.addEventListener('click', () => switchTab('tab-country'));
-    tabKoreaAdmin.addEventListener('click', () => switchTab('tab-korea-admin'));
-
-    // 초기 탭 설정 (국가 탭 활성화)
-    switchTab('tab-country');
-
     // 1. 국가 경계 데이터 소스 추가
     map.addSource('country-boundaries', {
         type: 'vector',
@@ -325,7 +305,40 @@ map.on('load', function () {
         'water' // 'water' 레이어 아래에 삽입
     );
 
-    // 3. 육지색 변경을 위한 레이어 설정
+    // 3. 국경선 레이어 추가
+    map.addLayer(
+        {
+            id: 'country-border',
+            source: 'country-boundaries',
+            'source-layer': 'country_boundaries',
+            type: 'line',
+            paint: {
+                'line-color': borderColorPicker.value, // 초기 색상
+                'line-width': 1,
+                'line-opacity': parseFloat(borderOpacitySlider.value), // 초기 투명도
+            },
+        },
+        'country-color-fill' // 'country-color-fill' 레이어 위에 삽입
+    );
+
+    // 4. 행정구역선 레이어 추가
+    map.addLayer(
+        {
+            id: 'admin-boundaries',
+            source: 'country-boundaries',
+            'source-layer': 'country_boundaries',
+            type: 'line',
+            filter: ['==', ['get', 'admin_level'], 2], // admin_level 2 (주/도 경계) 필터링
+            paint: {
+                'line-color': adminColorPicker.value, // 초기 색상
+                'line-width': 0.5,
+                'line-opacity': parseFloat(adminOpacitySlider.value), // 초기 투명도
+            },
+        },
+        'country-border' // 'country-border' 레이어 위에 삽입
+    );
+
+    // 5. 육지색 변경을 위한 레이어 설정
     const landLayerId = 'landColor';
 
     if (map.getLayer(landLayerId)) {
@@ -401,6 +414,12 @@ map.on('load', function () {
     // 행정구역 색상 선택기 변경 이벤트
     adminColorPicker.addEventListener('input', updateMapPaintAndFilter);
 
+    // 국경선 투명도 슬라이더 변경 이벤트
+    borderOpacitySlider.addEventListener('input', updateMapPaintAndFilter);
+
+    // 행정구역선 투명도 슬라이더 변경 이벤트
+    adminOpacitySlider.addEventListener('input', updateMapPaintAndFilter);
+
     // 육지색 선택기 변경 이벤트
     landColorPicker.addEventListener('input', function () {
         const newColor = this.value;
@@ -428,6 +447,13 @@ map.on('load', function () {
     projectionSelect.addEventListener('change', function () {
         const newProjection = this.value;
         map.setProjection(newProjection);
+
+        // 투영법이 'globe'로 변경될 때 isFirstGlobeProjection 플래그를 재설정
+        if (newProjection === 'globe') {
+            isFirstGlobeProjection = true;
+        } else {
+            isFirstGlobeProjection = false; // 다른 투영법으로 변경 시 초기화
+        }
 
         // 투영법 변경 시, 지도를 선택된 국가 중심으로 다시 이동시키는 것이 좋습니다.
         // 현재 선택된 국가의 정보로 다시 flyTo를 호출합니다.
@@ -462,6 +488,39 @@ map.on('load', function () {
                 },
             },
             'water' // 'water' 레이어 아래에 삽입
+        );
+
+        // 3. 국경선 레이어 추가 (스타일 변경 시 다시 추가)
+        map.addLayer(
+            {
+                id: 'country-border',
+                source: 'country-boundaries',
+                'source-layer': 'country_boundaries',
+                type: 'line',
+                paint: {
+                    'line-color': borderColorPicker.value, // 초기 색상
+                    'line-width': 1,
+                    'line-opacity': parseFloat(borderOpacitySlider.value), // 초기 투명도
+                },
+            },
+            'country-color-fill' // 'country-color-fill' 레이어 위에 삽입
+        );
+
+        // 4. 행정구역선 레이어 추가 (스타일 변경 시 다시 추가)
+        map.addLayer(
+            {
+                id: 'admin-boundaries',
+                source: 'country-boundaries',
+                'source-layer': 'country_boundaries',
+                type: 'line',
+                filter: ['==', ['get', 'admin_level'], 2], // admin_level 2 (주/도 경계) 필터링
+                paint: {
+                    'line-color': adminColorPicker.value, // 초기 색상
+                    'line-width': 0.5,
+                    'line-opacity': parseFloat(adminOpacitySlider.value), // 초기 투명도
+                },
+            },
+            'country-border' // 'country-border' 레이어 위에 삽입
         );
 
         // 육지색 및 바다색 레이어 업데이트 (스타일 변경 시 다시 적용)
