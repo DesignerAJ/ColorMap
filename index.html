@@ -4,6 +4,7 @@
 <head>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link rel="shortcut icon" href="#">
     <title>Highlight countries in Mapbox</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,28 +17,64 @@
 
 <body>
     <div id='country-selector-container'>
-        <div class="control-group-box" id="county-addminus-group">
-            <div class="control-group">
-                <label for="country-select-1">국가1</label>
-                <input type="color" id="highlight-color-picker-1" value="#2eca89">
-                <select id="country-select-1"></select>
+        <div class="tab-header">
+            <button class="tab-button active" data-tab="country">국가</button>
+            <button class="tab-button" data-tab="province">대한민국 시도</button>
+        </div>
+
+        <div class="tab-content-container">
+            <div id="country-tab-content" class="tab-content active">
+                <div class="control-group-box" id="county-addminus-group">
+                    <div class="control-group">
+                        <label for="country-select-1">국가1</label>
+                        <input type="color" id="highlight-color-picker-1" value="#2eca89">
+                        <select id="country-select-1"></select>
+                    </div>
+
+                    <div class="control-group hidden" id="country-group-2">
+                        <label for="country-select-2">국가2</label>
+                        <input type="color" id="highlight-color-picker-2" value="#29dff2">
+                        <select id="country-select-2"></select>
+                    </div>
+
+                    <div class="control-group hidden" id="country-group-3">
+                        <label for="country-select-3">국가3</label>
+                        <input type="color" id="highlight-color-picker-3" value="#fcec26">
+                        <select id="country-select-3"></select>
+                    </div>
+
+                    <div class="control-group" id="country-buttons">
+                        <button id="add-country">＋ <span class="max-text">(MAX: 3)</span></button>
+                        <button id="remove-country" disabled>－</button>
+                    </div>
+                </div>
             </div>
 
-            <div class="control-group hidden" id="country-group-2">
-                <label for="country-select-2">국가2</label>
-                <input type="color" id="highlight-color-picker-2" value="#29dff2">
-                <select id="country-select-2"></select>
-            </div>
+            <div id="province-tab-content" class="tab-content hidden">
+                <div class="control-group-box" id="province-addminus-group">
+                    <div class="control-group">
+                        <label for="province-select-1">시도1</label>
+                        <input type="color" id="highlight-color-picker-province-1" value="#2eca89">
+                        <select id="province-select-1"></select>
+                    </div>
 
-            <div class="control-group hidden" id="country-group-3">
-                <label for="country-select-3">국가3</label>
-                <input type="color" id="highlight-color-picker-3" value="#fcec26">
-                <select id="country-select-3"></select>
-            </div>
+                    <div class="control-group hidden" id="province-group-2">
+                        <label for="province-select-2">시도2</label>
+                        <input type="color" id="highlight-color-picker-province-2" value="#29dff2">
+                        <select id="province-select-2"></select>
+                    </div>
 
-            <div class="control-group" id="country-buttons">
-                <button id="add-country">＋ <span class="max-text">(MAX: 3)</span></button>
-                <button id="remove-country">－</button>
+                    <div class="control-group hidden" id="province-group-3">
+                        <label for="province-select-3">시도3</label>
+                        <input type="color" id="highlight-color-picker-province-3" value="#fcec26">
+                        <select id="province-select-3"></select>
+                    </div>
+
+                    <div class="control-group" id="province-buttons">
+                        <button id="add-province">＋ <span class="max-text">(MAX: 3)</span></button>
+                        <button id="remove-province">－</button>
+                    </div>
+                </div>
             </div>
         </div>
 

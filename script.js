@@ -3,6 +3,40 @@
 // config.js에서 정의한 토큰 및 국가 데이터 변수를 사용합니다.
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
 
+// HTML 요소 가져오기
+const countrySelect1 = document.getElementById('country-select-1');
+const countrySelect2 = document.getElementById('country-select-2');
+const countrySelect3 = document.getElementById('country-select-3');
+
+const highlightColorPicker1 = document.getElementById('highlight-color-picker-1');
+const highlightColorPicker2 = document.getElementById('highlight-color-picker-2');
+const highlightColorPicker3 = document.getElementById('highlight-color-picker-3');
+
+const borderColorPicker = document.getElementById('border-color-picker');
+const adminColorPicker = document.getElementById('admin-color-picker');
+
+const borderOpacitySlider = document.getElementById('border-opacity-slider');
+const adminOpacitySlider = document.getElementById('admin-opacity-slider');
+
+const landColorPicker = document.getElementById('land-color-picker');
+const waterColorPicker = document.getElementById('water-color-picker');
+
+const projectionSelect = document.getElementById('projection-select');
+const styleSelect = document.getElementById('style-select');
+
+const addCountryButton = document.getElementById('add-country');
+const removeCountryButton = document.getElementById('remove-country');
+
+const countryGroup2 = document.getElementById('country-group-2');
+const countryGroup3 = document.getElementById('country-group-3');
+
+const landWaterColorGroup = document.getElementById('landwater-color-group');
+
+// 전역 상태 변수
+let activeCountryGroups = 1;
+let currentSelectedCountryIsos = [];
+let isFirstGlobeProjection = true; // 지구본 투영법에서 초기 줌 조정을 위한 플래그
+
 const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf', // 사용자의 커스텀 스타일 URL
@@ -17,36 +51,6 @@ map.addControl(new mapboxgl.NavigationControl(), 'top-left');
 // 국가 목록 데이터는 config.js에서 가져옵니다.
 const countries = COUNTRIES_DATA;
 
-// UI 요소 가져오기
-const countrySelect1 = document.getElementById('country-select-1');
-const countrySelect2 = document.getElementById('country-select-2');
-const countrySelect3 = document.getElementById('country-select-3');
-const highlightColorPicker1 = document.getElementById('highlight-color-picker-1'); // 국가 강조색 피커
-const highlightColorPicker2 = document.getElementById('highlight-color-picker-2'); // 국가 강조색 피커
-const highlightColorPicker3 = document.getElementById('highlight-color-picker-3'); // 국가 강조색 피커
-const borderColorPicker = document.getElementById('border-color-picker');       // 국경 색상 피커
-const adminColorPicker = document.getElementById('admin-color-picker');         // 행정구역 색상 피커
-const borderOpacitySlider = document.getElementById('border-opacity-slider');   // 국경선 투명도 슬라이더
-const adminOpacitySlider = document.getElementById('admin-opacity-slider');     // 행정구역선 투명도 슬라이더
-const landColorPicker = document.getElementById('land-color-picker');           // 육지색 피커
-const waterColorPicker = document.getElementById('water-color-picker');         // 바다색 피커
-const projectionSelect = document.getElementById('projection-select');          // 투영법 선택 드롭다운
-const styleSelect = document.getElementById('style-select');                    // 맵 스타일 선택 드롭다운
-
-// 동적 국가 선택 UI 요소
-const countryGroup2 = document.getElementById('country-group-2');
-const countryGroup3 = document.getElementById('country-group-3');
-const addCountryButton = document.getElementById('add-country');
-const removeCountryButton = document.getElementById('remove-country');
-
-// 육지/바다 색상 UI 그룹
-const landWaterColorGroup = document.getElementById('landwater-color-group');
-
-let currentSelectedCountryIsos = []; // 현재 선택된 국가 ISO 코드 배열
-let activeCountryGroups = 1; // 초기에 국가1만 활성화
-let isFirstGlobeProjection = true; // globe 투영법으로 처음 전환되었는지 추적
-
-
 const mapStyles = [
     { name: '기본 단색', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
     { name: '지형도', value: 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw' },
@@ -59,7 +63,6 @@ const projections = [
     // 필요에 따라 다른 지원되는 투영법을 추가할 수 있습니다.
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
-
 
 // 드롭다운 리스트 채우기 함수
 function populateCountryDropdown(selectElement) {
@@ -321,40 +324,7 @@ map.on('load', function () {
         'water' // 'water' 레이어 아래에 삽입
     );
 
-    // 3. 국경선 레이어 추가
-    map.addLayer(
-        {
-            id: 'country-border',
-            source: 'country-boundaries',
-            'source-layer': 'country_boundaries',
-            type: 'line',
-            paint: {
-                'line-color': borderColorPicker.value, // 초기 색상
-                'line-width': 1,
-                'line-opacity': parseFloat(borderOpacitySlider.value), // 초기 투명도
-            },
-        },
-        'country-color-fill' // 'country-color-fill' 레이어 위에 삽입
-    );
-
-    // 4. 행정구역선 레이어 추가
-    map.addLayer(
-        {
-            id: 'admin-boundaries',
-            source: 'country-boundaries',
-            'source-layer': 'country_boundaries',
-            type: 'line',
-            filter: ['==', ['get', 'admin_level'], 2], // admin_level 2 (주/도 경계) 필터링
-            paint: {
-                'line-color': adminColorPicker.value, // 초기 색상
-                'line-width': 0.5,
-                'line-opacity': parseFloat(adminOpacitySlider.value), // 초기 투명도
-            },
-        },
-        'country-border' // 'country-border' 레이어 위에 삽입
-    );
-
-    // 5. 육지색 변경을 위한 레이어 설정
+    // 3. 육지색 변경을 위한 레이어 설정
     const landLayerId = 'landColor';
 
     if (map.getLayer(landLayerId)) {
@@ -488,6 +458,9 @@ map.on('load', function () {
 
     // 스타일이 변경될 때마다 레이어를 다시 추가하고 필터를 업데이트
     map.on('style.load', function () {
+        if (map.getLayer('country-color-fill')) map.removeLayer('country-color-fill');
+        if (map.getSource('country-boundaries')) map.removeSource('country-boundaries');
+
         // 1. 국가 경계 데이터 소스 추가 (스타일 변경 시 다시 추가)
         map.addSource('country-boundaries', {
             type: 'vector',
@@ -507,39 +480,6 @@ map.on('load', function () {
                 },
             },
             'water' // 'water' 레이어 아래에 삽입
-        );
-
-        // 3. 국경선 레이어 추가 (스타일 변경 시 다시 추가)
-        map.addLayer(
-            {
-                id: 'country-border',
-                source: 'country-boundaries',
-                'source-layer': 'country_boundaries',
-                type: 'line',
-                paint: {
-                    'line-color': borderColorPicker.value, // 초기 색상
-                    'line-width': 1,
-                    'line-opacity': parseFloat(borderOpacitySlider.value), // 초기 투명도
-                },
-            },
-            'country-color-fill' // 'country-color-fill' 레이어 위에 삽입
-        );
-
-        // 4. 행정구역선 레이어 추가 (스타일 변경 시 다시 추가)
-        map.addLayer(
-            {
-                id: 'admin-boundaries',
-                source: 'country-boundaries',
-                'source-layer': 'country_boundaries',
-                type: 'line',
-                filter: ['==', ['get', 'admin_level'], 2], // admin_level 2 (주/도 경계) 필터링
-                paint: {
-                    'line-color': adminColorPicker.value, // 초기 색상
-                    'line-width': 0.5,
-                    'line-opacity': parseFloat(adminOpacitySlider.value), // 초기 투명도
-                },
-            },
-            'country-border' // 'country-border' 레이어 위에 삽입
         );
 
         // 육지색 및 바다색 레이어 업데이트 (스타일 변경 시 다시 적용)
