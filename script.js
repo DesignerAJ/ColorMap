@@ -300,14 +300,14 @@ function handleColorUIVisibility() {
 function updateMapPaintAndFilter() {
     const currentStyleValue = styleSelect.value; // 현재 선택된 스타일 값 가져오기
 
-    // fill-opacity를 스타일이 '기본': 1, '지형': 0.4, '위성': 0.5으로 설정
+    // fill-opacity를 스타일이 '기본 단색': 1, '지형도': 0.4, '위성사진': 0.5으로 설정
     let newOpacity;
-    if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 기본
+    if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 기본 단색
         newOpacity = 1;
-    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw') { // 지형
-        newOpacity = 0.4;
-    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') { // 위성
-        newOpacity = 0.5;
+    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw') { // 지형도
+        newOpacity = 0.75;
+    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') { // 위성사진
+        newOpacity = 0.6;
     } else {
         newOpacity = 1; // 기본값
     }
@@ -321,7 +321,14 @@ function updateMapPaintAndFilter() {
     // 행정구역선 색상 및 투명도 업데이트
     if (map.getLayer('admin-boundaries')) {
         map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
+        // admin-boundaries 레이어는 기본적으로 항상 보이도록 설정
         map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
+    }
+
+    // 시도 경계선 레이어 업데이트 (새로 추가될 레이어)
+    if (map.getLayer('province-border-line')) {
+        map.setPaintProperty('province-border-line', 'line-color', adminColorPicker.value);
+        map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));
     }
 
     if (activeTab === 'country') {
@@ -338,7 +345,7 @@ function updateMapPaintAndFilter() {
                 currentSelectedCountryIsos.push(selectedCountry1);
             }
             if (selectedCountry2) {
-                paintExpression.push(selectedCountry2, highlightColorPicker2.value);
+            paintExpression.push(selectedCountry2, highlightColorPicker2.value);
                 currentSelectedCountryIsos.push(selectedCountry2);
             }
             if (selectedCountry3) {
@@ -364,11 +371,28 @@ function updateMapPaintAndFilter() {
         if (map.getLayer('province-color-fill')) {
             map.setFilter('province-color-fill', ["==", "name", ""]);
         }
+        // 시도 경계선 레이어 숨김
+        if (map.getLayer('province-border-line')) {
+            map.setPaintProperty('province-border-line', 'line-opacity', 0);
+        }
+        // admin-boundaries 레이어 다시 보이게
+        if (map.getLayer('admin-boundaries')) {
+            map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
+        }
 
     } else if (activeTab === 'province') {
         const selectedProvince1 = provinceSelect1.value;
         const selectedProvince2 = provinceSelect2.value;
         const selectedProvince3 = provinceSelect3.value;
+
+        // admin-boundaries 레이어 숨김
+        if (map.getLayer('admin-boundaries')) {
+            map.setPaintProperty('admin-boundaries', 'line-opacity', 0);
+        }
+        // 시도 경계선 레이어 보이게
+        if (map.getLayer('province-border-line')) {
+            map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));
+        }
 
         if (map.getLayer('province-color-fill')) {
             currentSelectedProvinceCodes = [];
@@ -514,11 +538,7 @@ map.on('load', function () {
         'water' // 'water' 레이어 아래에 삽입
     );
 
-    // 3. 대한민국 시도 경계 데이터 소스 추가 (Mapbox Studio에서 생성한 타일셋 URL)
-    // 이 URL은 Mapbox Studio에서 대한민국 시도 경계 데이터를 업로드하여 생성해야 합니다.
-    // 예시: 'mapbox://styles/your-username/your-tileset-id'
-    // 현재는 임시로 Mapbox의 일반 admin-0-boundary 레이어를 사용합니다.
-    // TODO: 실제 대한민국 시도 타일셋 URL로 변경 필요
+    // 3. 대한민국 시도 경계 geoJson데이터
     map.addSource('province-boundaries', {
         type: 'geojson',
         data: 'data/KoreaAdmin_Simple_250718.geojson'
@@ -537,6 +557,26 @@ map.on('load', function () {
             filter: ["==", "name", ""] // 초기에는 아무것도 선택되지 않도록 필터링
         },
         'water' // 'water' 레이어 아래에 삽입
+    );
+
+    // 4-1. 대한민국 시도 경계선 레이어 추가 (라인)
+    map.addLayer(
+        {
+            id: 'province-border-line',
+            source: 'province-boundaries',
+            type: 'line',
+            paint: {
+                'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
+                'line-opacity': 0, // 초기에는 숨김 (시도 탭에서만 보이도록)
+                'line-width': 0.8 // 경계선 두께
+            },
+            layout: { // 추가된 부분
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            filter: ["has", "name"] // 모든 시도 경계선을 포함하도록 필터링
+        },
+        'water' // 시도 채우기 레이어 위에 삽입
     );
 
     // 5. 육지색 변경을 위한 레이어 설정
@@ -753,6 +793,7 @@ map.on('load', function () {
         if (map.getLayer('country-color-fill')) map.removeLayer('country-color-fill');
         if (map.getSource('country-boundaries')) map.removeSource('country-boundaries');
         if (map.getLayer('province-color-fill')) map.removeLayer('province-color-fill');
+        if (map.getLayer('province-border-line')) map.removeLayer('province-border-line'); // 추가
         if (map.getSource('province-boundaries')) map.removeSource('province-boundaries');
 
         // 1. 국가 경계 데이터 소스 추가 (스타일 변경 시 다시 추가)
@@ -795,6 +836,26 @@ map.on('load', function () {
                 filter: ["==", "name", ""] // 초기에는 아무것도 선택되지 않도록 필터링
             },
             'water' // 'water' 레이어 아래에 삽입
+        );
+
+        // 4-1. 대한민국 시도 경계선 레이어 추가 (라인)
+        map.addLayer(
+            {
+                id: 'province-border-line',
+                source: 'province-boundaries',
+                type: 'line',
+                paint: {
+                    'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
+                    'line-opacity': 0, // 초기에는 숨김 (시도 탭에서만 보이도록)
+                    'line-width': 0.8 // 경계선 두께
+                },
+                layout: { // 추가된 부분
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                filter: ["has", "name"] // 모든 시도 경계선을 포함하도록 필터링
+            },
+            'water' // 시도 채우기 레이어 위에 삽입
         );
 
         // 육지색 및 바다색 레이어 업데이트 (스타일 변경 시 다시 적용)
