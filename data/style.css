@@ -186,7 +186,7 @@ input[type="range"] {
     padding-top: 0 !important;
     padding-bottom: 0 !important;
     border: 0 !important;
-    margin: -8px !important;
+    margin: 0 !important;
     overflow: hidden !important;
     /* 내용 잘리도록 */
 }
@@ -195,6 +195,11 @@ input[type="range"] {
 .tab-content-container .control-group.hidden {
     margin: -4px !important;
 }
+
+#landwater-color-group.hidden {
+    margin: -4px !important;
+}
+
 
 /* +,- 버튼 스타일 */
 #country-buttons, #province-buttons {
