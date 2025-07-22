@@ -31,6 +31,7 @@ const countryGroup2 = document.getElementById('country-group-2');
 const countryGroup3 = document.getElementById('country-group-3');
 
 const landWaterColorGroup = document.getElementById('landwater-color-group');
+const mapZoomSlider = document.getElementById('map-zoom-slider'); // 줌 슬라이더 요소 추가
 
 // 대한민국 시도 관련 HTML 요소 가져오기
 const provinceSelect1 = document.getElementById('province-select-1');
@@ -521,6 +522,19 @@ function flyToSelectedProvinces() {
 
 
 map.on('load', function () {
+    // 줌 슬라이더 초기값 설정
+    mapZoomSlider.value = map.getZoom().toFixed(1);
+
+    // 줌 슬라이더 변경 이벤트
+    mapZoomSlider.addEventListener('input', function () {
+        map.setZoom(parseFloat(this.value));
+    });
+
+    // 맵 줌 변경 이벤트 (맵 줌이 변경될 때 슬라이더 업데이트)
+    map.on('zoom', function () {
+        mapZoomSlider.value = map.getZoom().toFixed(1);
+    });
+
     // 1. 국가 경계 데이터 소스 추가
     map.addSource('country-boundaries', {
         type: 'vector',
