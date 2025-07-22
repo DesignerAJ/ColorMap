@@ -13,6 +13,7 @@
     <script src='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js'></script>
     <link href='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css' rel='stylesheet' />
     <link href='./data/style.css' rel='stylesheet' />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 
 <body>
@@ -20,6 +21,7 @@
         <div class="tab-header">
             <button class="tab-button active" data-tab="country">국가</button>
             <button class="tab-button" data-tab="province">대한민국 시도</button>
+            <button id="minimize-button" class="minimize-button"><i class="fas fa-angle-up"></i></button>
         </div>
 
 
@@ -87,9 +89,9 @@
                 <input type="range" id="border-opacity-slider" min="0" max="1" step="0.01" value="1">
             </div>
             <div class="control-group">
-                <label for="admin-color-picker">행정구역선</label>
+                <label for="admin-color-picker">행정구역</label>
                 <input type="color" id="admin-color-picker" value="#ededed">
-                <input type="range" id="admin-opacity-slider" min="0" max="1" step="0.01" value="0.4">
+                <input type="range" id="admin-opacity-slider" min="0" max="1" step="0.01" value="0.5">
             </div>
         </div>
 

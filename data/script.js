@@ -49,7 +49,8 @@ const highlightColorPickerProvince3 = document.getElementById('highlight-color-p
 const tabButtons = document.querySelectorAll('.tab-button');
 const countryTabContent = document.getElementById('country-tab-content');
 const provinceTabContent = document.getElementById('province-tab-content');
-
+const minimizeButton = document.getElementById('minimize-button'); // 최소화 버튼
+const countrySelectorContainer = document.getElementById('country-selector-container'); // 전체 컨테이너
 
 // 전역 상태 변수
 let activeCountryGroups = 1;
@@ -58,6 +59,7 @@ let currentSelectedCountryIsos = [];
 let currentSelectedProvinceCodes = []; // 시도 코드 저장을 위한 새 변수
 let activeTab = 'country'; // 현재 활성화된 탭을 추적하는 변수 (초기값 'country')
 let isFirstGlobeProjection = true; // 지구본 투영법에서 초기 줌 조정을 위한 플래그
+let isMinimized = false; // 최소화 상태를 추적하는 변수
 
 const map = new mapboxgl.Map({
     container: 'map',
@@ -85,6 +87,8 @@ const projections = [
     // 필요에 따라 다른 지원되는 투영법을 추가할 수 있습니다.
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
+
+const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드 시 ../ColorMap/data/KoreaAdmin_Simple_250718.geojson
 
 // 드롭다운 리스트 채우기 함수
 function populateCountryDropdown(selectElement) {
@@ -541,7 +545,7 @@ map.on('load', function () {
     // 3. 대한민국 시도 경계 geoJson데이터
     map.addSource('province-boundaries', {
         type: 'geojson',
-        data: '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'
+        data: krGeojson
     });
 
     // 4. 대한민국 시도 경계 레이어 추가 및 색칠
@@ -614,6 +618,22 @@ map.on('load', function () {
     updateProvinceGroupVisibility(); // 초기 시도 그룹 가시성 설정
 
     // --- 이벤트 리스너 ---
+
+    // 최소화 버튼 클릭 이벤트
+    minimizeButton.addEventListener('click', () => {
+        isMinimized = !isMinimized; // 상태 토글
+        countrySelectorContainer.classList.toggle('minimized', isMinimized); // minimized 클래스 토글
+
+        // 아이콘 변경
+        const icon = minimizeButton.querySelector('i');
+        if (isMinimized) {
+            icon.classList.remove('fa-angle-up');
+            icon.classList.add('fa-angle-down');
+        } else {
+            icon.classList.remove('fa-angle-down');
+            icon.classList.add('fa-angle-up');
+        }
+    });
 
     // 탭 버튼 클릭 이벤트
     tabButtons.forEach(button => {
@@ -820,7 +840,7 @@ map.on('load', function () {
         // 3. 대한민국 시도 경계 데이터 소스 추가 (Mapbox Studio에서 생성한 타일셋 URL)
         map.addSource('province-boundaries', {
             type: 'geojson',
-            data: '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'
+            data: krGeojson
         });
 
         // 4. 대한민국 시도 경계 레이어 추가 및 색칠
