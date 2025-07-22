@@ -71,7 +71,7 @@ const map = new mapboxgl.Map({
 });
 
 // 줌 인터페이스 (NavigationControl) 추가 (지도 왼쪽 상단)
-map.addControl(new mapboxgl.NavigationControl(), 'top-left');
+// map.addControl(new mapboxgl.NavigationControl(), 'top-left');
 
 // 국가 목록 데이터는 config.js에서 가져옵니다.
 const countries = COUNTRIES_DATA;

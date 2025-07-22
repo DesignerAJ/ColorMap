@@ -186,7 +186,7 @@ input[type="range"] {
     padding-top: 0 !important;
     padding-bottom: 0 !important;
     border: 0 !important;
-    margin: 0 !important; /* 추가: 숨겨질 때 마진도 제거 */
+    margin: -8px !important;
     overflow: hidden !important;
     /* 내용 잘리도록 */
 }
