@@ -541,7 +541,7 @@ map.on('load', function () {
     // 3. 대한민국 시도 경계 geoJson데이터
     map.addSource('province-boundaries', {
         type: 'geojson',
-        data: '../data/KoreaAdmin_Simple_250718.geojson'
+        data: './data/KoreaAdmin_Simple_250718.geojson'
     });
 
     // 4. 대한민국 시도 경계 레이어 추가 및 색칠
@@ -820,7 +820,7 @@ map.on('load', function () {
         // 3. 대한민국 시도 경계 데이터 소스 추가 (Mapbox Studio에서 생성한 타일셋 URL)
         map.addSource('province-boundaries', {
             type: 'geojson',
-            data: '../data/KoreaAdmin_Simple_250718.geojson'
+            data: './data/KoreaAdmin_Simple_250718.geojson'
         });
 
         // 4. 대한민국 시도 경계 레이어 추가 및 색칠
