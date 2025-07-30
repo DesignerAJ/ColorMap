@@ -1,8 +1,5 @@
 // config.js
 
-// Mapbox 액세스 토큰(토큰 뒤 공백 확인!!!)
-const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiZGVzaWduZXJhaiIsImEiOiJjaXZqNDFuMWswMjN0MnRwM3l3NjJuaXNqIn0.O5DQoymT7cb0VKaSxZN_ZQ';
-
 // 국가 목록 데이터 (center: [경도, 위도], zoom: 초기 줌 레벨)
 // tag: 특별한 내용 (예: #분쟁지역), tagColor: 태그 색상 (CSS 색상 값) 체크 필요
 const COUNTRIES_DATA = [

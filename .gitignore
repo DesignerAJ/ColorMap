@@ -1,2 +1,14 @@
 Backup/
+
 Temp/
+
+# Node.js dependencies
+/node_modules
+/functions/node_modules
+
+# Firebase and environment variables
+.firebase/
+.firebaserc
+# .env files contain sensitive credentials
+.env*
+!/.env.example

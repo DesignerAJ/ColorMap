@@ -1,6 +1,39 @@
 // script.js
 
-// config.js에서 정의한 토큰 및 국가 데이터 변수를 사용합니다.
+const tokenFunctionUrl = 'https://asia-northeast3-manage-dev-tokens.cloudfunctions.net/getMapboxToken';
+
+// 받아온 토큰을 저장하여 반복적인 호출을 방지하기 위한 변수
+let cachedToken = null;
+
+/**
+ * Cloud Function에서 맵박스 토큰을 비동기적으로 가져오는 함수
+ * 한 번 가져온 토큰은 캐시에 저장하여 재사용합니다.
+ * @returns {Promise<string|null>} 맵박스 토큰 또는 null
+ */
+export async function fetchMapboxToken() {
+    // 캐시된 토큰이 있으면 즉시 반환
+    if (cachedToken) {
+        return cachedToken;
+    }
+
+    try {
+        const response = await fetch(tokenFunctionUrl);
+        if (!response.ok) {
+            throw new Error('서버 응답이 올바르지 않습니다.');
+        }
+        const data = await response.json();
+        
+        // 받아온 토큰을 캐시에 저장
+        cachedToken = data.token;
+        return cachedToken;
+
+    } catch (error) {
+        console.error('맵박스 토큰을 가져오는 데 실패했습니다:', error);
+        return null;
+    }
+}
+
+const MAPBOX_ACCESS_TOKEN = await fetchMapboxToken();
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
 
 // HTML 요소 가져오기
@@ -69,9 +102,6 @@ const map = new mapboxgl.Map({
     zoom: 4, // 초기 지도 줌 레벨
     projection: 'mercator', // 초기 투영법 설정 (기본값)
 });
-
-// 줌 인터페이스 (NavigationControl) 추가 (지도 왼쪽 상단)
-// map.addControl(new mapboxgl.NavigationControl(), 'top-left');
 
 // 국가 목록 데이터는 config.js에서 가져옵니다.
 const countries = COUNTRIES_DATA;
