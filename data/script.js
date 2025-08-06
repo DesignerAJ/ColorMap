@@ -392,15 +392,37 @@ function updateMapPaintAndFilter() {
             map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
             map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
 
+            let worldviewFilter = [
+                "match",
+                ["get", "worldview"],
+                [
+                    "AR,CN,IN,MA,RS,RU,TR,US"
+                ],
+                true,
+                false
+            ];
+
             if (currentSelectedCountryIsos.length > 0) {
                 map.setFilter('country-color-fill', [
-                    "in",
-                    "iso_3166_1_alpha_3",
-                    ...currentSelectedCountryIsos
+                    'all',
+                    ['any',
+                        ['==', 'all', ['get', 'worldview']],
+                        ['in', 'US', ['get', 'worldview']],
+                    ],
                 ]);
             } else {
                 map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]); // 선택된 국가가 없으면 숨김
             }
+
+            // if (currentSelectedCountryIsos.length > 0) {
+            //     map.setFilter('country-color-fill', [
+            //         "in",
+            //         "iso_3166_1_alpha_3",
+            //         ...currentSelectedCountryIsos
+            //     ]);
+            // } else {
+            //     map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]); // 선택된 국가가 없으면 숨김
+            // }
         }
         // 시도 레이어 숨김
         if (map.getLayer('province-color-fill')) {
@@ -572,11 +594,25 @@ map.on('load', function () {
     });
 
     // 2. 국가 경계 레이어 추가 및 색칠
+    let worldviewFilter = [
+        "all",
+        [
+            "match",
+            ["get", "worldview"],
+            [
+                "AR,CN,IN,MA,RS,RU,TR,US"
+            ],
+            true,
+            false
+        ]
+    ];
+
     map.addLayer(
         {
             id: 'country-color-fill',
             source: 'country-boundaries',
             'source-layer': 'country_boundaries',
+            filter: worldviewFilter, // 세계관 필터 적용
             type: 'fill',
             paint: {
                 'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
@@ -866,12 +902,26 @@ map.on('load', function () {
             url: 'mapbox://mapbox.country-boundaries-v1',
         });
 
+        let worldviewFilter = [
+            "all",
+            [
+                "match",
+                ["get", "worldview"],
+                [
+                    "AR,CN,IN,MA,RS,RU,TR,US"
+                ],
+                true,
+                false
+            ]
+        ];
+
         // 2. 국가 경계 레이어 추가 및 색칠 (스타일 변경 시 다시 추가)
         map.addLayer(
             {
                 id: 'country-color-fill',
                 source: 'country-boundaries',
                 'source-layer': 'country_boundaries',
+                filter: worldviewFilter, // 세계관 필터 적용
                 type: 'fill',
                 paint: {
                     'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용

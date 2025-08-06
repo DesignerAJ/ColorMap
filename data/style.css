@@ -314,6 +314,16 @@ input[type="range"] {
     transform: scale(0.9);
 }
 
+@media (max-width: 768px) {
+    .minimize-button {
+        transform: rotate(180deg);
+    }
+
+    .minimize-button:hover {
+        background-color: #ebebeb;
+    }
+}
+
 .tab-button.active {
     background-color: #ffffff;
     color: #333;
