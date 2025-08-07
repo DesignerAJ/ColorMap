@@ -31,17 +31,22 @@ body,
     overflow: hidden;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 720px) {
     #country-selector-container {
         top: auto;
         bottom: 10px;
         left: 10px;
         right: 10px;
         width: auto;
+        min-width: 360px;
         max-height: 50%;
         /* 모바일 화면에서 높이 제한 */
         overflow-y: auto;
         /* 내용이 많을 경우 스크롤 가능하도록 */
+    }
+
+    #map-zoom-slider-group.control-group-box {
+        display: none;
     }
 }
 
@@ -64,7 +69,7 @@ body,
     background-color: #f7f7f7;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 40px;
     /* control-group 내부 간격 */
     max-height: 600px;
     /* 충분히 큰 값으로 설정 */
@@ -74,16 +79,43 @@ body,
 
 .control-group-box.horizontal-group {
     flex-direction: row;
-    justify-content: space-between;
     gap: 16px;
-    /* 가로 그룹 내 control-group 간격 */
     transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out, padding 0.3s ease-in-out, border 0.3s ease-in-out, margin 0.3s ease-in-out;
 }
+
+.control-group-box.vertical-group {
+    flex-direction: column;
+    gap: 14px;
+    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out, padding 0.3s ease-in-out, border 0.3s ease-in-out, margin 0.3s ease-in-out;
+}
+
+.control-group-box.solid-color-group {
+    display: flex;
+    justify-content: space-evenly;
+    flex-direction: row;
+    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out, padding 0.3s ease-in-out, border 0.3s ease-in-out, margin 0.3s ease-in-out;
+}
+
+#landwater-color-group .control-group,
+#water-color-group .control-group,
+#water-visible-group .control-group {
+    width: 240px;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+}
+
+/* #land-color-picker,
+#water-color-picker,
+#watter-visible-checker {
+    margin-right: -74px;
+} */
+
 
 .control-group {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     /* 라벨과 입력 필드 사이의 간격 */
     flex-grow: 1;
     /* 가로 그룹에서 공간을 균등하게 차지하도록 */
@@ -162,10 +194,23 @@ input[type="color" i] {
     display: block;
 }
 
+#country-selector-container .line-label {
+    width: 64px;
+    flex-shrink: 0; /* 라벨 너비가 줄어들지 않도록 설정 */
+}
+
+#country-selector-container .line-property-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #727272;
+    margin-left: 6px;
+    margin-right: -4px;
+    flex-shrink: 0; /* 라벨 너비가 줄어들지 않도록 설정 */
+}
 
 /* Range Slider Styles */
 input[type="range"] {
-    width: 80%;
+    width: 100%;
     height: 6px;
     -webkit-transition: .2s;
     transition: opacity .2s;
@@ -211,7 +256,7 @@ input[type="range"] {
 #add-country, #remove-country, #add-province, #remove-province {
     flex-grow: 1;
     width: 49%;
-    height: 36px;
+    height: 30px;
     font-size: 20px;
     /* 폰트 크기 조정 */
     font-weight: 700;
@@ -369,6 +414,8 @@ input[type="range"] {
     overflow: visible;
 }
 
+
+
 /* 최소화된 상태에서 하단 control-group-box 숨기기 */
 #country-selector-container.minimized .control-group-box:not(#county-addminus-group):not(#province-addminus-group) {
     max-height: 0;
@@ -380,9 +427,4 @@ input[type="range"] {
     border: none;
     overflow: hidden;
     transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out, border 0.3s ease-out;
-}
-
-#water-color-group {
-    position: relative;
-    left: -4px;
 }
