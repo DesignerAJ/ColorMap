@@ -51,8 +51,12 @@ const adminColorPicker = document.getElementById('admin-color-picker');
 const borderOpacitySlider = document.getElementById('border-opacity-slider');
 const adminOpacitySlider = document.getElementById('admin-opacity-slider');
 
+const borderDotlineChecker = document.getElementById('border-dotline-checker');
+const adminDotlineChecker = document.getElementById('admin-dotline-checker');
+
 const landColorPicker = document.getElementById('land-color-picker');
 const waterColorPicker = document.getElementById('water-color-picker');
+const waterChecker = document.getElementById('water-checker');
 
 const projectionSelect = document.getElementById('projection-select');
 const styleSelect = document.getElementById('style-select');
@@ -119,7 +123,8 @@ const projections = [
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
-const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드 시 ../ColorMap/data/KoreaAdmin_Simple_250718.geojson
+const krGeojson = '../data/KoreaAdmin_Simple_250718.geojson';
+// const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드시 사용
 
 // 드롭다운 리스트 채우기 함수
 function populateCountryDropdown(selectElement) {
@@ -347,10 +352,31 @@ function updateMapPaintAndFilter() {
         newOpacity = 1; // 기본값
     }
 
+    const countryDashLineProperty = [
+        "step",
+        ["zoom"],
+        ["literal", [2, 2]],
+        6,
+        ["literal", [2, 2]],
+        12,
+        ["literal", [5, 3]]
+    ]
+
+    const adminDashLineProperty = [
+        "step",
+        ["zoom"],
+        ["literal", [2, 3]],
+        6,
+        ["literal", [2, 3]],
+        12,
+        ["literal", [4, 3]]
+    ]
+
     // 국경선 색상 및 투명도 업데이트
     if (map.getLayer('country-border')) {
         map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
         map.setPaintProperty('country-border', 'line-opacity', parseFloat(borderOpacitySlider.value));
+        map.setPaintProperty('country-border', 'line-dasharray', borderDotlineChecker.checked ? countryDashLineProperty : undefined);
     }
 
     // 행정구역선 색상 및 투명도 업데이트
@@ -358,12 +384,24 @@ function updateMapPaintAndFilter() {
         map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
         // admin-boundaries 레이어는 기본적으로 항상 보이도록 설정
         map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
+        map.setPaintProperty('admin-boundaries', 'line-dasharray', adminDotlineChecker.checked ? adminDashLineProperty : undefined);
     }
 
     // 시도 경계선 레이어 업데이트 (새로 추가될 레이어)
     if (map.getLayer('province-border-line')) {
         map.setPaintProperty('province-border-line', 'line-color', adminColorPicker.value);
-        map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));
+        map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));;
+        map.setPaintProperty('province-border-line', 'line-dasharray', adminDotlineChecker.checked ? adminDashLineProperty : undefined);
+    }
+
+    // 강/호수 레이어 가시성 및 색상 업데이트
+    if (map.getLayer('water')) {
+        const waterIsVisible = waterChecker.checked;
+        map.setLayoutProperty('water', 'visibility', waterIsVisible ? 'visible' : 'none');
+        if (waterIsVisible) {
+            map.setPaintProperty('water', 'fill-color', waterColorPicker.value);
+            map.setPaintProperty('water', 'fill-outline-color', waterColorPicker.value);
+        }
     }
 
     if (activeTab === 'country') {
@@ -840,6 +878,13 @@ map.on('load', function () {
     // 행정구역선 투명도 슬라이더 변경 이벤트
     adminOpacitySlider.addEventListener('input', updateMapPaintAndFilter);
 
+    // 점선 체크박스 변경 이벤트
+    borderDotlineChecker.addEventListener('change', updateMapPaintAndFilter);
+    adminDotlineChecker.addEventListener('change', updateMapPaintAndFilter);
+
+    // 강/호수 체크박스 변경 이벤트
+    waterChecker.addEventListener('change', updateMapPaintAndFilter);
+
     // 육지색 선택기 변경 이벤트
     landColorPicker.addEventListener('input', function () {
         const newColor = this.value;
@@ -860,6 +905,11 @@ map.on('load', function () {
             if (map.getLayer(backgroundLayerId).type === 'background') {
                 map.setPaintProperty(backgroundLayerId, 'background-color', newColor);
             }
+        }
+        // 강/호수 레이어 색상도 함께 업데이트 (체크된 경우)
+        if (waterChecker.checked && map.getLayer('water')) {
+            map.setPaintProperty('water', 'fill-color', newColor);
+            map.setPaintProperty('water', 'fill-outline-color', newColor);
         }
     });
 
