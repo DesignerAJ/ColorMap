@@ -123,8 +123,11 @@ const projections = [
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
-const krGeojson = '../data/KoreaAdmin_Simple_250718.geojson';
-// const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드시 사용
+// const krGeojson = '../data/KoreaAdmin_Simple_250718.geojson'; // 로컬 테스트용
+// const krLineGeojson = '../data/KoreaAdmin_line_250808.geojson'; // 로컬 테스트용
+const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드시 사용
+const krLineGeojson = '../ColorMap/data/KoreaAdmin_line_250808.geojson'; // 업로드시 사용
+
 
 // 드롭다운 리스트 채우기 함수
 function populateCountryDropdown(selectElement) {
@@ -666,6 +669,11 @@ map.on('load', function () {
         data: krGeojson
     });
 
+    map.addSource('province-boundaries-line', {
+        type: 'geojson',
+        data: krLineGeojson
+    });
+
     // 4. 대한민국 시도 경계 레이어 추가 및 색칠
     map.addLayer(
         {
@@ -685,7 +693,7 @@ map.on('load', function () {
     map.addLayer(
         {
             id: 'province-border-line',
-            source: 'province-boundaries',
+            source: 'province-boundaries-line',
             type: 'line',
             paint: {
                 'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
