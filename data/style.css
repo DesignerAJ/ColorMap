@@ -128,20 +128,34 @@ body,
     display: flex;
 }
 
+.datalist-wrapper::before {
+    content: ' ';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23aaa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"></circle><line x1="50" y1="50" x2="16.65" y2="16.65"></line></svg>');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 16px 16px;
+    pointer-events: none;
+}
+
 .datalist-wrapper::after {
     content: ' ';
     position: absolute;
     right: 8px;
     top: 50%;
     transform: translateY(-50%);
-    width: 40px; /* 너비 확장 */
+    width: 16px;
     height: 16px;
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23aaa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>'),
-        url('data:image/svg+xml;utf8,<svg fill="%23333" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
-    background-repeat: no-repeat, no-repeat;
-    background-position: right 0px center, right 20px center; /* 오른쪽부터 아이콘 배치 */
-    background-size: 16px 16px, 16px 16px; /* 각 아이콘 크기 */
-    pointer-events: none; /* 아이콘이 클릭 이벤트를 방해하지 않도록 설정 */
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%23333" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 16px 16px;
+    pointer-events: none;
 }
 
 .datalist-wrapper input[list] {
@@ -180,7 +194,8 @@ select {
 }
 
 .datalist-wrapper input[list] {
-    padding-right: 50px; /* 아이콘과 텍스트가 겹치지 않도록 패딩 추가 */
+    padding-left: 30px; /* 왼쪽 아이콘을 위한 패딩 */
+    padding-right: 30px; /* 오른쪽 아이콘을 위한 패딩 */
 }
 
 input[list]::-webkit-calendar-picker-indicator {
