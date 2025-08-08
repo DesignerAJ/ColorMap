@@ -39,8 +39,8 @@ body,
         right: 10px;
         width: auto;
         min-width: 360px;
-        max-height: 50%;
-        /* 모바일 화면에서 높이 제한 */
+        max-height: 420px;
+        /* max-height: 80%; */
         overflow-y: auto;
         /* 내용이 많을 경우 스크롤 가능하도록 */
     }
