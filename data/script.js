@@ -103,7 +103,7 @@ const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf', // 사용자의 커스텀 스타일 URL
     center: [127, 36], // 초기 지도 중심 (한국)
-    zoom: 4, // 초기 지도 줌 레벨
+    zoom: 6, // 초기 지도 줌 레벨
     projection: 'mercator', // 초기 투영법 설정 (기본값)
 });
 
@@ -129,57 +129,37 @@ const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로
 const krLineGeojson = '../ColorMap/data/KoreaAdmin_line_250808.geojson'; // 업로드시 사용
 
 
-// 드롭다운 리스트 채우기 함수
-function populateCountryDropdown(selectElement) {
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = '-- 선택 없음 --';
-    selectElement.appendChild(defaultOption);
-
-    countries.forEach(country => {
+// 데이터리스트 채우기 함수
+function populateDatalist(datalistElement, data, type) {
+    datalistElement.innerHTML = ''; // 기존 옵션 초기화
+    data.forEach(item => {
         const option = document.createElement('option');
-        option.value = country.iso;
-        option.textContent = country.name;
-        if (country.tag) {
-            option.textContent += ` ${country.tag}`;
+        if (type === 'country') {
+            option.value = item.name;
+            option.dataset.iso = item.iso;
+        } else {
+            option.value = item.name;
         }
-        if (country.tagColor) {
-            option.style.color = country.tagColor;
-        }
-        selectElement.appendChild(option);
+        datalistElement.appendChild(option);
     });
 }
 
-// 각 국가 드롭다운 채우기
-populateCountryDropdown(countrySelect1);
-populateCountryDropdown(countrySelect2);
-populateCountryDropdown(countrySelect3);
+// 각 국가 데이터리스트 채우기
+populateDatalist(document.getElementById('country-datalist-1'), COUNTRIES_DATA, 'country');
+populateDatalist(document.getElementById('country-datalist-2'), COUNTRIES_DATA, 'country');
+populateDatalist(document.getElementById('country-datalist-3'), COUNTRIES_DATA, 'country');
 
 // 대한민국 시도 목록 데이터는 config.js에서 가져옵니다.
 const provinces = PROVINCES_DATA;
 
-// 시도 드롭다운 리스트 채우기 함수
-function populateProvinceDropdown(selectElement) {
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = '-- 선택 없음 --';
-    selectElement.appendChild(defaultOption);
+// 각 시도 데이터리스트 채우기
+populateDatalist(document.getElementById('province-datalist-1'), PROVINCES_DATA, 'province');
+populateDatalist(document.getElementById('province-datalist-2'), PROVINCES_DATA, 'province');
+populateDatalist(document.getElementById('province-datalist-3'), PROVINCES_DATA, 'province');
 
-    provinces.forEach(province => {
-        const option = document.createElement('option');
-        option.value = province.name;
-        option.textContent = province.name;
-        selectElement.appendChild(option);
-    });
-}
-
-// 각 시도 드롭다운 채우기
-populateProvinceDropdown(provinceSelect1);
-populateProvinceDropdown(provinceSelect2);
-populateProvinceDropdown(provinceSelect3);
 
 // 초기 선택 국가 설정
-countrySelect1.value = 'KOR';
+countrySelect1.value = '대한민국';
 countrySelect2.value = ''; // 초기에는 선택되지 않음
 countrySelect3.value = ''; // 초기에는 선택되지 않음
 
@@ -212,7 +192,6 @@ function updateCountryGroupVisibility() {
     if (activeTab === 'country') {
         flyToSelectedCountries(); // UI 변경 후 지도 이동
     }
-    updateDropdownOptions(); // 드롭다운 옵션 업데이트
 }
 
 // 동적 시도 그룹 가시성 및 버튼 상태 업데이트 함수
@@ -230,79 +209,53 @@ function updateProvinceGroupVisibility() {
     if (activeTab === 'province') {
         flyToSelectedProvinces(); // UI 변경 후 지도 이동
     }
-    updateProvinceDropdownOptions(); // 드롭다운 옵션 업데이트
 }
 
 
-// 드롭다운 옵션 업데이트 함수
-function updateDropdownOptions() {
-    const allSelects = [countrySelect1];
-    if (activeCountryGroups >= 2) {
-        allSelects.push(countrySelect2);
-    }
-    if (activeCountryGroups >= 3) {
-        allSelects.push(countrySelect3);
-    }
+// 국가 이름으로 ISO 코드를 찾는 함수
+function getCountryIsoByName(name) {
+    const country = COUNTRIES_DATA.find(c => c.name === name);
+    return country ? country.iso : null;
+}
 
-    const selectedValues = allSelects.map(select => select.value).filter(value => value !== '');
+// 입력 값 유효성 검사 및 ISO 코드 변환 함수
+function getSelectedCountryIso(inputElement) {
+    const countryName = inputElement.value;
+    return getCountryIsoByName(countryName);
+}
 
-    // 모든 드롭다운의 모든 옵션을 먼저 활성화 상태로 초기화
-    [countrySelect1, countrySelect2, countrySelect3].forEach(selectElement => {
-        Array.from(selectElement.options).forEach(option => {
-            option.disabled = false;
-            option.style.textDecoration = 'none';
-        });
-    });
+// 동적 데이터리스트 업데이트 (국가)
+function updateCountryDatalist() {
+    const allSelects = [countrySelect1, countrySelect2, countrySelect3].filter(el => !el.parentElement.classList.contains('hidden'));
+    const selectedNames = allSelects.map(select => select.value).filter(value => value !== '');
 
-    // 활성화된 드롭다운에 대해서만 중복 옵션 비활성화 로직 적용
     allSelects.forEach(selectElement => {
-        Array.from(selectElement.options).forEach(option => {
-            if (option.value === '') {
-                // "-- 선택 없음 --" 옵션은 항상 활성화
-                option.disabled = false;
-                option.style.textDecoration = 'none';
-                return;
-            }
-
-            // 현재 드롭다운의 선택된 값은 제외하고, 다른 활성화된 드롭다운에서 선택된 값인지 확인
-            const isSelectedInOtherActiveDropdown = selectedValues.includes(option.value) && option.value !== selectElement.value;
-
-            if (isSelectedInOtherActiveDropdown) {
-                option.disabled = true;
-                option.style.textDecoration = 'line-through'; // 추가
-            }
-        });
+        const datalist = document.getElementById(selectElement.getAttribute('list'));
+        const currentVal = selectElement.value;
+        
+        // 다른 input에서 선택된 값을 제외한 목록 생성
+        const filteredCountries = COUNTRIES_DATA.filter(country => 
+            !selectedNames.includes(country.name) || country.name === currentVal
+        );
+        
+        populateDatalist(datalist, filteredCountries, 'country');
     });
 }
 
-// 시도 드롭다운 옵션 업데이트 함수
-function updateProvinceDropdownOptions() {
-    const allSelects = [provinceSelect1];
-    if (activeProvinceGroups >= 2) allSelects.push(provinceSelect2);
-    if (activeProvinceGroups >= 3) allSelects.push(provinceSelect3);
-
-    const selectedValues = allSelects.map(select => select.value).filter(value => value !== '');
-
-    [provinceSelect1, provinceSelect2, provinceSelect3].forEach(selectElement => {
-        Array.from(selectElement.options).forEach(option => {
-            option.disabled = false;
-            option.style.textDecoration = 'none';
-        });
-    });
+// 동적 데이터리스트 업데이트 (시도)
+function updateProvinceDatalist() {
+    const allSelects = [provinceSelect1, provinceSelect2, provinceSelect3].filter(el => !el.parentElement.classList.contains('hidden'));
+    const selectedNames = allSelects.map(select => select.value).filter(value => value !== '');
 
     allSelects.forEach(selectElement => {
-        Array.from(selectElement.options).forEach(option => {
-            if (option.value === '') {
-                option.disabled = false;
-                option.style.textDecoration = 'none';
-                return;
-            }
-            const isSelectedInOtherActiveDropdown = selectedValues.includes(option.value) && option.value !== selectElement.value;
-            if (isSelectedInOtherActiveDropdown) {
-                option.disabled = true;
-                option.style.textDecoration = 'line-through';
-            }
-        });
+        const datalist = document.getElementById(selectElement.getAttribute('list'));
+        const currentVal = selectElement.value;
+
+        const filteredProvinces = PROVINCES_DATA.filter(province => 
+            !selectedNames.includes(province.name) || province.name === currentVal
+        );
+
+        populateDatalist(datalist, filteredProvinces, 'province');
     });
 }
 
@@ -409,9 +362,9 @@ function updateMapPaintAndFilter() {
     }
 
     if (activeTab === 'country') {
-        const selectedCountry1 = countrySelect1.value;
-        const selectedCountry2 = countrySelect2.value;
-        const selectedCountry3 = countrySelect3.value;
+        const selectedCountry1 = getSelectedCountryIso(countrySelect1);
+        const selectedCountry2 = getSelectedCountryIso(countrySelect2);
+        const selectedCountry3 = getSelectedCountryIso(countrySelect3);
 
         if (map.getLayer('country-color-fill')) {
             const paintExpression = ['match', ['get', 'iso_3166_1_alpha_3']];
@@ -422,7 +375,7 @@ function updateMapPaintAndFilter() {
                 currentSelectedCountryIsos.push(selectedCountry1);
             }
             if (selectedCountry2) {
-            paintExpression.push(selectedCountry2, highlightColorPicker2.value);
+                paintExpression.push(selectedCountry2, highlightColorPicker2.value);
                 currentSelectedCountryIsos.push(selectedCountry2);
             }
             if (selectedCountry3) {
@@ -456,15 +409,6 @@ function updateMapPaintAndFilter() {
                 map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]); // 선택된 국가가 없으면 숨김
             }
 
-            // if (currentSelectedCountryIsos.length > 0) {
-            //     map.setFilter('country-color-fill', [
-            //         "in",
-            //         "iso_3166_1_alpha_3",
-            //         ...currentSelectedCountryIsos
-            //     ]);
-            // } else {
-            //     map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]); // 선택된 국가가 없으면 숨김
-            // }
         }
         // 시도 레이어 숨김
         if (map.getLayer('province-color-fill')) {
@@ -480,9 +424,6 @@ function updateMapPaintAndFilter() {
         }
 
     } else if (activeTab === 'province') {
-        const selectedProvince1 = provinceSelect1.value;
-        const selectedProvince2 = provinceSelect2.value;
-        const selectedProvince3 = provinceSelect3.value;
 
         // admin-boundaries 레이어 숨김
         if (map.getLayer('admin-boundaries')) {
@@ -831,38 +772,33 @@ map.on('load', function () {
         }
     });
 
-    // 국가 드롭다운 변경 이벤트
-    countrySelect1.addEventListener('change', function () {
-        updateMapPaintAndFilter();
-        updateDropdownOptions(); // 추가
-        flyToSelectedCountries();
-    });
-    countrySelect2.addEventListener('change', function () {
-        updateMapPaintAndFilter();
-        updateDropdownOptions(); // 추가
-        flyToSelectedCountries();
-    });
-    countrySelect3.addEventListener('change', function () {
-        updateMapPaintAndFilter();
-        updateDropdownOptions(); // 추가
-        flyToSelectedCountries();
+    // 국가 입력 필드 이벤트 리스너
+    [countrySelect1, countrySelect2, countrySelect3].forEach(input => {
+        input.addEventListener('focus', updateCountryDatalist);
+        input.addEventListener('change', function () {
+            // 유효한 국가 이름인지 확인
+            const iso = getSelectedCountryIso(this);
+            if (this.value && !iso) {
+                this.value = ''; // 유효하지 않으면 값 초기화
+            }
+            updateMapPaintAndFilter();
+            flyToSelectedCountries();
+            updateCountryDatalist(); // 선택 후 다른 목록들도 업데이트
+        });
     });
 
-    // 시도 드롭다운 변경 이벤트
-    provinceSelect1.addEventListener('change', function () {
-        updateMapPaintAndFilter();
-        updateProvinceDropdownOptions();
-        flyToSelectedProvinces();
-    });
-    provinceSelect2.addEventListener('change', function () {
-        updateMapPaintAndFilter();
-        updateProvinceDropdownOptions();
-        flyToSelectedProvinces();
-    });
-    provinceSelect3.addEventListener('change', function () {
-        updateMapPaintAndFilter();
-        updateProvinceDropdownOptions();
-        flyToSelectedProvinces();
+    // 시도 입력 필드 이벤트 리스너
+    [provinceSelect1, provinceSelect2, provinceSelect3].forEach(input => {
+        input.addEventListener('focus', updateProvinceDatalist);
+        input.addEventListener('change', function () {
+            const isValid = PROVINCES_DATA.some(p => p.name === this.value);
+            if (this.value && !isValid) {
+                this.value = ''; // 유효하지 않으면 값 초기화
+            }
+            updateMapPaintAndFilter();
+            flyToSelectedProvinces();
+            updateProvinceDatalist(); // 선택 후 다른 목록들도 업데이트
+        });
     });
 
     // 국가 강조색 선택기 변경 이벤트

@@ -122,7 +122,45 @@ body,
     transition: max-height 0.2s ease-in-out, opacity 0.2s ease-in-out, padding 0.2s ease-in-out, border 0.2s ease-in-out, margin 0.2s ease-in-out;
 }
 
-/* 드롭다운 (country-select, projection-select) 공통 스타일 */
+.datalist-wrapper {
+    position: relative;
+    flex-grow: 1;
+    display: flex;
+}
+
+.datalist-wrapper::after {
+    content: ' ';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px; /* 너비 확장 */
+    height: 16px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23aaa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>'),
+        url('data:image/svg+xml;utf8,<svg fill="%23333" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat, no-repeat;
+    background-position: right 0px center, right 20px center; /* 오른쪽부터 아이콘 배치 */
+    background-size: 16px 16px, 16px 16px; /* 각 아이콘 크기 */
+    pointer-events: none; /* 아이콘이 클릭 이벤트를 방해하지 않도록 설정 */
+}
+
+.datalist-wrapper input[list] {
+    width: 100%;
+    padding: 8px;
+    font-family: inherit;
+    /* 폰트 상속 */
+    font-size: 16px;
+    font-weight: 700;
+    /* 폰트 굵기 추가 */
+    border: 1px solid #dbdbdb;
+    border-radius: 6px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: #fff;
+    cursor: pointer;
+}
+
 select {
     flex-grow: 1;
     width: auto;
@@ -140,6 +178,21 @@ select {
     background-size: 16px auto;
     cursor: pointer;
 }
+
+.datalist-wrapper input[list] {
+    padding-right: 50px; /* 아이콘과 텍스트가 겹치지 않도록 패딩 추가 */
+}
+
+input[list]::-webkit-calendar-picker-indicator {
+    display: none !important;
+}
+
+/* placeholder 스타일 */
+input[list]::placeholder {
+    color: #aaa;
+    font-weight: 400;
+}
+
 
 /* 드롭다운 내부 옵션 (country-select, projection-select) 공통 스타일 */
 select option {
