@@ -335,6 +335,7 @@ function handleColorUIVisibility() {
             landWaterColorGroup.classList.remove('hidden');
         } else {
             landWaterColorGroup.classList.add('hidden');
+            waterChecker.checked = false; // 스타일이 변경되면 물 체크박스 해제
         }
     }
 }
