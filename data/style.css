@@ -257,38 +257,19 @@ select option {
 }
 
 
-/* 모든 컬러 피커 공통 스타일 */
-input[type="color"] {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    padding: 0;
-    margin: 0;
-    border: none;
-    background: #8f8f8f;
-    cursor: pointer;
+/* 우리가 디자인한 커스텀 컬러 피커 버튼 */
+.custom-color-btn {
     width: 22px;
     height: 22px;
-    border-radius: 100px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    margin: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+    /* 안쪽 얇은 테두리로 버튼 부각 */
+    cursor: pointer;
     display: block;
-    overflow: hidden;
     outline: none;
-}
-
-input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 1px;
-}
-
-input[type="color"]::-webkit-color-swatch {
-    border: none;
-    border-radius: 50%;
-    height: 20px;
-    width: 20px;
-}
-
-input[type="color"]::-moz-color-swatch {
-    border: none;
-    border-radius: 50%;
 }
 
 #country-selector-container .line-label {
@@ -605,4 +586,34 @@ input[type="range"] {
     border: none;
     overflow: hidden;
     transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out, border 0.3s ease-out;
+}
+
+/* Pickr 하단 포맷 변경 버튼 노출 순서 강제 배치 (순서대로 1,2,3,4) */
+.pcr-app .pcr-interaction {
+    display: flex;
+    flex-wrap: wrap;
+    /* 창 크기에 따라 자연스럽게 감싸지도록 */
+}
+
+/* 1순위: RGBA */
+.pcr-app .pcr-interaction .pcr-type[value="RGBA"],
+.pcr-app .pcr-interaction .pcr-type.active[value="RGBA"] {
+    order: 1 !important;
+}
+
+/* 2순위: HSLA */
+.pcr-app .pcr-interaction .pcr-type[value="HSLA"],
+.pcr-app .pcr-interaction .pcr-type.active[value="HSLA"] {
+    order: 2 !important;
+}
+
+/* 3순위: HEXA */
+.pcr-app .pcr-interaction .pcr-type[value="HEXA"],
+.pcr-app .pcr-interaction .pcr-type.active[value="HEXA"] {
+    order: 3 !important;
+}
+
+/* 4순위: 텍스트 입력창 (input) */
+.pcr-app .pcr-interaction .pcr-result {
+    order: 4 !important;
 }

@@ -36,18 +36,78 @@ export async function fetchMapboxToken() {
 const MAPBOX_ACCESS_TOKEN = await fetchMapboxToken();
 mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
 
+/* --- Pickr 연동 래퍼 함수 --- */
+function createPickrWrapper(elementId) {
+    const inputElement = document.getElementById(elementId);
+    if (!inputElement) return { value: '#000000', addEventListener: () => { } };
+
+    const initialColor = inputElement.value || '#000000';
+
+    // 기존 input(막대힌 브라우저 피커) 요소를 우리가 디자인할 원형 div 버튼으로 교체
+    const colorBtn = document.createElement('div');
+    colorBtn.id = elementId;
+    colorBtn.className = 'custom-color-btn';
+    colorBtn.style.backgroundColor = initialColor; // 초기 배경색 설정
+
+    inputElement.parentNode.replaceChild(colorBtn, inputElement);
+
+    const pickr = Pickr.create({
+        el: colorBtn,
+        theme: 'monolith', // 사용자가 요청한 Monolith 테마 적용
+        useAsButton: true, // 핵심: Pickr 내장 버튼을 쓰지 않고 우리가 만든 요소(colorBtn)를 트리거로 사용
+        default: initialColor,
+        defaultRepresentation: 'RGBA', // 기본 표기법을 RGBA로 강제
+        components: {
+            preview: true,
+            opacity: true, // 투명도 조절 허용!
+            hue: true,
+            interaction: {
+                rgba: true,
+                hsla: true,
+                hex: true,
+                input: true
+            }
+        }
+    });
+
+    const wrapper = {
+        pickr: pickr, // 외부에서 Pickr 인스턴스에 접근 가능하도록 추가
+        get value() {
+            // 알파(투명도) 채널까지 포함된 rgba 색상 객체를 Mapbox에 적합한 문자열로 반환
+            // pickr가 완전히 로드되지 않았으면 기존 색상값 사용
+            if (!pickr || !pickr.getColor()) return initialColor;
+            return pickr.getColor().toRGBA().toString(0);
+        },
+        addEventListener: function (type, listener) {
+            // Pickr 이벤트 매핑 시, 드래그 중 버튼 색상이 실시간으로 바뀌게 처리
+            pickr.on('change', (color) => {
+                colorBtn.style.backgroundColor = color.toRGBA().toString(0);
+            });
+            if (type === 'input' || type === 'change') {
+                pickr.on('changestop', () => listener.call(wrapper));
+                pickr.on('save', () => listener.call(wrapper));
+                pickr.on('clear', () => {
+                    colorBtn.style.backgroundColor = 'transparent';
+                    listener.call(wrapper);
+                });
+            }
+        }
+    };
+    return wrapper;
+}
+
 // HTML 요소 가져오기
 const countrySelect1 = document.getElementById('country-select-1');
 const countrySelect2 = document.getElementById('country-select-2');
 const countrySelect3 = document.getElementById('country-select-3');
 
-const highlightColorPicker1 = document.getElementById('highlight-color-picker-1');
-const highlightColorPicker2 = document.getElementById('highlight-color-picker-2');
-const highlightColorPicker3 = document.getElementById('highlight-color-picker-3');
+const highlightColorPicker1 = createPickrWrapper('highlight-color-picker-1');
+const highlightColorPicker2 = createPickrWrapper('highlight-color-picker-2');
+const highlightColorPicker3 = createPickrWrapper('highlight-color-picker-3');
 
-const borderColorPicker = document.getElementById('border-color-picker');
-const disputedColorPicker = document.getElementById('disputed-color-picker');
-const adminColorPicker = document.getElementById('admin-color-picker');
+const borderColorPicker = createPickrWrapper('border-color-picker');
+const disputedColorPicker = createPickrWrapper('disputed-color-picker');
+const adminColorPicker = createPickrWrapper('admin-color-picker');
 
 const borderOpacitySlider = document.getElementById('border-opacity-slider');
 const adminOpacitySlider = document.getElementById('admin-opacity-slider');
@@ -57,8 +117,8 @@ const adminWidthSlider = document.getElementById('admin-width-slider');
 const borderDotlineChecker = document.getElementById('border-dotline-checker');
 const adminDotlineChecker = document.getElementById('admin-dotline-checker');
 
-const landColorPicker = document.getElementById('land-color-picker');
-const waterColorPicker = document.getElementById('water-color-picker');
+const landColorPicker = createPickrWrapper('land-color-picker');
+const waterColorPicker = createPickrWrapper('water-color-picker');
 const waterChecker = document.getElementById('water-checker');
 
 const projectionSelect = document.getElementById('projection-select');
@@ -82,9 +142,9 @@ const provinceGroup3 = document.getElementById('province-group-3');
 const addProvinceButton = document.getElementById('add-province');
 const removeProvinceButton = document.getElementById('remove-province');
 
-const highlightColorPickerProvince1 = document.getElementById('highlight-color-picker-province-1');
-const highlightColorPickerProvince2 = document.getElementById('highlight-color-picker-province-2');
-const highlightColorPickerProvince3 = document.getElementById('highlight-color-picker-province-3');
+const highlightColorPickerProvince1 = createPickrWrapper('highlight-color-picker-province-1');
+const highlightColorPickerProvince2 = createPickrWrapper('highlight-color-picker-province-2');
+const highlightColorPickerProvince3 = createPickrWrapper('highlight-color-picker-province-3');
 
 // 탭 관련 요소
 const tabButtons = document.querySelectorAll('.tab-button');
@@ -127,8 +187,8 @@ const projections = [
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
-const krGeojson = '../data/KoreaAdmin_Simple_250718.geojson'; // 로컬 테스트용
-const krLineGeojson = '../data/KoreaAdmin_line_250808.geojson'; // 로컬 테스트용
+const krGeojson = './data/KoreaAdmin_Simple_250718.geojson'; // 로컬 테스트용
+const krLineGeojson = './data/KoreaAdmin_line_250808.geojson'; // 로컬 테스트용
 // const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드시 사용
 // const krLineGeojson = '../ColorMap/data/KoreaAdmin_line_250808.geojson'; // 업로드시 사용
 
@@ -300,23 +360,32 @@ function handleColorUIVisibility() {
     }
 }
 
+// 맵 스타일별 디폴트 투명도(Alpha) 적용 함수
+function applyDefaultAlphaByStyle() {
+    if (!styleSelect) return;
+    const currentStyle = styleSelect.value;
+    // '단색' 스타일만 1.0, 나머지는 0.6
+    const defaultAlpha = (currentStyle === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') ? 1.0 : 0.60;
+
+    const fillPickers = [
+        highlightColorPicker1, highlightColorPicker2, highlightColorPicker3,
+        highlightColorPickerProvince1, highlightColorPickerProvince2, highlightColorPickerProvince3
+    ];
+
+    fillPickers.forEach(wrapper => {
+        if (wrapper && wrapper.pickr) {
+            const color = wrapper.pickr.getColor().toRGBA();
+            // 기존 색상(RGB)은 유지하고 alpha만 변경
+            wrapper.pickr.setColor(`rgba(${color[0]}, ${color[1]}, ${color[2]}, ${defaultAlpha})`);
+        }
+    });
+}
+
 // 지도 색상 및 필터 업데이트 함수
 function updateMapPaintAndFilter() {
     const currentStyleValue = styleSelect.value; // 현재 선택된 스타일 값 가져오기
 
-    // fill-opacity를 스타일이 '단색지형': 0.8, '단색': 1, '지형도': 0.4, '위성사진': 0.5으로 설정
-    let newOpacity;
-    if (currentStyleValue === 'mapbox://styles/designeraj/cmma6v98500gl01suhod9gfsz') { // 단색지형
-        newOpacity = 0.6;
-    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 단색
-        newOpacity = 1;
-    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw') { // 지형도
-        newOpacity = 0.75;
-    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5') { // 위성사진
-        newOpacity = 0.6;
-    } else {
-        newOpacity = 1; // 기본값
-    }
+    // (기존의 지형/단색 스타일에 따른 일괄 fill-opacity 지정 로직 삭제됨)
 
     const countryDashLineProperty = [
         "step",
@@ -338,36 +407,44 @@ function updateMapPaintAndFilter() {
         ["literal", [4, 3]]
     ]
 
-    // 국경선 색상 및 투명도, 두께 업데이트
+    // 국경선 색상 업데이트 (투명도 제거)
     if (map.getLayer('country-border')) {
         map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
-        map.setPaintProperty('country-border', 'line-opacity', parseFloat(borderOpacitySlider.value));
         map.setPaintProperty('country-border', 'line-width', parseFloat(borderWidthSlider.value));
-        map.setPaintProperty('country-border', 'line-dasharray', borderDotlineChecker.checked ? countryDashLineProperty : undefined);
+        if (borderDotlineChecker.checked) {
+            map.setPaintProperty('country-border', 'line-dasharray', countryDashLineProperty);
+        } else {
+            // 실선으로 초기화
+            map.setPaintProperty('country-border', 'line-dasharray', [1, 0]);
+        }
     }
 
-    // 분쟁지역선 업데이트 (투명도와 두께는 공유하되 두께는 국경선보다 살짝 작게 적용)
+    // 분쟁지역선 업데이트
     if (map.getLayer('dispute-boundaries')) {
         map.setPaintProperty('dispute-boundaries', 'line-color', disputedColorPicker.value);
-        map.setPaintProperty('dispute-boundaries', 'line-opacity', parseFloat(borderOpacitySlider.value));
         map.setPaintProperty('dispute-boundaries', 'line-width', parseFloat(borderWidthSlider.value) * 0.8);
-        // 분쟁지역은 항상 점선으로 표시되도록 함
     }
 
-    // 행정구역선 색상 및 투명도, 두께 업데이트
+    // 행정구역선 업데이트
     if (map.getLayer('admin-boundaries')) {
         map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
-        map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
         map.setPaintProperty('admin-boundaries', 'line-width', parseFloat(adminWidthSlider.value));
-        map.setPaintProperty('admin-boundaries', 'line-dasharray', adminDotlineChecker.checked ? adminDashLineProperty : undefined);
+        if (adminDotlineChecker.checked) {
+            map.setPaintProperty('admin-boundaries', 'line-dasharray', adminDashLineProperty);
+        } else {
+            map.setPaintProperty('admin-boundaries', 'line-dasharray', [1, 0]);
+        }
     }
 
-    // 시도 경계선 레이어 업데이트 (새로 추가될 레이어)
+    // 시도 경계선 레이어 업데이트
     if (map.getLayer('province-border-line')) {
         map.setPaintProperty('province-border-line', 'line-color', adminColorPicker.value);
-        map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));
         map.setPaintProperty('province-border-line', 'line-width', parseFloat(adminWidthSlider.value));
-        map.setPaintProperty('province-border-line', 'line-dasharray', adminDotlineChecker.checked ? adminDashLineProperty : undefined);
+        if (adminDotlineChecker.checked) {
+            map.setPaintProperty('province-border-line', 'line-dasharray', adminDashLineProperty);
+        } else {
+            map.setPaintProperty('province-border-line', 'line-dasharray', [1, 0]);
+        }
     }
 
     // 강/호수 레이어 가시성 및 색상 업데이트
@@ -386,6 +463,7 @@ function updateMapPaintAndFilter() {
         const selectedCountry3 = getSelectedCountryIso(countrySelect3);
 
         if (map.getLayer('country-color-fill')) {
+            map.setLayoutProperty('country-color-fill', 'visibility', 'visible'); // 다시 보이게
             const paintExpression = ['match', ['get', 'iso_3166_1_alpha_3']];
             currentSelectedCountryIsos = [];
 
@@ -401,6 +479,7 @@ function updateMapPaintAndFilter() {
                 paintExpression.push(selectedCountry3, highlightColorPicker3.value);
                 currentSelectedCountryIsos.push(selectedCountry3);
             }
+
             paintExpression.push('rgba(0, 0, 0, 0)'); // 기본값 (투명)
 
             if (currentSelectedCountryIsos.length > 0) {
@@ -408,7 +487,6 @@ function updateMapPaintAndFilter() {
             } else {
                 map.setPaintProperty('country-color-fill', 'fill-color', 'rgba(0, 0, 0, 0)');
             }
-            map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
 
             let worldviewFilter = [
                 "match",
@@ -433,31 +511,35 @@ function updateMapPaintAndFilter() {
             }
 
         }
-        // 시도 레이어 숨김
+        // 시도 색상 레이어 숨김 (필터 대신 visibility 속성 활용)
         if (map.getLayer('province-color-fill')) {
+            map.setLayoutProperty('province-color-fill', 'visibility', 'none');
             map.setFilter('province-color-fill', ["==", "name", ""]);
         }
-        // 시도 경계선 레이어 숨김
+        // 시도 경계선 레이어 숨김 (opacity 0 대신 visibility none 활용)
         if (map.getLayer('province-border-line')) {
-            map.setPaintProperty('province-border-line', 'line-opacity', 0);
+            map.setLayoutProperty('province-border-line', 'visibility', 'none');
         }
         // admin-boundaries 레이어 다시 보이게
         if (map.getLayer('admin-boundaries')) {
-            map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
+            map.setLayoutProperty('admin-boundaries', 'visibility', 'visible');
         }
 
     } else if (activeTab === 'province') {
 
         // admin-boundaries 레이어 숨김
         if (map.getLayer('admin-boundaries')) {
-            map.setPaintProperty('admin-boundaries', 'line-opacity', 0);
+            map.setLayoutProperty('admin-boundaries', 'visibility', 'none');
         }
         // 시도 경계선 레이어 보이게
         if (map.getLayer('province-border-line')) {
-            map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));
+            map.setLayoutProperty('province-border-line', 'visibility', 'visible');
         }
 
+        // 시도 색상 레이어 보이게
         if (map.getLayer('province-color-fill')) {
+            map.setLayoutProperty('province-color-fill', 'visibility', 'visible');
+
             currentSelectedProvinceCodes = [];
             const selectedProvince1 = provinceSelect1.value;
             const selectedProvince2 = provinceSelect2.value;
@@ -484,10 +566,10 @@ function updateMapPaintAndFilter() {
                 if (selectedProvince3) {
                     proPaintExpression.push(selectedProvince3, highlightColorPickerProvince3.value);
                 }
+
                 proPaintExpression.push('rgba(0, 0, 0, 0)'); // 기본값 (투명)
 
                 map.setPaintProperty('province-color-fill', 'fill-color', proPaintExpression);
-                map.setPaintProperty('province-color-fill', 'fill-opacity', newOpacity);
 
                 map.setFilter('province-color-fill', [
                     "in",
@@ -495,15 +577,14 @@ function updateMapPaintAndFilter() {
                     ...currentSelectedProvinceCodes
                 ]);
             } else {
-                // 선택된 시도가 없으면 레이어를 투명하게 설정하고 필터를 비활성화
+                // 선택된 시도가 없으면 레이어를 투명하게 설정하고 필터 초기화
                 map.setPaintProperty('province-color-fill', 'fill-color', 'rgba(0, 0, 0, 0)');
-                map.setPaintProperty('province-color-fill', 'fill-opacity', 0); // 완전히 투명하게
                 map.setFilter('province-color-fill', ["==", "name", ""]);
             }
         }
-        // 국가 레이어 숨김
+        // 국가 색상 레이어 숨김
         if (map.getLayer('country-color-fill')) {
-            map.setFilter('country-color-fill', ["==", "iso_3166_1_alpha_3", ""]);
+            map.setLayoutProperty('country-color-fill', 'visibility', 'none');
         }
     }
 }
@@ -580,6 +661,10 @@ function flyToSelectedProvinces() {
 
 
 map.on('load', function () {
+
+    // 초기 스타일 투명도 적용
+    applyDefaultAlphaByStyle();
+
     // 줌 슬라이더 초기값 설정
     mapZoomSlider.value = map.getZoom().toFixed(1);
 
@@ -621,8 +706,7 @@ map.on('load', function () {
             filter: worldviewFilter, // 세계관 필터 적용
             type: 'fill',
             paint: {
-                'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
-                'fill-opacity': 0.4, // 초기값 0.4로 설정
+                'fill-color': 'rgba(0, 0, 0, 0)' // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
             },
         },
         'water' // 'water' 레이어 아래에 삽입
@@ -646,8 +730,7 @@ map.on('load', function () {
             source: 'province-boundaries',
             type: 'fill',
             paint: {
-                'fill-color': 'rgba(255, 29, 29, 1)',
-                'fill-opacity': 0.4,
+                'fill-color': 'rgba(0, 0, 0, 0)'
             },
             filter: ["==", "name", ""] // 초기에는 아무것도 선택되지 않도록 필터링
         },
@@ -655,24 +738,25 @@ map.on('load', function () {
     );
 
     // 4-1. 대한민국 시도 경계선 레이어 추가 (라인)
-    map.addLayer(
-        {
-            id: 'province-border-line',
-            source: 'province-boundaries-line',
-            type: 'line',
-            paint: {
-                'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
-                'line-opacity': 0, // 초기에는 숨김 (시도 탭에서만 보이도록)
-                'line-width': 0.8 // 경계선 두께
-            },
-            layout: { // 추가된 부분
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            filter: ["has", "name"] // 모든 시도 경계선을 포함하도록 필터링
-        },
-        'water' // 시도 채우기 레이어 위에 삽입
-    );
+    const linePaintPropsLoad = {
+        'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
+        'line-width': parseFloat(adminWidthSlider.value) // 행정구역선 두께 공유
+    };
+    if (adminDotlineChecker.checked) {
+        linePaintPropsLoad['line-dasharray'] = adminDashLineProperty; // 점선 유무 공유
+    }
+
+    map.addLayer({
+        id: 'province-border-line',
+        source: 'province-boundaries-line',
+        type: 'line',
+        paint: linePaintPropsLoad,
+        layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+            'visibility': activeTab === 'province' ? 'visible' : 'none'
+        }
+    }); // 최상단에 그리기 위해 삽입 기준 생략
 
     // 5. 육지색 변경을 위한 레이어 설정
     const landLayerId = 'landColor';
@@ -839,11 +923,41 @@ map.on('load', function () {
     disputedColorPicker.addEventListener('input', updateMapPaintAndFilter);
     adminColorPicker.addEventListener('input', updateMapPaintAndFilter);
 
-    // 국경선 투명도 슬라이더 변경 이벤트
-    borderOpacitySlider.addEventListener('input', updateMapPaintAndFilter);
+    // 국경선 투명도 외부 슬라이더 변경 시 Pickr 알파 조절 (동기화)
+    borderOpacitySlider.addEventListener('input', function () {
+        [borderColorPicker, disputedColorPicker].forEach(wrapper => {
+            if (wrapper.pickr) {
+                let rgba = wrapper.pickr.getColor().toRGBA();
+                rgba[3] = parseFloat(borderOpacitySlider.value);
+                wrapper.pickr.setColor(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]})`);
+            }
+        });
+        updateMapPaintAndFilter();
+    });
 
-    // 행정구역선 투명도 슬라이더 변경 이벤트
-    adminOpacitySlider.addEventListener('input', updateMapPaintAndFilter);
+    // Pickr 투명도 변경 시 외부 국경선 슬라이더 갱신 (역동기화)
+    [borderColorPicker, disputedColorPicker].forEach(wrapper => {
+        if (wrapper.pickr) wrapper.pickr.on('change', (color) => {
+            borderOpacitySlider.value = color.toRGBA()[3];
+        });
+    });
+
+    // 행정구역선 투명도 외부 슬라이더 변경 시 Pickr 알파 조절 (동기화)
+    adminOpacitySlider.addEventListener('input', function () {
+        if (adminColorPicker.pickr) {
+            let rgba = adminColorPicker.pickr.getColor().toRGBA();
+            rgba[3] = parseFloat(adminOpacitySlider.value);
+            adminColorPicker.pickr.setColor(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]})`);
+        }
+        updateMapPaintAndFilter();
+    });
+
+    // Pickr 투명도 변경 시 외부 행정구역선 슬라이더 갱신 (역동기화)
+    if (adminColorPicker.pickr) {
+        adminColorPicker.pickr.on('change', (color) => {
+            adminOpacitySlider.value = color.toRGBA()[3];
+        });
+    }
 
     // 국경선 두께 슬라이더 변경 이벤트
     borderWidthSlider.addEventListener('input', updateMapPaintAndFilter);
@@ -903,9 +1017,14 @@ map.on('load', function () {
         flyToSelectedCountries();
     });
 
+
     // 맵 스타일 선택 드롭다운 변경 이벤트
     styleSelect.addEventListener('change', function () {
         const newStyle = this.value;
+
+        // 스타일별 디폴트 alpha 적용
+        applyDefaultAlphaByStyle();
+
         map.setStyle(newStyle, { diff: false }); // diff 비활성화하여 리렌더링 오류 및 404 방지
         handleColorUIVisibility(); // 스타일 변경 시 UI 가시성 업데이트
     });
@@ -916,8 +1035,9 @@ map.on('load', function () {
         if (map.getLayer('country-color-fill')) map.removeLayer('country-color-fill');
         if (map.getSource('country-boundaries')) map.removeSource('country-boundaries');
         if (map.getLayer('province-color-fill')) map.removeLayer('province-color-fill');
-        if (map.getLayer('province-border-line')) map.removeLayer('province-border-line'); // 추가
+        if (map.getLayer('province-border-line')) map.removeLayer('province-border-line');
         if (map.getSource('province-boundaries')) map.removeSource('province-boundaries');
+        if (map.getSource('province-line-boundaries')) map.removeSource('province-line-boundaries');
 
         // 1. 국가 경계 데이터 소스 추가 (스타일 변경 시 다시 추가)
         map.addSource('country-boundaries', {
@@ -948,16 +1068,21 @@ map.on('load', function () {
                 type: 'fill',
                 paint: {
                     'fill-color': 'rgba(0, 0, 0, 0)', // 초기값은 투명으로 설정하고, updateMapPaintAndFilter에서 실제 색상 적용
-                    'fill-opacity': 0.4, // 초기값 0.4로 설정
                 },
             },
             'water' // 'water' 레이어 아래에 삽입
         );
 
-        // 3. 대한민국 시도 경계 데이터 소스 추가 (Mapbox Studio에서 생성한 타일셋 URL)
+        // 3. 대한민국 시도 경계 데이터 소스 추가 (Mapbox Studio에서 생성한 타일셋 URL 대신 로컬 GEOJSON)
         map.addSource('province-boundaries', {
             type: 'geojson',
             data: krGeojson
+        });
+
+        // 3-1. 대한민국 시도 경계선 전용 라인 데이터 소스 추가
+        map.addSource('province-line-boundaries', {
+            type: 'geojson',
+            data: krLineGeojson
         });
 
         // 4. 대한민국 시도 경계 레이어 추가 및 색칠
@@ -968,7 +1093,6 @@ map.on('load', function () {
                 type: 'fill',
                 paint: {
                     'fill-color': 'rgba(255, 29, 29, 1)', // 초기값은 투명
-                    'fill-opacity': 0.4,
                 },
                 filter: ["==", "name", ""] // 초기에는 아무것도 선택되지 않도록 필터링
             },
@@ -976,24 +1100,25 @@ map.on('load', function () {
         );
 
         // 4-1. 대한민국 시도 경계선 레이어 추가 (라인)
-        map.addLayer(
-            {
-                id: 'province-border-line',
-                source: 'province-boundaries',
-                type: 'line',
-                paint: {
-                    'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
-                    'line-opacity': 0, // 초기에는 숨김 (시도 탭에서만 보이도록)
-                    'line-width': 0.8 // 경계선 두께
-                },
-                layout: { // 추가된 부분
-                    'line-join': 'round',
-                    'line-cap': 'round'
-                },
-                filter: ["has", "name"] // 모든 시도 경계선을 포함하도록 필터링
-            },
-            'water' // 시도 채우기 레이어 위에 삽입
-        );
+        const linePaintProps = {
+            'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
+            'line-width': parseFloat(adminWidthSlider.value) // 행정구역선 두께 공유
+        };
+        if (adminDotlineChecker.checked) {
+            linePaintProps['line-dasharray'] = adminDashLineProperty; // 점선 유무 공유
+        }
+
+        map.addLayer({
+            id: 'province-border-line',
+            source: 'province-line-boundaries',
+            type: 'line',
+            paint: linePaintProps,
+            layout: {
+                'line-join': 'round',
+                'line-cap': 'round',
+                'visibility': activeTab === 'province' ? 'visible' : 'none' // 현재 탭에 맞춰 초기 가시성 설정
+            }
+        }); // 최상단에 그리기 위해 삽입 기준 생략
 
         // 육지색 및 바다색 레이어 업데이트 (스타일 변경 시 다시 적용)
         const landLayerId = 'landColor';
