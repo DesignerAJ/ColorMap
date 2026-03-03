@@ -14,21 +14,23 @@ body,
     font-weight: 700;
     font-size: 20px;
     position: absolute;
-    top: 10px;
-    right: 10px;
-    background-color: white;
-    padding: 10px;
-    border-radius: 10px;
+    top: 15px;
+    right: 15px;
+    background-color: rgba(14, 23, 44, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 16px;
+    border-radius: 24px;
     z-index: 10;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    /* 그룹 박스들 간의 간격 */
+    gap: 12px;
     width: 360px;
-    max-height: 600px;
-    /* 충분히 큰 값으로 설정 */
+    max-height: 85vh;
     overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (max-width: 720px) {
@@ -60,21 +62,16 @@ body,
 }
 
 .control-group-box {
-    border: 1px solid #f0f0f0;
-    border-radius: 6px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-    padding-left: 10px;
-    padding-right: 10px;
-    background-color: #f7f7f7;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+    padding: 12px;
+    background-color: rgba(255, 255, 255, 0.7);
     display: flex;
     flex-direction: column;
     gap: 40px;
-    /* control-group 내부 간격 */
     max-height: 600px;
-    /* 충분히 큰 값으로 설정 */
     overflow: hidden;
-    transition: max-height 0.2s ease-in-out, opacity 0.2s ease-in-out, padding 0.2s ease-in-out, border 0.2s ease-in-out, margin 0.2s ease-in-out;
+    transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, transform 0.3s ease;
 }
 
 .control-group-box.horizontal-group {
@@ -116,10 +113,39 @@ body,
     display: flex;
     align-items: center;
     gap: 10px;
-    /* 라벨과 입력 필드 사이의 간격 */
     flex-grow: 1;
-    /* 가로 그룹에서 공간을 균등하게 차지하도록 */
-    transition: max-height 0.2s ease-in-out, opacity 0.2s ease-in-out, padding 0.2s ease-in-out, border 0.2s ease-in-out, margin 0.2s ease-in-out;
+    transition: all 0.2s ease-in-out;
+}
+
+.line-item-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.line-property-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding-left: 4px;
+}
+
+.property-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-grow: 1;
+}
+
+.property-item.checkbox-item {
+    padding-left: 0px;
+}
+
+.group-separator {
+    height: 1px;
+    background-color: rgba(0, 0, 0, 0.15);
+    margin: 0px 0;
 }
 
 .datalist-wrapper {
@@ -160,19 +186,25 @@ body,
 
 .datalist-wrapper input[list] {
     width: 100%;
-    padding: 8px;
+    padding: 10px;
     font-family: inherit;
-    /* 폰트 상속 */
-    font-size: 16px;
-    font-weight: 700;
-    /* 폰트 굵기 추가 */
-    border: 1px solid #dbdbdb;
-    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-color: #fff;
+    background-color: rgba(255, 255, 255, 1);
     cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.datalist-wrapper input[list]:focus {
+    outline: none;
+    border-color: #007bff;
+    background-color: #fff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
 }
 
 select {
@@ -181,7 +213,7 @@ select {
     padding: 8px;
     font-size: 16px;
     border: 1px solid #dbdbdb;
-    border-radius: 6px;
+    border-radius: 8px;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
@@ -194,8 +226,10 @@ select {
 }
 
 .datalist-wrapper input[list] {
-    padding-left: 30px; /* 왼쪽 아이콘을 위한 패딩 */
-    padding-right: 30px; /* 오른쪽 아이콘을 위한 패딩 */
+    padding-left: 30px;
+    /* 왼쪽 아이콘을 위한 패딩 */
+    padding-right: 30px;
+    /* 오른쪽 아이콘을 위한 패딩 */
 }
 
 input[list]::-webkit-calendar-picker-indicator {
@@ -218,17 +252,27 @@ select option {
 
 #country-selector-container label {
     font-size: 16px;
-    color: #333;
+    color: rgba(40, 40, 40, 1);
     white-space: nowrap;
 }
 
 
-input[type="color"]:first-child {
+/* 모든 컬러 피커 공통 스타일 */
+input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
     padding: 0;
     margin: 0;
     border: none;
-    box-shadow: none;
-    background: none;
+    background: #8f8f8f;
+    cursor: pointer;
+    width: 22px;
+    height: 22px;
+    border-radius: 100px;
+    display: block;
+    overflow: hidden;
+    outline: none;
 }
 
 input[type="color"]::-webkit-color-swatch-wrapper {
@@ -236,44 +280,46 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 }
 
 input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
     height: 20px;
     width: 20px;
-    border: none;
-    border-radius: 10px;
 }
 
-input[type="color"]:nth-child(2) {
-    padding: 0;
-    margin: 0;
+input[type="color"]::-moz-color-swatch {
     border: none;
-    box-shadow: none;
-    border-radius: 100px;
-    cursor: pointer;
-    background: #b9b9b9;
-    outline: none;
-}
-
-input[type="color" i] {
-    border-radius: 100px;
-    border: none;
-    height: 22px;
-    width: 22px;
-    cursor: pointer;
-    display: block;
+    border-radius: 50%;
 }
 
 #country-selector-container .line-label {
-    width: 64px;
-    flex-shrink: 0; /* 라벨 너비가 줄어들지 않도록 설정 */
+    width: auto;
+    flex-shrink: 0;
+}
+
+.disputed-label {
+    font-size: 13px !important;
+    /* 원래 16px의 약 80% */
+    opacity: 0.5;
+}
+
+#disputed-color-picker {
+    transform: scale(0.7);
+    transform-origin: left center;
+    margin-left: -4px;
+}
+
+.label-separator {
+    color: rgba(0, 0, 0, 0.2);
+    margin: 0 4px;
+    font-weight: 300;
 }
 
 #country-selector-container .line-property-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: #727272;
-    margin-left: 6px;
-    margin-right: -4px;
-    flex-shrink: 0; /* 라벨 너비가 줄어들지 않도록 설정 */
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(70, 70, 70, 1);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 /* Range Slider Styles */
@@ -315,13 +361,17 @@ input[type="range"] {
 
 
 /* +,- 버튼 스타일 */
-#country-buttons, #province-buttons {
+#country-buttons,
+#province-buttons {
     display: flex;
     gap: 8px;
     /* 버튼 사이의 간격 */
 }
 
-#add-country, #remove-country, #add-province, #remove-province {
+#add-country,
+#remove-country,
+#add-province,
+#remove-province {
     flex-grow: 1;
     width: 49%;
     height: 30px;
@@ -330,7 +380,7 @@ input[type="range"] {
     font-weight: 700;
     line-height: 0;
     color: white;
-    background-color: #7e98b4;
+    background-color: #007bff;
     border: none;
     border-radius: 4px;
     /* 둥근 네모형 디자인 */
@@ -343,22 +393,30 @@ input[type="range"] {
     /* 클릭 시 부드러운 전환 효과 */
 }
 
-#add-country:hover, #add-province:hover {
-    background-color: #0a69cf;
+#add-country:hover,
+#add-province:hover {
+    background-color: #47acff;
 }
 
-#remove-country:hover, #remove-province:hover {
+#remove-country:hover,
+#remove-province:hover {
     background-color: #9c0f1e;
 }
 
-#add-country:active, #remove-country:active, #add-province:active, #remove-province:active {
+#add-country:active,
+#remove-country:active,
+#add-province:active,
+#remove-province:active {
     transform: scale(0.9);
     /* 클릭 시 90%로 작아짐 */
 }
 
 /* 비활성화된 버튼 스타일 */
-#add-country:disabled, #remove-country:disabled, #add-province:disabled, #remove-province:disabled {
-    background-color: #cccccc;
+#add-country:disabled,
+#remove-country:disabled,
+#add-province:disabled,
+#remove-province:disabled {
+    background-color: #929292;
     /* 비활성화 색상 */
     cursor: not-allowed;
     opacity: 0.6;
@@ -371,60 +429,114 @@ input[type="range"] {
     opacity: 0.8;
 }
 
-/* Tab Styles */
 .tab-header {
     display: flex;
-    justify-content: space-between; /* 탭 버튼과 최소화 버튼을 양 끝으로 정렬 */
-    border-bottom: 0px solid #e0e0e0;
-    gap: 6px;
-    /* margin-bottom: 0px; */
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.tab-switch {
+    display: flex;
+    position: relative;
+    background-color: rgba(0, 0, 0, 0);
+
+    /* 계단 현상 제거를 위한 이중 그림자 기법 (테두리 대체) */
+    border: none;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.3),
+        /* 본체 테두리 */
+        0 0 1px 1px rgba(255, 255, 255, 0.3);
+    /* 안티앨리어싱용 부드러운 외곽선 */
+
+    border-radius: 14px;
+    padding: 4px;
+    flex-grow: 1;
+    height: 40px;
+
+    /* 하드웨어 가속 유도로 렌더링 품질 향상 */
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* 탭 스위치 중앙화살표 표시 */
+.tab-switch-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255, 255, 255, 1);
+    font-size: 20px;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.tab-switch:has(.tab-button[data-tab="province"].active) .tab-slider {
+    transform: translateX(100%);
+}
+
+.tab-slider {
+    position: absolute;
+    width: calc(50% - 4px);
+    height: calc(100% - 8px);
+    background-color: #007bff;
+    border-radius: 11px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
 }
 
 .tab-button {
     flex-grow: 1;
     flex-basis: 0;
-    padding: 10px 15px;
+    padding: 0;
     border: none;
-    border-bottom: 3px solid #c7c7c7;
-    background-color: #ffffff;
+    background-color: transparent;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
-    color: #b8b8b8;
-    border-radius: 6px 6px 0 0;
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.tab-button:hover {
-    background-color: #e5e5e5;
-    color: #888888;
-    border-bottom: 3px solid #57a8ff;
-}
-
-/* 최소화 버튼 스타일 */
-.minimize-button {
-    background-color: #ebebeb;
-    color: rgb(161, 161, 161);
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    width: 28px; /* 버튼 너비 */
-    height: 28px; /* 버튼 높이 */
+    color: rgba(255, 255, 255, 0.5);
+    border-radius: 20px;
+    transition: color 0.3s ease;
+    z-index: 2;
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-left: 16px;
-    transition: background-color 0.2s ease, transform 0.1s ease-in-out;
-    /* flex-shrink: 0; 탭 버튼과 함께 줄어들지 않도록 */
+}
+
+.tab-button:hover {
+    color: #fff;
+}
+
+/* 상단 핸들 스타일 최소화 버튼 */
+.minimize-button {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    width: 60px;
+    height: 6px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 8px auto;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.minimize-button i {
+    display: none;
+    /* 아이콘 숨기기 (핸들 모양으로 대체) */
 }
 
 .minimize-button:hover {
-    background-color: #48a1ff;
+    background-color: rgba(255, 255, 255, 0.4);
 }
 
 .minimize-button:active {
-    transform: scale(0.9);
+    transform: scale(0.95);
 }
 
 @media (max-width: 768px) {
@@ -438,18 +550,16 @@ input[type="range"] {
 }
 
 .tab-button.active {
-    background-color: #ffffff;
-    color: #333;
-    border-bottom: 3px solid #007bff;
-    /* Active tab indicator */
+    color: #fff;
 }
 
 /* 최소화된 상태의 컨테이너 스타일 */
 #country-selector-container.minimized {
-    max-height: 56px; /* 최소화된 높이 (tab-header 높이 + padding) */
-    padding-bottom: 0px;
+    max-height: 80px;
+    /* 핸들(약 14px) + 탭스위치(약 48px) + 여백 고려 */
+    padding-bottom: 12px;
     overflow: hidden;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .tab-content-container {

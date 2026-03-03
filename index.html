@@ -23,10 +23,14 @@
 
 <body>
     <div id='country-selector-container'>
+        <button id="minimize-button" class="minimize-button"><i class="fas fa-angle-up"></i></button>
         <div class="tab-header">
-            <button class="tab-button active" data-tab="country">국가</button>
-            <button class="tab-button" data-tab="province">대한민국 시도</button>
-            <button id="minimize-button" class="minimize-button"><i class="fas fa-angle-up"></i></button>
+            <div class="tab-switch">
+                <div class="tab-slider"></div>
+                <button class="tab-button active" data-tab="country">국가</button>
+                <i class="fa-solid fa-arrow-right-arrow-left tab-switch-icon"></i>
+                <button class="tab-button" data-tab="province">대한민국 시도</button>
+            </div>
         </div>
 
 
@@ -38,7 +42,8 @@
                         <label for="country-select-1">국가-1</label>
                         <input type="color" id="highlight-color-picker-1" value="#2eca89">
                         <div class="datalist-wrapper">
-                            <input list="country-datalist-1" id="country-select-1" placeholder="국가 선택 or 검색.." autocomplete="off">
+                            <input list="country-datalist-1" id="country-select-1" placeholder="국가 선택 or 검색.."
+                                autocomplete="off">
                         </div>
                         <datalist id="country-datalist-1"></datalist>
                     </div>
@@ -47,7 +52,8 @@
                         <label for="country-select-2">국가-2</label>
                         <input type="color" id="highlight-color-picker-2" value="#29dff2">
                         <div class="datalist-wrapper">
-                            <input list="country-datalist-2" id="country-select-2" placeholder="국가 선택 or 검색.." autocomplete="off">
+                            <input list="country-datalist-2" id="country-select-2" placeholder="국가 선택 or 검색.."
+                                autocomplete="off">
                         </div>
                         <datalist id="country-datalist-2"></datalist>
                     </div>
@@ -56,7 +62,8 @@
                         <label for="country-select-3">국가-3</label>
                         <input type="color" id="highlight-color-picker-3" value="#fcec26">
                         <div class="datalist-wrapper">
-                            <input list="country-datalist-3" id="country-select-3" placeholder="국가 선택 or 검색.." autocomplete="off">
+                            <input list="country-datalist-3" id="country-select-3" placeholder="국가 선택 or 검색.."
+                                autocomplete="off">
                         </div>
                         <datalist id="country-datalist-3"></datalist>
                     </div>
@@ -74,7 +81,8 @@
                         <label for="province-select-1">시도-1</label>
                         <input type="color" id="highlight-color-picker-province-1" value="#2eca89">
                         <div class="datalist-wrapper">
-                            <input list="province-datalist-1" id="province-select-1" placeholder="시도 선택 or 검색.." autocomplete="off">
+                            <input list="province-datalist-1" id="province-select-1" placeholder="시도 선택 or 검색.."
+                                autocomplete="off">
                         </div>
                         <datalist id="province-datalist-1"></datalist>
                     </div>
@@ -83,7 +91,8 @@
                         <label for="province-select-2">시도-2</label>
                         <input type="color" id="highlight-color-picker-province-2" value="#29dff2">
                         <div class="datalist-wrapper">
-                            <input list="province-datalist-2" id="province-select-2" placeholder="시도 선택 or 검색.." autocomplete="off">
+                            <input list="province-datalist-2" id="province-select-2" placeholder="시도 선택 or 검색.."
+                                autocomplete="off">
                         </div>
                         <datalist id="province-datalist-2"></datalist>
                     </div>
@@ -92,7 +101,8 @@
                         <label for="province-select-3">시도-3</label>
                         <input type="color" id="highlight-color-picker-province-3" value="#fcec26">
                         <div class="datalist-wrapper">
-                            <input list="province-datalist-3" id="province-select-3" placeholder="시도 선택 or 검색.." autocomplete="off">
+                            <input list="province-datalist-3" id="province-select-3" placeholder="시도 선택 or 검색.."
+                                autocomplete="off">
                         </div>
                         <datalist id="province-datalist-3"></datalist>
                     </div>
@@ -106,21 +116,53 @@
         </div>
 
         <div class="control-group-box vertical-group" id="border-admin-color-group">
-            <div class="control-group" id="border-color-group">
-                <label class="line-label" for="border-color-picker">국 경 선</label>
-                <input type="color" id="border-color-picker" value="#ffffff">
-                <label class="line-property-label" for="border-opacity-slider">투명도</label>
-                <input type="range" id="border-opacity-slider" min="0" max="1" step="0.01" value="1">
-                <label class="line-property-label" for="border-dotline-checker">점선</label>
-                <input type="checkbox" id="border-dotline-checker">
+            <!-- 국경선 설정 그룹 -->
+            <div class="line-item-group">
+                <div class="control-group">
+                    <label class="line-label" for="border-color-picker">국경선</label>
+                    <input type="color" id="border-color-picker" value="#ffffff">
+                    <span class="label-separator">┃</span>
+                    <label class="line-label disputed-label" for="disputed-color-picker">분쟁지역선</label>
+                    <input type="color" id="disputed-color-picker" value="#fff82e">
+                </div>
+                <div class="control-group line-property-row">
+                    <div class="property-item">
+                        <label class="line-property-label" for="border-opacity-slider">투명도</label>
+                        <input type="range" id="border-opacity-slider" min="0" max="1" step="0.01" value="1">
+                    </div>
+                    <div class="property-item">
+                        <label class="line-property-label" for="border-width-slider">두께</label>
+                        <input type="range" id="border-width-slider" min="0" max="6" step="0.1" value="2">
+                    </div>
+                    <div class="property-item checkbox-item">
+                        <label class="line-property-label" for="border-dotline-checker">점선</label>
+                        <input type="checkbox" id="border-dotline-checker">
+                    </div>
+                </div>
             </div>
-            <div class="control-group" id="admin-color-group">
-                <label class="line-label" for="admin-color-picker">행정구역</label>
-                <input type="color" id="admin-color-picker" value="#ededed">
-                <label class="line-property-label" for="admin-opacity-slider">투명도</label>
-                <input type="range" id="admin-opacity-slider" min="0" max="1" step="0.01" value="0.5">
-                <label class="line-property-label" for="admin-dotline-checker">점선</label>
-                <input type="checkbox" id="admin-dotline-checker">
+
+            <div class="group-separator"></div>
+
+            <!-- 행정구역 설정 그룹 -->
+            <div class="line-item-group">
+                <div class="control-group">
+                    <label class="line-label" for="admin-color-picker">행정구역선</label>
+                    <input type="color" id="admin-color-picker" value="#ededed">
+                </div>
+                <div class="control-group line-property-row">
+                    <div class="property-item">
+                        <label class="line-property-label" for="admin-opacity-slider">투명도</label>
+                        <input type="range" id="admin-opacity-slider" min="0" max="1" step="0.01" value="0.5">
+                    </div>
+                    <div class="property-item">
+                        <label class="line-property-label" for="admin-width-slider">두께</label>
+                        <input type="range" id="admin-width-slider" min="0" max="6" step="0.1" value="1">
+                    </div>
+                    <div class="property-item checkbox-item">
+                        <label class="line-property-label" for="admin-dotline-checker">점선</label>
+                        <input type="checkbox" id="admin-dotline-checker">
+                    </div>
+                </div>
             </div>
         </div>
 

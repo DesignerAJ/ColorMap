@@ -22,7 +22,7 @@ export async function fetchMapboxToken() {
             throw new Error('서버 응답이 올바르지 않습니다.');
         }
         const data = await response.json();
-        
+
         // 받아온 토큰을 캐시에 저장
         cachedToken = data.token;
         return cachedToken;
@@ -46,10 +46,13 @@ const highlightColorPicker2 = document.getElementById('highlight-color-picker-2'
 const highlightColorPicker3 = document.getElementById('highlight-color-picker-3');
 
 const borderColorPicker = document.getElementById('border-color-picker');
+const disputedColorPicker = document.getElementById('disputed-color-picker');
 const adminColorPicker = document.getElementById('admin-color-picker');
 
 const borderOpacitySlider = document.getElementById('border-opacity-slider');
 const adminOpacitySlider = document.getElementById('admin-opacity-slider');
+const borderWidthSlider = document.getElementById('border-width-slider');
+const adminWidthSlider = document.getElementById('admin-width-slider');
 
 const borderDotlineChecker = document.getElementById('border-dotline-checker');
 const adminDotlineChecker = document.getElementById('admin-dotline-checker');
@@ -101,7 +104,7 @@ let isMinimized = false; // 최소화 상태를 추적하는 변수
 
 const map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf', // 사용자의 커스텀 스타일 URL
+    style: 'mapbox://styles/designeraj/cmma6v98500gl01suhod9gfsz', // 사용자의 커스텀 스타일 URL
     center: [127, 36], // 초기 지도 중심 (한국)
     zoom: 6, // 초기 지도 줌 레벨
     projection: 'mercator', // 초기 투영법 설정 (기본값)
@@ -111,7 +114,8 @@ const map = new mapboxgl.Map({
 const countries = COUNTRIES_DATA;
 
 const mapStyles = [
-    { name: '기본 단색', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
+    { name: '단색지형', value: 'mapbox://styles/designeraj/cmma6v98500gl01suhod9gfsz' },
+    { name: '단색', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
     { name: '지형도', value: 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw' },
     { name: '위성사진', value: 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5' }
 ];
@@ -123,10 +127,10 @@ const projections = [
     // Mapbox GL JS 문서: https://docs.mapbox.com/mapbox-gl-js/api/map/#map-parameters
 ];
 
-// const krGeojson = '../data/KoreaAdmin_Simple_250718.geojson'; // 로컬 테스트용
-// const krLineGeojson = '../data/KoreaAdmin_line_250808.geojson'; // 로컬 테스트용
-const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드시 사용
-const krLineGeojson = '../ColorMap/data/KoreaAdmin_line_250808.geojson'; // 업로드시 사용
+const krGeojson = '../data/KoreaAdmin_Simple_250718.geojson'; // 로컬 테스트용
+const krLineGeojson = '../data/KoreaAdmin_line_250808.geojson'; // 로컬 테스트용
+// const krGeojson = '../ColorMap/data/KoreaAdmin_Simple_250718.geojson'; // 업로드시 사용
+// const krLineGeojson = '../ColorMap/data/KoreaAdmin_line_250808.geojson'; // 업로드시 사용
 
 
 // 데이터리스트 채우기 함수
@@ -232,12 +236,12 @@ function updateCountryDatalist() {
     allSelects.forEach(selectElement => {
         const datalist = document.getElementById(selectElement.getAttribute('list'));
         const currentVal = selectElement.value;
-        
+
         // 다른 input에서 선택된 값을 제외한 목록 생성
-        const filteredCountries = COUNTRIES_DATA.filter(country => 
+        const filteredCountries = COUNTRIES_DATA.filter(country =>
             !selectedNames.includes(country.name) || country.name === currentVal
         );
-        
+
         populateDatalist(datalist, filteredCountries, 'country');
     });
 }
@@ -251,7 +255,7 @@ function updateProvinceDatalist() {
         const datalist = document.getElementById(selectElement.getAttribute('list'));
         const currentVal = selectElement.value;
 
-        const filteredProvinces = PROVINCES_DATA.filter(province => 
+        const filteredProvinces = PROVINCES_DATA.filter(province =>
             !selectedNames.includes(province.name) || province.name === currentVal
         );
 
@@ -281,7 +285,10 @@ mapStyles.forEach(style => {
 // 육지/바다 색상 UI 가시성 제어 함수
 function handleColorUIVisibility() {
     const currentStyleValue = styleSelect.value;
-    const isDefaultStyle = (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf');
+    const isDefaultStyle = (
+        currentStyleValue === 'mapbox://styles/designeraj/cmma6v98500gl01suhod9gfsz' ||
+        currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf'
+    );
 
     if (landWaterColorGroup) {
         if (isDefaultStyle) {
@@ -297,9 +304,11 @@ function handleColorUIVisibility() {
 function updateMapPaintAndFilter() {
     const currentStyleValue = styleSelect.value; // 현재 선택된 스타일 값 가져오기
 
-    // fill-opacity를 스타일이 '기본 단색': 1, '지형도': 0.4, '위성사진': 0.5으로 설정
+    // fill-opacity를 스타일이 '단색지형': 0.8, '단색': 1, '지형도': 0.4, '위성사진': 0.5으로 설정
     let newOpacity;
-    if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 기본 단색
+    if (currentStyleValue === 'mapbox://styles/designeraj/cmma6v98500gl01suhod9gfsz') { // 단색지형
+        newOpacity = 0.6;
+    } else if (currentStyleValue === 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf') { // 단색
         newOpacity = 1;
     } else if (currentStyleValue === 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw') { // 지형도
         newOpacity = 0.75;
@@ -329,25 +338,35 @@ function updateMapPaintAndFilter() {
         ["literal", [4, 3]]
     ]
 
-    // 국경선 색상 및 투명도 업데이트
+    // 국경선 색상 및 투명도, 두께 업데이트
     if (map.getLayer('country-border')) {
         map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
         map.setPaintProperty('country-border', 'line-opacity', parseFloat(borderOpacitySlider.value));
+        map.setPaintProperty('country-border', 'line-width', parseFloat(borderWidthSlider.value));
         map.setPaintProperty('country-border', 'line-dasharray', borderDotlineChecker.checked ? countryDashLineProperty : undefined);
     }
 
-    // 행정구역선 색상 및 투명도 업데이트
+    // 분쟁지역선 업데이트 (투명도와 두께는 공유하되 두께는 국경선보다 살짝 작게 적용)
+    if (map.getLayer('dispute-boundaries')) {
+        map.setPaintProperty('dispute-boundaries', 'line-color', disputedColorPicker.value);
+        map.setPaintProperty('dispute-boundaries', 'line-opacity', parseFloat(borderOpacitySlider.value));
+        map.setPaintProperty('dispute-boundaries', 'line-width', parseFloat(borderWidthSlider.value) * 0.8);
+        // 분쟁지역은 항상 점선으로 표시되도록 함
+    }
+
+    // 행정구역선 색상 및 투명도, 두께 업데이트
     if (map.getLayer('admin-boundaries')) {
         map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
-        // admin-boundaries 레이어는 기본적으로 항상 보이도록 설정
         map.setPaintProperty('admin-boundaries', 'line-opacity', parseFloat(adminOpacitySlider.value));
+        map.setPaintProperty('admin-boundaries', 'line-width', parseFloat(adminWidthSlider.value));
         map.setPaintProperty('admin-boundaries', 'line-dasharray', adminDotlineChecker.checked ? adminDashLineProperty : undefined);
     }
 
     // 시도 경계선 레이어 업데이트 (새로 추가될 레이어)
     if (map.getLayer('province-border-line')) {
         map.setPaintProperty('province-border-line', 'line-color', adminColorPicker.value);
-        map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));;
+        map.setPaintProperty('province-border-line', 'line-opacity', parseFloat(adminOpacitySlider.value));
+        map.setPaintProperty('province-border-line', 'line-width', parseFloat(adminWidthSlider.value));
         map.setPaintProperty('province-border-line', 'line-dasharray', adminDotlineChecker.checked ? adminDashLineProperty : undefined);
     }
 
@@ -384,7 +403,11 @@ function updateMapPaintAndFilter() {
             }
             paintExpression.push('rgba(0, 0, 0, 0)'); // 기본값 (투명)
 
-            map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
+            if (currentSelectedCountryIsos.length > 0) {
+                map.setPaintProperty('country-color-fill', 'fill-color', paintExpression);
+            } else {
+                map.setPaintProperty('country-color-fill', 'fill-color', 'rgba(0, 0, 0, 0)');
+            }
             map.setPaintProperty('country-color-fill', 'fill-opacity', newOpacity);
 
             let worldviewFilter = [
@@ -811,10 +834,9 @@ map.on('load', function () {
     highlightColorPickerProvince2.addEventListener('input', updateMapPaintAndFilter);
     highlightColorPickerProvince3.addEventListener('input', updateMapPaintAndFilter);
 
-    // 국경 색상 선택기 변경 이벤트
+    // 국경/분쟁/행정 색상 선택기 변경 이벤트
     borderColorPicker.addEventListener('input', updateMapPaintAndFilter);
-
-    // 행정구역 색상 선택기 변경 이벤트
+    disputedColorPicker.addEventListener('input', updateMapPaintAndFilter);
     adminColorPicker.addEventListener('input', updateMapPaintAndFilter);
 
     // 국경선 투명도 슬라이더 변경 이벤트
@@ -822,6 +844,12 @@ map.on('load', function () {
 
     // 행정구역선 투명도 슬라이더 변경 이벤트
     adminOpacitySlider.addEventListener('input', updateMapPaintAndFilter);
+
+    // 국경선 두께 슬라이더 변경 이벤트
+    borderWidthSlider.addEventListener('input', updateMapPaintAndFilter);
+
+    // 행정구역선 두께 슬라이더 변경 이벤트
+    adminWidthSlider.addEventListener('input', updateMapPaintAndFilter);
 
     // 점선 체크박스 변경 이벤트
     borderDotlineChecker.addEventListener('change', updateMapPaintAndFilter);
@@ -878,7 +906,7 @@ map.on('load', function () {
     // 맵 스타일 선택 드롭다운 변경 이벤트
     styleSelect.addEventListener('change', function () {
         const newStyle = this.value;
-        map.setStyle(newStyle);
+        map.setStyle(newStyle, { diff: false }); // diff 비활성화하여 리렌더링 오류 및 404 방지
         handleColorUIVisibility(); // 스타일 변경 시 UI 가시성 업데이트
     });
 
