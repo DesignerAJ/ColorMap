@@ -148,8 +148,6 @@ const highlightColorPickerProvince3 = createPickrWrapper('highlight-color-picker
 
 // 탭 관련 요소
 const tabButtons = document.querySelectorAll('.tab-button');
-const countryTabContent = document.getElementById('country-tab-content');
-const provinceTabContent = document.getElementById('province-tab-content');
 const minimizeButton = document.getElementById('minimize-button'); // 최소화 버튼
 const countrySelectorContainer = document.getElementById('country-selector-container'); // 전체 컨테이너
 
@@ -1028,6 +1026,10 @@ map.on('load', function () {
         map.setStyle(newStyle, { diff: false }); // diff 비활성화하여 리렌더링 오류 및 404 방지
         handleColorUIVisibility(); // 스타일 변경 시 UI 가시성 업데이트
     });
+
+    // 초기 로드 시, 슬라이더의 투명도 값을 Pickr 및 UI에 동기화
+    borderOpacitySlider.dispatchEvent(new Event('input'));
+    adminOpacitySlider.dispatchEvent(new Event('input'));
 
     // 스타일이 변경될 때마다 레이어를 다시 추가하고 필터를 업데이트
     map.on('style.load', function () {

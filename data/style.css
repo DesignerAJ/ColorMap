@@ -11,6 +11,7 @@ body,
 }
 
 #country-selector-container {
+    font-family: "Nanum Gothic Coding", monospace;
     font-weight: 700;
     font-size: 20px;
     position: absolute;
@@ -31,25 +32,6 @@ body,
     max-height: 85vh;
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@media (max-width: 720px) {
-    #country-selector-container {
-        top: auto;
-        bottom: 10px;
-        left: 10px;
-        right: 10px;
-        width: auto;
-        min-width: 360px;
-        max-height: 420px;
-        /* max-height: 80%; */
-        overflow-y: auto;
-        /* 내용이 많을 경우 스크롤 가능하도록 */
-    }
-
-    #map-zoom-slider-group.control-group-box {
-        display: none;
-    }
 }
 
 /* 국가 및 시도 추가/삭제 그룹 공통 스타일 */
@@ -256,6 +238,11 @@ select option {
     white-space: nowrap;
 }
 
+.roman {
+    font-family: 'Noto Serif KR', serif;
+    margin-left: 2px;
+}
+
 
 /* 우리가 디자인한 커스텀 컬러 피커 버튼 */
 .custom-color-btn {
@@ -278,21 +265,20 @@ select option {
 }
 
 .disputed-label {
-    font-size: 13px !important;
+    font-size: 14px !important;
     /* 원래 16px의 약 80% */
     opacity: 0.5;
 }
 
 #disputed-color-picker {
-    transform: scale(0.7);
+    transform: scale(0.8);
     transform-origin: left center;
     margin-left: -4px;
 }
 
 .label-separator {
     color: rgba(0, 0, 0, 0.2);
-    margin: 0 4px;
-    font-weight: 300;
+    font-weight: 100;
 }
 
 #country-selector-container .line-property-label {
@@ -361,17 +347,28 @@ input[type="range"] {
     font-weight: 700;
     line-height: 0;
     color: white;
-    background-color: #007bff;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     /* 둥근 네모형 디자인 */
     cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
     flex-shrink: 0;
-    transition: transform 0.1s ease-in-out;
-    /* 클릭 시 부드러운 전환 효과 */
+    transition: transform 0.1s ease-in-out, background-color 0.2s ease;
+    /* 클릭 및 색상 전환 효과 */
+}
+
+/* 추가 버튼 기본 색상 */
+#add-country,
+#add-province {
+    background-color: #007bff;
+}
+
+/* 삭제 버튼 기본 색상 (적색 계열로 수정) */
+#remove-country,
+#remove-province {
+    background-color: #dc3545;
 }
 
 #add-country:hover,
@@ -397,10 +394,10 @@ input[type="range"] {
 #remove-country:disabled,
 #add-province:disabled,
 #remove-province:disabled {
-    background-color: #929292;
-    /* 비활성화 색상 */
+    background-color: #6d6d6d;
     cursor: not-allowed;
     opacity: 0.6;
+    transform: none;
 }
 
 .max-text {
@@ -415,6 +412,9 @@ input[type="range"] {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
+    max-height: 60px;
+    opacity: 1;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out, gap 0.3s ease-out;
 }
 
 .tab-switch {
@@ -497,7 +497,7 @@ input[type="range"] {
     border: none;
     border-radius: 10px;
     cursor: pointer;
-    width: 60px;
+    width: 100px;
     height: 6px;
     display: flex;
     justify-content: center;
@@ -520,25 +520,14 @@ input[type="range"] {
     transform: scale(0.95);
 }
 
-@media (max-width: 768px) {
-    .minimize-button {
-        transform: rotate(180deg);
-    }
-
-    .minimize-button:hover {
-        background-color: #ebebeb;
-    }
-}
-
 .tab-button.active {
     color: #fff;
 }
 
 /* 최소화된 상태의 컨테이너 스타일 */
 #country-selector-container.minimized {
-    max-height: 80px;
-    /* 핸들(약 14px) + 탭스위치(약 48px) + 여백 고려 */
-    padding-bottom: 12px;
+    max-height: 20px;
+    padding-bottom: 2px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
@@ -547,30 +536,36 @@ input[type="range"] {
     transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out;
 }
 
-/* 최소화된 상태에서 탭 콘텐츠 숨기기 */
+/* 최소화된 상태에서 탭 콘텐츠 및 탭 헤더 숨기기 */
+#country-selector-container.minimized .tab-header,
 #country-selector-container.minimized .tab-content-container {
     max-height: 0;
     opacity: 0;
     overflow: hidden;
     padding-top: 0;
     padding-bottom: 0;
+    margin-top: 0;
     margin-bottom: 0;
-    transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out;
+    gap: 0;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out, gap 0.3s ease-out;
 }
 
 .tab-content {
     /* Initial state for hidden tabs */
+    transform: scale(0.95);
     max-height: 0;
     opacity: 0;
     overflow: hidden;
-    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+    transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
 }
 
 .tab-content.active {
+    transform: scale(1);
     max-height: 600px;
     /* Adjust based on expected content height */
     opacity: 1;
     overflow: visible;
+    transition: transform 0.6s ease-in-out, opacity 0.6s ease-in-out;
 }
 
 
@@ -585,7 +580,7 @@ input[type="range"] {
     margin-bottom: 0;
     border: none;
     overflow: hidden;
-    transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out, border 0.3s ease-out;
+    transition: max-height 0.2s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out, border 0.3s ease-out;
 }
 
 /* Pickr 하단 포맷 변경 버튼 노출 순서 강제 배치 (순서대로 1,2,3,4) */
@@ -616,4 +611,57 @@ input[type="range"] {
 /* 4순위: 텍스트 입력창 (input) */
 .pcr-app .pcr-interaction .pcr-result {
     order: 4 !important;
+}
+
+/* 줌 아이콘 스타일 */
+.zoom-icon {
+    font-size: 14px;
+    color: rgb(65, 65, 65);
+    padding: 0 4px;
+}
+
+/* 사용 방법 안내 섹션 스타일 */
+.info-guide-section {
+    margin-top: 5px;
+    padding: 12px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.guide-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.guide-list {
+    margin: 0;
+    padding-left: 18px;
+    list-style-type: disc;
+}
+
+.guide-list li {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.guide-list li:last-child {
+    margin-bottom: 0;
+}
+
+.sidebar-copyright {
+
+    font-size: 10px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.35);
+    text-align: center;
+    letter-spacing: 0.5px;
 }

@@ -10,10 +10,11 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./image/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="./image/favicon-16x16.png">
     <link rel="manifest" href="./image/site.webmanifest">
-    <title>ColorMap v1.3</title>
+    <title>ColorMap v2.0</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&display=swap"
+    <link
+        href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Serif+KR:wght@200..900&display=swap"
         rel="stylesheet">
     <script src='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js'></script>
     <link href='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css' rel='stylesheet' />
@@ -40,7 +41,7 @@
             <div id="country-tab-content" class="tab-content active">
                 <div class="control-group-box" id="county-addminus-group">
                     <div class="control-group">
-                        <label for="country-select-1">국가-1</label>
+                        <label for="country-select-1">국가<span class="roman">Ⅰ</span></label>
                         <input type="color" id="highlight-color-picker-1" value="#2eca89">
                         <div class="datalist-wrapper">
                             <input list="country-datalist-1" id="country-select-1" placeholder="국가 선택 or 검색.."
@@ -50,7 +51,7 @@
                     </div>
 
                     <div class="control-group hidden" id="country-group-2">
-                        <label for="country-select-2">국가-2</label>
+                        <label for="country-select-2">국가<span class="roman">Ⅱ</span></label>
                         <input type="color" id="highlight-color-picker-2" value="#29dff2">
                         <div class="datalist-wrapper">
                             <input list="country-datalist-2" id="country-select-2" placeholder="국가 선택 or 검색.."
@@ -60,7 +61,7 @@
                     </div>
 
                     <div class="control-group hidden" id="country-group-3">
-                        <label for="country-select-3">국가-3</label>
+                        <label for="country-select-3">국가<span class="roman">Ⅲ</span></label>
                         <input type="color" id="highlight-color-picker-3" value="#fcec26">
                         <div class="datalist-wrapper">
                             <input list="country-datalist-3" id="country-select-3" placeholder="국가 선택 or 검색.."
@@ -70,7 +71,7 @@
                     </div>
 
                     <div class="control-group" id="country-buttons">
-                        <button id="add-country">＋ <span class="max-text">(MAX: 3)</span></button>
+                        <button id="add-country">＋ <span class="max-text">(최대 3개)</span></button>
                         <button id="remove-country" disabled>－</button>
                     </div>
                 </div>
@@ -79,7 +80,7 @@
             <div id="province-tab-content" class="tab-content hidden">
                 <div class="control-group-box" id="province-addminus-group">
                     <div class="control-group">
-                        <label for="province-select-1">시도-1</label>
+                        <label for="province-select-1">시도<span class="roman">Ⅰ</span></label>
                         <input type="color" id="highlight-color-picker-province-1" value="#2eca89">
                         <div class="datalist-wrapper">
                             <input list="province-datalist-1" id="province-select-1" placeholder="시도 선택 or 검색.."
@@ -89,7 +90,7 @@
                     </div>
 
                     <div class="control-group hidden" id="province-group-2">
-                        <label for="province-select-2">시도-2</label>
+                        <label for="province-select-2">시도<span class="roman">Ⅱ</span></label>
                         <input type="color" id="highlight-color-picker-province-2" value="#29dff2">
                         <div class="datalist-wrapper">
                             <input list="province-datalist-2" id="province-select-2" placeholder="시도 선택 or 검색.."
@@ -99,7 +100,7 @@
                     </div>
 
                     <div class="control-group hidden" id="province-group-3">
-                        <label for="province-select-3">시도-3</label>
+                        <label for="province-select-3">시도<span class="roman">Ⅲ</span></label>
                         <input type="color" id="highlight-color-picker-province-3" value="#fcec26">
                         <div class="datalist-wrapper">
                             <input list="province-datalist-3" id="province-select-3" placeholder="시도 선택 or 검색.."
@@ -109,7 +110,7 @@
                     </div>
 
                     <div class="control-group" id="province-buttons">
-                        <button id="add-province">＋ <span class="max-text">(MAX: 3)</span></button>
+                        <button id="add-province">＋ <span class="max-text">(최대 3개)</span></button>
                         <button id="remove-province" disabled>－</button>
                     </div>
                 </div>
@@ -123,7 +124,7 @@
                     <label class="line-label" for="border-color-picker">국경선</label>
                     <input type="color" id="border-color-picker" value="#ffffff">
                     <span class="label-separator">┃</span>
-                    <label class="line-label disputed-label" for="disputed-color-picker">분쟁지역선</label>
+                    <label class="line-label disputed-label" for="disputed-color-picker">분쟁지역 국경선</label>
                     <input type="color" id="disputed-color-picker" value="#fff82e">
                 </div>
                 <div class="control-group line-property-row">
@@ -133,7 +134,7 @@
                     </div>
                     <div class="property-item">
                         <label class="line-property-label" for="border-width-slider">두께</label>
-                        <input type="range" id="border-width-slider" min="0" max="6" step="0.1" value="2">
+                        <input type="range" id="border-width-slider" min="0" max="6" step="0.1" value="2.5">
                     </div>
                     <div class="property-item checkbox-item">
                         <label class="line-property-label" for="border-dotline-checker">점선</label>
@@ -153,11 +154,11 @@
                 <div class="control-group line-property-row">
                     <div class="property-item">
                         <label class="line-property-label" for="admin-opacity-slider">투명도</label>
-                        <input type="range" id="admin-opacity-slider" min="0" max="1" step="0.01" value="1">
+                        <input type="range" id="admin-opacity-slider" min="0" max="1" step="0.01" value="0.6">
                     </div>
                     <div class="property-item">
                         <label class="line-property-label" for="admin-width-slider">두께</label>
-                        <input type="range" id="admin-width-slider" min="0" max="6" step="0.1" value="1">
+                        <input type="range" id="admin-width-slider" min="0" max="6" step="0.1" value="1.2">
                     </div>
                     <div class="property-item checkbox-item">
                         <label class="line-property-label" for="admin-dotline-checker">점선</label>
@@ -191,9 +192,26 @@
         </div>
         <div class="control-group-box" id="map-zoom-slider-group">
             <div class="control-group">
-                <label for="map-zoom-slider">&nbsp;&nbsp;<i class="fa fa-search-plus"></i>&nbsp;&nbsp;</label>
+                <i class="fa fa-search-minus zoom-icon"></i>
                 <input type="range" id="map-zoom-slider" min="1" max="16" step="0.1" value="6">
+                <i class="fa fa-search-plus zoom-icon"></i>
             </div>
+        </div>
+
+        <div class="info-guide-section">
+            <div class="guide-title">
+                <i class="fas fa-question-circle"></i> 사용법 참고
+            </div>
+            <ul class="guide-list">
+                <li>국가, 시도를 검색하거나 리스트에서 선택합니다.</li>
+                <li>[＋] 버튼으로 최대 3개까지 다른 색상 지정 가능합니다.</li>
+                <li>국가, 시도 색상 피커에서 투명도(알파값) 변경 가능 합니다.</li>
+                <li>상단의 ㅡ 버튼으로 사이드바를 숨길 수 있습니다. (캡처용)</li>
+            </ul>
+        </div>
+
+        <div class="sidebar-copyright">
+            © 2025-26 ColorMap Project for KBS News graphics Office.
         </div>
     </div>
     <div id='map'></div>
