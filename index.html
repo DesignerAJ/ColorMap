@@ -123,9 +123,14 @@
                 <div class="control-group">
                     <label class="line-label" for="border-color-picker">국경선</label>
                     <input type="color" id="border-color-picker" value="#ffffff">
-                    <span class="label-separator">┃</span>
-                    <label class="line-label disputed-label" for="disputed-color-picker">분쟁지역 국경선</label>
-                    <input type="color" id="disputed-color-picker" value="#fff82e">
+                    <div class="dash-reference"
+                        style="margin-left: auto; display: flex; align-items: center; gap: 6px; margin-top: auto;">
+                        <img src="./image/dashLine_TypeA.png" alt="A" style="height: 14px; opacity: 0.4;">
+                        <img src="./image/dashLine_TypeB.png" alt="B"
+                            style="height: 14px; opacity: 0.4; margin-left: 0px;">
+                        <img src="./image/dashLine_TypeC.png" alt="C"
+                            style="height: 14px; opacity: 0.4; margin-left: 0px; margin-right: 3px;">
+                    </div>
                 </div>
                 <div class="control-group line-property-row">
                     <div class="property-item">
@@ -137,8 +142,44 @@
                         <input type="range" id="border-width-slider" min="0" max="6" step="0.1" value="2.5">
                     </div>
                     <div class="property-item checkbox-item">
-                        <label class="line-property-label" for="border-dotline-checker">점선</label>
-                        <input type="checkbox" id="border-dotline-checker">
+                        <label class="line-property-label">점선</label>
+                        <input type="checkbox" id="border-dotline-a" title="점선 타입 A" class="dotline-chk">
+                        <input type="checkbox" id="border-dotline-b" title="점선 타입 B" class="dotline-chk">
+                        <input type="checkbox" id="border-dotline-c" title="점선 타입 C" class="dotline-chk">
+                    </div>
+                </div>
+            </div>
+
+            <div class="group-separator"></div>
+
+            <!-- 분쟁지역 국경선 설정 그룹 -->
+            <div class="line-item-group">
+                <div class="control-group">
+                    <label class="line-label disputed-label" for="disputed-color-picker">분쟁지역 국경선</label>
+                    <input type="color" id="disputed-color-picker" value="#fff82e">
+                    <div class="dash-reference"
+                        style="margin-left: auto; display: flex; align-items: center; gap: 6px; margin-top: auto;">
+                        <img src="./image/dashLine_TypeA.png" alt="A" style="height: 14px; opacity: 0.4;">
+                        <img src="./image/dashLine_TypeB.png" alt="B"
+                            style="height: 14px; opacity: 0.4; margin-left: 0px;">
+                        <img src="./image/dashLine_TypeC.png" alt="C"
+                            style="height: 14px; opacity: 0.4; margin-left: 0px; margin-right: 3px;">
+                    </div>
+                </div>
+                <div class="control-group line-property-row">
+                    <div class="property-item">
+                        <label class="line-property-label" for="disputed-opacity-slider">투명도</label>
+                        <input type="range" id="disputed-opacity-slider" min="0" max="1" step="0.01" value="1">
+                    </div>
+                    <div class="property-item">
+                        <label class="line-property-label" for="disputed-width-slider">두께</label>
+                        <input type="range" id="disputed-width-slider" min="0" max="6" step="0.1" value="2.5">
+                    </div>
+                    <div class="property-item checkbox-item">
+                        <label class="line-property-label">점선</label>
+                        <input type="checkbox" id="disputed-dotline-a" title="점선 타입 A" class="dotline-chk" checked>
+                        <input type="checkbox" id="disputed-dotline-b" title="점선 타입 B" class="dotline-chk">
+                        <input type="checkbox" id="disputed-dotline-c" title="점선 타입 C" class="dotline-chk">
                     </div>
                 </div>
             </div>
@@ -150,6 +191,14 @@
                 <div class="control-group">
                     <label class="line-label" for="admin-color-picker">행정구역선</label>
                     <input type="color" id="admin-color-picker" value="#ededed">
+                    <div class="dash-reference"
+                        style="margin-left: auto; display: flex; align-items: center; gap: 6px; margin-top: auto;">
+                        <img src="./image/dashLine_TypeA.png" alt="A" style="height: 14px; opacity: 0.4;">
+                        <img src="./image/dashLine_TypeB.png" alt="B"
+                            style="height: 14px; opacity: 0.4; margin-left: 0px;">
+                        <img src="./image/dashLine_TypeC.png" alt="C"
+                            style="height: 14px; opacity: 0.4; margin-left: 0px; margin-right: 3px;">
+                    </div>
                 </div>
                 <div class="control-group line-property-row">
                     <div class="property-item">
@@ -161,8 +210,10 @@
                         <input type="range" id="admin-width-slider" min="0" max="6" step="0.1" value="1.2">
                     </div>
                     <div class="property-item checkbox-item">
-                        <label class="line-property-label" for="admin-dotline-checker">점선</label>
-                        <input type="checkbox" id="admin-dotline-checker">
+                        <label class="line-property-label">점선</label>
+                        <input type="checkbox" id="admin-dotline-a" title="점선 타입 A" class="dotline-chk">
+                        <input type="checkbox" id="admin-dotline-b" title="점선 타입 B" class="dotline-chk">
+                        <input type="checkbox" id="admin-dotline-c" title="점선 타입 C" class="dotline-chk">
                     </div>
                 </div>
             </div>

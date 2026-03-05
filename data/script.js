@@ -110,12 +110,23 @@ const disputedColorPicker = createPickrWrapper('disputed-color-picker');
 const adminColorPicker = createPickrWrapper('admin-color-picker');
 
 const borderOpacitySlider = document.getElementById('border-opacity-slider');
+const disputedOpacitySlider = document.getElementById('disputed-opacity-slider');
 const adminOpacitySlider = document.getElementById('admin-opacity-slider');
 const borderWidthSlider = document.getElementById('border-width-slider');
+const disputedWidthSlider = document.getElementById('disputed-width-slider');
 const adminWidthSlider = document.getElementById('admin-width-slider');
 
-const borderDotlineChecker = document.getElementById('border-dotline-checker');
-const adminDotlineChecker = document.getElementById('admin-dotline-checker');
+const borderDotlineA = document.getElementById('border-dotline-a');
+const borderDotlineB = document.getElementById('border-dotline-b');
+const borderDotlineC = document.getElementById('border-dotline-c');
+
+const disputedDotlineA = document.getElementById('disputed-dotline-a');
+const disputedDotlineB = document.getElementById('disputed-dotline-b');
+const disputedDotlineC = document.getElementById('disputed-dotline-c');
+
+const adminDotlineA = document.getElementById('admin-dotline-a');
+const adminDotlineB = document.getElementById('admin-dotline-b');
+const adminDotlineC = document.getElementById('admin-dotline-c');
 
 const landColorPicker = createPickrWrapper('land-color-picker');
 const waterColorPicker = createPickrWrapper('water-color-picker');
@@ -131,6 +142,19 @@ const countryGroup2 = document.getElementById('country-group-2');
 const countryGroup3 = document.getElementById('country-group-3');
 
 const landWaterColorGroup = document.getElementById('landwater-color-group');
+
+const DashLinePropertyTypeA = [2, 1.2]; // 길이, 갭
+const DashLinePropertyTypeB = [3, 1, 0.8, 1]; // 길이, 갭, 점, 갭
+const DashLinePropertyTypeC = [0.8, 0.5]; // 점, 갭
+
+function getDashLineProperty(chkA, chkB, chkC) {
+    if (chkA && chkA.checked) return DashLinePropertyTypeA;
+    if (chkB && chkB.checked) return DashLinePropertyTypeB;
+    if (chkC && chkC.checked) return DashLinePropertyTypeC;
+    return null; // 실선
+}
+
+// 맵 줌 슬라이더 관련 요소 가져오기
 const mapZoomSlider = document.getElementById('map-zoom-slider'); // 줌 슬라이더 요소 추가
 
 // 대한민국 시도 관련 HTML 요소 가져오기
@@ -160,6 +184,7 @@ let activeTab = 'country'; // 현재 활성화된 탭을 추적하는 변수 (�
 let isFirstGlobeProjection = true; // 지구본 투영법에서 초기 줌 조정을 위한 플래그
 let isMinimized = false; // 최소화 상태를 추적하는 변수
 
+
 const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/designeraj/cmma6v98500gl01suhod9gfsz', // 사용자의 커스텀 스타일 URL
@@ -168,13 +193,15 @@ const map = new mapboxgl.Map({
     projection: 'mercator', // 초기 투영법 설정 (기본값)
 });
 
+window.map = map;
+
 // 국가 목록 데이터는 config.js에서 가져옵니다.
 const countries = COUNTRIES_DATA;
 
 const mapStyles = [
     { name: '단색지형', value: 'mapbox://styles/designeraj/cmma6v98500gl01suhod9gfsz' },
     { name: '단색', value: 'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf' },
-    { name: '지형도', value: 'mapbox://styles/designeraj/cmd5901wa02kl01ri8v4m1hqw' },
+    { name: '지형도', value: 'mapbox://styles/designeraj/cmmcpegvn00fn01sugpfi79x7' },
     { name: '위성사진', value: 'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5' }
 ];
 const projections = [
@@ -385,50 +412,72 @@ function updateMapPaintAndFilter() {
 
     // (기존의 지형/단색 스타일에 따른 일괄 fill-opacity 지정 로직 삭제됨)
 
-    const countryDashLineProperty = [
-        "step",
+    // 국경선 두께의 줌 레벨 스케일 지정 (슬라이더 값을 기준으로 6~12줌 구간 변화)
+    const baseBorderWidth = parseFloat(borderWidthSlider.value);
+    const interpolatedBorderWidth = [
+        "interpolate",
+        ["linear"],
         ["zoom"],
-        ["literal", [2, 2]],
-        6,
-        ["literal", [2, 2]],
-        12,
-        ["literal", [5, 3]]
-    ]
-
-    const adminDashLineProperty = [
-        "step",
-        ["zoom"],
-        ["literal", [2, 3]],
-        6,
-        ["literal", [2, 3]],
-        12,
-        ["literal", [4, 3]]
-    ]
+        4, baseBorderWidth * 0.5,
+        6, baseBorderWidth * 1,    // 줌 레벨 6일 때 슬라이더 값의 80% 두께
+        12, baseBorderWidth * 3    // 줌 레벨 12일 때 슬라이더 값의 150% 두께
+    ];
 
     // 국경선 색상 업데이트 (투명도 제거)
     if (map.getLayer('country-border')) {
         map.setPaintProperty('country-border', 'line-color', borderColorPicker.value);
-        map.setPaintProperty('country-border', 'line-width', parseFloat(borderWidthSlider.value));
-        if (borderDotlineChecker.checked) {
-            map.setPaintProperty('country-border', 'line-dasharray', countryDashLineProperty);
+        map.setPaintProperty('country-border', 'line-width', interpolatedBorderWidth);
+        const borderDash = getDashLineProperty(borderDotlineA, borderDotlineB, borderDotlineC);
+        if (borderDash) {
+            map.setPaintProperty('country-border', 'line-dasharray', borderDash);
         } else {
             // 실선으로 초기화
             map.setPaintProperty('country-border', 'line-dasharray', [1, 0]);
         }
     }
 
+    // 분쟁지역 국경선 두께 줌 레벨 스케일 지정
+    const baseDisputedWidth = parseFloat(disputedWidthSlider.value);
+    const interpolatedDisputedWidth = [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        4, baseDisputedWidth * 0.5,
+        6, baseDisputedWidth * 1,
+        12, baseDisputedWidth * 3
+    ];
+
     // 분쟁지역선 업데이트
     if (map.getLayer('dispute-boundaries')) {
         map.setPaintProperty('dispute-boundaries', 'line-color', disputedColorPicker.value);
-        map.setPaintProperty('dispute-boundaries', 'line-width', parseFloat(borderWidthSlider.value) * 0.8);
+        map.setPaintProperty('dispute-boundaries', 'line-width', interpolatedDisputedWidth);
+        const disputedDash = getDashLineProperty(disputedDotlineA, disputedDotlineB, disputedDotlineC);
+        if (disputedDash) {
+            map.setPaintProperty('dispute-boundaries', 'line-dasharray', disputedDash);
+        } else {
+            // 실선으로 초기화
+            map.setPaintProperty('dispute-boundaries', 'line-dasharray', [1, 0]);
+        }
     }
+
+    // 행정구역선 두께 줌 레벨 스케일 지정
+    const baseAdminWidth = parseFloat(adminWidthSlider.value);
+    const interpolatedAdminWidth = [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        4, baseAdminWidth * 0.5,
+        6, baseAdminWidth * 1,
+        12, baseAdminWidth * 3
+    ];
 
     // 행정구역선 업데이트
     if (map.getLayer('admin-boundaries')) {
         map.setPaintProperty('admin-boundaries', 'line-color', adminColorPicker.value);
-        map.setPaintProperty('admin-boundaries', 'line-width', parseFloat(adminWidthSlider.value));
-        if (adminDotlineChecker.checked) {
-            map.setPaintProperty('admin-boundaries', 'line-dasharray', adminDashLineProperty);
+        map.setPaintProperty('admin-boundaries', 'line-width', interpolatedAdminWidth);
+        const adminDash = getDashLineProperty(adminDotlineA, adminDotlineB, adminDotlineC);
+        if (adminDash) {
+            map.setPaintProperty('admin-boundaries', 'line-dasharray', adminDash);
         } else {
             map.setPaintProperty('admin-boundaries', 'line-dasharray', [1, 0]);
         }
@@ -437,9 +486,10 @@ function updateMapPaintAndFilter() {
     // 시도 경계선 레이어 업데이트
     if (map.getLayer('province-border-line')) {
         map.setPaintProperty('province-border-line', 'line-color', adminColorPicker.value);
-        map.setPaintProperty('province-border-line', 'line-width', parseFloat(adminWidthSlider.value));
-        if (adminDotlineChecker.checked) {
-            map.setPaintProperty('province-border-line', 'line-dasharray', adminDashLineProperty);
+        map.setPaintProperty('province-border-line', 'line-width', interpolatedAdminWidth);
+        const adminDash2 = getDashLineProperty(adminDotlineA, adminDotlineB, adminDotlineC);
+        if (adminDash2) {
+            map.setPaintProperty('province-border-line', 'line-dasharray', adminDash2);
         } else {
             map.setPaintProperty('province-border-line', 'line-dasharray', [1, 0]);
         }
@@ -740,8 +790,12 @@ map.on('load', function () {
         'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
         'line-width': parseFloat(adminWidthSlider.value) // 행정구역선 두께 공유
     };
-    if (adminDotlineChecker.checked) {
-        linePaintPropsLoad['line-dasharray'] = adminDashLineProperty; // 점선 유무 공유
+    const initialAdminDash = adminDotlineA.checked || adminDotlineB.checked || adminDotlineC.checked;
+    if (initialAdminDash) {
+        let selectedDash = DashLinePropertyTypeA;
+        if (adminDotlineB.checked) selectedDash = DashLinePropertyTypeB;
+        if (adminDotlineC.checked) selectedDash = DashLinePropertyTypeC;
+        linePaintPropsLoad['line-dasharray'] = selectedDash; // 점선 유무 공유
     }
 
     map.addLayer({
@@ -751,7 +805,7 @@ map.on('load', function () {
         paint: linePaintPropsLoad,
         layout: {
             'line-join': 'round',
-            'line-cap': 'round',
+            'line-cap': 'butt',
             'visibility': activeTab === 'province' ? 'visible' : 'none'
         }
     }); // 최상단에 그리기 위해 삽입 기준 생략
@@ -923,22 +977,37 @@ map.on('load', function () {
 
     // 국경선 투명도 외부 슬라이더 변경 시 Pickr 알파 조절 (동기화)
     borderOpacitySlider.addEventListener('input', function () {
-        [borderColorPicker, disputedColorPicker].forEach(wrapper => {
-            if (wrapper.pickr) {
-                let rgba = wrapper.pickr.getColor().toRGBA();
-                rgba[3] = parseFloat(borderOpacitySlider.value);
-                wrapper.pickr.setColor(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]})`);
-            }
-        });
+        if (borderColorPicker.pickr) {
+            let rgba = borderColorPicker.pickr.getColor().toRGBA();
+            rgba[3] = parseFloat(borderOpacitySlider.value);
+            borderColorPicker.pickr.setColor(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]})`);
+        }
         updateMapPaintAndFilter();
     });
 
     // Pickr 투명도 변경 시 외부 국경선 슬라이더 갱신 (역동기화)
-    [borderColorPicker, disputedColorPicker].forEach(wrapper => {
-        if (wrapper.pickr) wrapper.pickr.on('change', (color) => {
+    if (borderColorPicker.pickr) {
+        borderColorPicker.pickr.on('change', (color) => {
             borderOpacitySlider.value = color.toRGBA()[3];
         });
+    }
+
+    // 분쟁지역 국경선 투명도 외부 슬라이더 변경 시 Pickr 알파 조절 (동기화)
+    disputedOpacitySlider.addEventListener('input', function () {
+        if (disputedColorPicker.pickr) {
+            let rgba = disputedColorPicker.pickr.getColor().toRGBA();
+            rgba[3] = parseFloat(disputedOpacitySlider.value);
+            disputedColorPicker.pickr.setColor(`rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]})`);
+        }
+        updateMapPaintAndFilter();
     });
+
+    // Pickr 투명도 변경 시 외부 분쟁지역 슬라이더 갱신 (역동기화)
+    if (disputedColorPicker.pickr) {
+        disputedColorPicker.pickr.on('change', (color) => {
+            disputedOpacitySlider.value = color.toRGBA()[3];
+        });
+    }
 
     // 행정구역선 투명도 외부 슬라이더 변경 시 Pickr 알파 조절 (동기화)
     adminOpacitySlider.addEventListener('input', function () {
@@ -957,15 +1026,30 @@ map.on('load', function () {
         });
     }
 
-    // 국경선 두께 슬라이더 변경 이벤트
+    // 국경/분쟁/행정 두께 슬라이더 변경 이벤트
     borderWidthSlider.addEventListener('input', updateMapPaintAndFilter);
-
-    // 행정구역선 두께 슬라이더 변경 이벤트
+    disputedWidthSlider.addEventListener('input', updateMapPaintAndFilter);
     adminWidthSlider.addEventListener('input', updateMapPaintAndFilter);
 
-    // 점선 체크박스 변경 이벤트
-    borderDotlineChecker.addEventListener('change', updateMapPaintAndFilter);
-    adminDotlineChecker.addEventListener('change', updateMapPaintAndFilter);
+    // 점선 체크박스 배타적 선택 로직 함수
+    function setupExclusiveCheckboxes(checkboxes) {
+        checkboxes.forEach(cb => {
+            if (!cb) return;
+            cb.addEventListener('change', function () {
+                if (this.checked) {
+                    checkboxes.forEach(other => {
+                        if (other !== this) other.checked = false;
+                    });
+                }
+                updateMapPaintAndFilter();
+            });
+        });
+    }
+
+    // 점선 체크박스 이벤트 설정
+    setupExclusiveCheckboxes([borderDotlineA, borderDotlineB, borderDotlineC]);
+    setupExclusiveCheckboxes([disputedDotlineA, disputedDotlineB, disputedDotlineC]);
+    setupExclusiveCheckboxes([adminDotlineA, adminDotlineB, adminDotlineC]);
 
     // 강/호수 체크박스 변경 이벤트
     waterChecker.addEventListener('change', updateMapPaintAndFilter);
@@ -1029,6 +1113,7 @@ map.on('load', function () {
 
     // 초기 로드 시, 슬라이더의 투명도 값을 Pickr 및 UI에 동기화
     borderOpacitySlider.dispatchEvent(new Event('input'));
+    disputedOpacitySlider.dispatchEvent(new Event('input'));
     adminOpacitySlider.dispatchEvent(new Event('input'));
 
     // 스타일이 변경될 때마다 레이어를 다시 추가하고 필터를 업데이트
@@ -1106,8 +1191,12 @@ map.on('load', function () {
             'line-color': adminColorPicker.value, // admin-boundaries와 동일한 색상 공유
             'line-width': parseFloat(adminWidthSlider.value) // 행정구역선 두께 공유
         };
-        if (adminDotlineChecker.checked) {
-            linePaintProps['line-dasharray'] = adminDashLineProperty; // 점선 유무 공유
+        const currentAdminDash = adminDotlineA.checked || adminDotlineB.checked || adminDotlineC.checked;
+        if (currentAdminDash) {
+            let selectedDash = DashLinePropertyTypeA;
+            if (adminDotlineB.checked) selectedDash = DashLinePropertyTypeB;
+            if (adminDotlineC.checked) selectedDash = DashLinePropertyTypeC;
+            linePaintProps['line-dasharray'] = selectedDash; // 점선 유무 공유
         }
 
         map.addLayer({
@@ -1117,7 +1206,7 @@ map.on('load', function () {
             paint: linePaintProps,
             layout: {
                 'line-join': 'round',
-                'line-cap': 'round',
+                'line-cap': 'butt',
                 'visibility': activeTab === 'province' ? 'visible' : 'none' // 현재 탭에 맞춰 초기 가시성 설정
             }
         }); // 최상단에 그리기 위해 삽입 기준 생략
