@@ -957,12 +957,12 @@ input[type="range"] {
 #geo-float button {
     box-sizing: border-box;
     min-height: 38px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 0px solid rgba(255, 255, 255, 0.8);
     border-radius: 10px;
-    background: rgba(14, 23, 44, 0.78);
-    color: #fff;
+    background: rgba(230, 230, 230, 0.78);
+    color: #000000;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 14px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
@@ -973,7 +973,17 @@ input[type="range"] {
 }
 
 #geo-float input::placeholder {
-    color: rgba(255, 255, 255, 0.55);
+    color: rgb(80, 80, 80);
+}
+
+#geo-float input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: none;
+}
+
+#geo-float input:focus::placeholder {
+    color: transparent;
 }
 
 #geo-float button {
@@ -985,8 +995,8 @@ input[type="range"] {
     padding: 0;
     border: 0;
     border-radius: 7px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.62);
+    background: rgb(109, 139, 184);
+    color: rgb(255, 255, 255);
     font-size: 18px;
     line-height: 1;
     transform: translateY(-50%);
@@ -996,13 +1006,8 @@ input[type="range"] {
 
 #geo-float button:hover,
 #geo-float button:focus-visible {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgb(58, 83, 163);
     color: #fff;
-}
-
-#geo-input:placeholder-shown + #geo-clear {
-    opacity: 0;
-    pointer-events: none;
 }
 
 #geo-float .geo-results {
