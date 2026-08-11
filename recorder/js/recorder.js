@@ -943,7 +943,12 @@ function initRecorder(map) {
     const color = block.querySelector('.bd-color').value;
     const opac  = parseFloat(block.querySelector('.bd-opacity').value);
     const width = parseFloat(block.querySelector('.bd-width').value);
-    const dash  = block.querySelector('.bd-dash').checked;
+    const dashType = block.querySelector('.bd-dash-option:checked')?.dataset.dash || '';
+    const dashPatterns = {
+      a: [2, 1.5],
+      b: [4, 1.5, 1, 1.5],
+      c: [1, 1],
+    };
     block.classList.toggle('disabled', !on);
     bdExistingLayers(kind).forEach(id => {
       const isBg = id.endsWith('-bg');   // 외곽선(배경 라인)은 좀 더 두껍게/연하게
@@ -953,7 +958,7 @@ function initRecorder(map) {
         map.setPaintProperty(id, 'line-color', color);
         map.setPaintProperty(id, 'line-opacity', isBg ? Math.min(1, opac) * 0.6 : opac);
         map.setPaintProperty(id, 'line-width', isBg ? width + 1.5 : width);
-        map.setPaintProperty(id, 'line-dasharray', dash ? [2, 1.5] : [1]);
+        map.setPaintProperty(id, 'line-dasharray', dashPatterns[dashType] || [1]);
       } catch (_) {}
     });
   }
@@ -978,8 +983,16 @@ function initRecorder(map) {
   document.querySelectorAll('.bd-block').forEach(block => {
     const kind = block.dataset.bd;
     block.querySelectorAll('input').forEach(inp => {
-      inp.addEventListener('input', () => applyBoundary(kind));
-      inp.addEventListener('change', () => applyBoundary(kind));
+      const updateBoundary = () => {
+        if (inp.classList.contains('bd-dash-option') && inp.checked) {
+          block.querySelectorAll('.bd-dash-option').forEach(option => {
+            if (option !== inp) option.checked = false;
+          });
+        }
+        applyBoundary(kind);
+      };
+      inp.addEventListener('input', updateBoundary);
+      inp.addEventListener('change', updateBoundary);
     });
   });
 

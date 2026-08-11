@@ -493,11 +493,34 @@
       box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.55);
     }
   }
+  .design-settings-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 10px !important;
+  }
+  .design-card {
+    border: 1px solid rgba(15, 38, 70, 0.08);
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.7);
+  }
+  .boundary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .map-color-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
   .map-color-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
+    gap: 7px;
+    min-width: 0;
   }
   /* 세그먼트 토글 — 눌린 칸이 한눈에 보이도록 트랙(움푹) + 선택 칸(도드라짐) 대비를 준다.
      예전엔 hover 와 active 스타일이 같아서, 마우스를 올리면 어느 쪽이 선택된 건지
@@ -559,30 +582,42 @@
     line-height: 1.5;
   }
   .map-color-row .mc-toggle {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 7px;
     font-size: 12px;
     cursor: pointer;
     margin: 0;
+    white-space: nowrap;
   }
   .map-color-row .mc-label {
-    flex: 1;
     font-size: 12px;
     margin: 0;
-  }
-  .map-color-row .mc-toggle input {
-    width: auto;
-    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .map-color-row input[type="color"] {
-    flex: 0 0 44px;
-    height: 30px;
-    padding: 2px;
+    margin: 0;
   }
   .map-color-row input[type="color"]:disabled {
     opacity: 0.4;
+  }
+  .river-toggle-row input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  .style-projection-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 0.9fr) minmax(0, 1.4fr);
+    align-items: center;
+    gap: 10px;
+  }
+  .style-projection-card > label {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .style-projection-card select {
+    min-width: 0;
   }
   /* 색 선택 입력 — 원형 스와치 (칩 안의 .sw 제외, 아래에서 따로 처리) */
   input[type="color"]:not(.sw) {
@@ -611,61 +646,77 @@
     border-radius: 50%;
   }
   .bd-block {
-    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
   .bd-head {
     display: flex;
     align-items: center;
     gap: 8px;
   }
-  .bd-head .mc-toggle {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 7px;
+  .bd-head .line-label {
     font-size: 12px;
-    cursor: pointer;
+    font-weight: 700;
     margin: 0;
-  }
-  .bd-head .mc-toggle input {
-    width: auto;
-    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .bd-head .bd-color {
-    flex: 0 0 44px;
-    height: 30px;
-    padding: 2px;
+    margin: 0;
+  }
+  .dash-reference {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .dash-reference img {
+    width: 18px;
+    height: 14px;
+    object-fit: contain;
+    opacity: 0.4;
   }
   .bd-ctrls {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
     align-items: center;
-    gap: 10px;
-    margin-top: 5px;
-    padding-left: 2px;
+    gap: 12px;
+    padding-left: 1px;
   }
   .bd-cell {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 10px;
-    color: var(--muted);
-  }
-  .bd-cell input[type="range"] {
-    flex: 1;
-    padding: 0;
-  }
-  .bd-dash-lbl {
-    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 4px;
+    min-width: 0;
     font-size: 10px;
     color: var(--muted);
+    white-space: nowrap;
+  }
+  .bd-cell input[type="range"] {
+    width: 0;
+    min-width: 38px;
+    flex: 1;
+    padding: 0;
+  }
+  .bd-dash-options {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .bd-dash-options input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    margin: 0;
+    padding: 0;
     cursor: pointer;
   }
-  .bd-dash-lbl input {
-    width: auto;
+  .group-separator {
+    height: 1px;
+    background: rgba(15, 38, 70, 0.14);
   }
   .bd-block.disabled .bd-ctrls {
     opacity: 0.35;

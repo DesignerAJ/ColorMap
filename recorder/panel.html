@@ -126,78 +126,108 @@
 
     <details id="design-settings" class="adv" data-menu-section="map-design">
       <summary>지도 디자인</summary>
-      <div class="pad">
-        <div class="row">
-          <div class="field">
-            <label>스타일</label>
-            <select id="style-select">
-              <option value="mono_terrain">단색지형</option>
-              <option value="mono">단색</option>
-              <option value="satellite">위성사진</option>
-              <option value="detail">지형도</option>
-              <option value="monotone">모노톤</option>
-              <option value="placenames">지명 참고용</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>투영</label>
-            <select id="proj-select">
-              <option value="mercator">2D 메르카토르</option>
-              <option value="equirectangular">2D WGS84</option>
-              <option value="globe">3D 구형</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="map-color-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
-          <div class="map-color-row">
-            <label class="mc-label">육지색</label>
-            <input id="land-color" type="color" list="palette" value="#e8e4dc" />
-          </div>
-          <div class="map-color-row">
-            <label class="mc-label">바다색 (호수 포함)</label>
-            <input id="sea-color" type="color" list="palette" value="#a8c8e0" />
-          </div>
-          <div class="map-color-row">
-            <label class="mc-toggle"><input type="checkbox" id="river-on" checked /> 강 표시</label>
-          </div>
-        </div>
-
-        <div id="boundary-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
-          <label style="display:block; margin-bottom:8px;">경계선</label>
+      <div class="pad design-settings-pad">
+        <div id="boundary-section" class="design-card boundary-card">
           <div class="bd-block" data-bd="country">
             <div class="bd-head">
-              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 국경선</label>
-              <input type="color" class="bd-color" list="palette" value="#7a7a7a" />
+              <input type="checkbox" class="bd-on" checked hidden />
+              <label class="line-label">국경선</label>
+              <input type="color" class="bd-color" list="palette" value="#ffffff" aria-label="국경선 색상" />
+              <div class="dash-reference" aria-hidden="true">
+                <img src="./image/dashLine_TypeA.png" alt="" />
+                <img src="./image/dashLine_TypeB.png" alt="" />
+                <img src="./image/dashLine_TypeC.png" alt="" />
+              </div>
             </div>
             <div class="bd-ctrls">
-              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
-              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1.5" /></span>
-              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" /> 점선</label>
+              <label class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.01" value="1" /></label>
+              <label class="bd-cell">두께<input type="range" class="bd-width" min="0" max="6" step="0.1" value="2.5" /></label>
+              <div class="bd-dash-options">
+                <span>점선</span>
+                <input type="checkbox" class="bd-dash-option" data-dash="a" aria-label="국경선 점선 타입 A" />
+                <input type="checkbox" class="bd-dash-option" data-dash="b" aria-label="국경선 점선 타입 B" />
+                <input type="checkbox" class="bd-dash-option" data-dash="c" aria-label="국경선 점선 타입 C" />
+              </div>
             </div>
           </div>
+          <div class="group-separator"></div>
           <div class="bd-block" data-bd="disputed">
             <div class="bd-head">
-              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 분쟁지역 국경선</label>
-              <input type="color" class="bd-color" list="palette" value="#7a7a7a" />
+              <input type="checkbox" class="bd-on" checked hidden />
+              <label class="line-label">분쟁지역 국경선</label>
+              <input type="color" class="bd-color" list="palette" value="#fff82e" aria-label="분쟁지역 국경선 색상" />
+              <div class="dash-reference" aria-hidden="true">
+                <img src="./image/dashLine_TypeA.png" alt="" />
+                <img src="./image/dashLine_TypeB.png" alt="" />
+                <img src="./image/dashLine_TypeC.png" alt="" />
+              </div>
             </div>
             <div class="bd-ctrls">
-              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
-              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1.5" /></span>
-              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" checked /> 점선</label>
+              <label class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.01" value="1" /></label>
+              <label class="bd-cell">두께<input type="range" class="bd-width" min="0" max="6" step="0.1" value="2.5" /></label>
+              <div class="bd-dash-options">
+                <span>점선</span>
+                <input type="checkbox" class="bd-dash-option" data-dash="a" aria-label="분쟁지역 국경선 점선 타입 A" checked />
+                <input type="checkbox" class="bd-dash-option" data-dash="b" aria-label="분쟁지역 국경선 점선 타입 B" />
+                <input type="checkbox" class="bd-dash-option" data-dash="c" aria-label="분쟁지역 국경선 점선 타입 C" />
+              </div>
             </div>
           </div>
+          <div class="group-separator"></div>
           <div class="bd-block" data-bd="admin">
             <div class="bd-head">
-              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 행정구역선</label>
-              <input type="color" class="bd-color" list="palette" value="#9a9a9a" />
+              <input type="checkbox" class="bd-on" checked hidden />
+              <label class="line-label">행정구역선</label>
+              <input type="color" class="bd-color" list="palette" value="#ededed" aria-label="행정구역선 색상" />
+              <div class="dash-reference" aria-hidden="true">
+                <img src="./image/dashLine_TypeA.png" alt="" />
+                <img src="./image/dashLine_TypeB.png" alt="" />
+                <img src="./image/dashLine_TypeC.png" alt="" />
+              </div>
             </div>
             <div class="bd-ctrls">
-              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
-              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1" /></span>
-              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" /> 점선</label>
+              <label class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.01" value="0.6" /></label>
+              <label class="bd-cell">두께<input type="range" class="bd-width" min="0" max="6" step="0.1" value="1.2" /></label>
+              <div class="bd-dash-options">
+                <span>점선</span>
+                <input type="checkbox" class="bd-dash-option" data-dash="a" aria-label="행정구역선 점선 타입 A" />
+                <input type="checkbox" class="bd-dash-option" data-dash="b" aria-label="행정구역선 점선 타입 B" />
+                <input type="checkbox" class="bd-dash-option" data-dash="c" aria-label="행정구역선 점선 타입 C" />
+              </div>
             </div>
           </div>
+        </div>
+
+        <div id="map-color-section" class="design-card map-color-card">
+          <div class="map-color-row">
+            <label class="mc-label" for="land-color">육지색</label>
+            <input id="land-color" type="color" list="palette" value="#8896a1" />
+          </div>
+          <div class="map-color-row">
+            <label class="mc-label" for="sea-color">바다색</label>
+            <input id="sea-color" type="color" list="palette" value="#172c4d" />
+          </div>
+          <div class="map-color-row river-toggle-row">
+            <label class="mc-toggle" for="river-on">강·호수</label>
+            <input type="checkbox" id="river-on" />
+          </div>
+        </div>
+
+        <div class="design-card style-projection-card">
+          <label for="style-select">스타일</label>
+          <select id="style-select">
+            <option value="mono_terrain">단색지형</option>
+            <option value="mono">단색</option>
+            <option value="satellite">위성사진</option>
+            <option value="detail">지형도</option>
+            <option value="monotone">모노톤</option>
+            <option value="placenames">지명 참고용</option>
+          </select>
+          <select id="proj-select" aria-label="지도 투영 방식">
+            <option value="mercator">2D / 메르카토르</option>
+            <option value="equirectangular">2D / WGS84</option>
+            <option value="globe">3D / 구형</option>
+          </select>
         </div>
       </div>
     </details>
