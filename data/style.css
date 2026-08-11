@@ -20,8 +20,8 @@ body,
     background-color: rgba(14, 23, 44, 0.6);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    padding: 16px;
-    border-radius: 24px;
+    padding: 14px;
+    border-radius: 20px;
     z-index: 10;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -761,7 +761,7 @@ input[type="range"] {
     gap: 2px;
     padding: 7px 4px;
     border: 1px solid var(--export-color, rgba(15, 38, 70, 0.22));
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--export-bg, rgba(255, 255, 255, 0.9));
     color: var(--export-color, #334155);
 }
@@ -801,7 +801,7 @@ input[type="range"] {
     transform: translate(-50%, -48%) scale(0.98);
     padding: 16px 22px;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 14px;
+    border-radius: 10px;
     background: rgba(14, 23, 44, 0.88);
     color: #fff;
     box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);

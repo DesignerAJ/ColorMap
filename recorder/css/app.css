@@ -69,7 +69,7 @@
     border: 1px solid var(--line);
     background: var(--panel-2);
     color: var(--txt);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 9px 10px;
     font-family: var(--font);
     font-size: 12px;
@@ -254,8 +254,8 @@
   details.adv {
     margin-bottom: 8px;
     border: 1px solid var(--line);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.76);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.7);
     overflow: hidden;
   }
   details.adv summary {
@@ -273,10 +273,11 @@
   }
   details.adv summary::after {
     content: "▾";
-    font-size: 10px;
+    font-size: 14px;
   }
   details.adv[open] summary::after {
     content: "▴";
+    font-size: 14px;
   }
   details.adv summary:hover {
     color: var(--txt);
@@ -496,12 +497,12 @@
   .design-settings-pad {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding-bottom: 10px !important;
+    gap: 4px;
+    padding-bottom: 12px !important;
   }
   .design-card {
     border: 1px solid rgba(15, 38, 70, 0.08);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 12px;
     background: rgba(255, 255, 255, 0.7);
   }
