@@ -2108,7 +2108,10 @@ function initRecorder(map) {
   })();
   const syncRecordFormatLabel = () => {
     const label = $('record-format-label');
-    if (label) label.textContent = ($('format').value || 'video').toUpperCase();
+    const modeLabel = $('record-mode-label');
+    const format = $('format').value || 'video';
+    if (label) label.textContent = format === 'webm' ? 'WebM' : format.toUpperCase();
+    if (modeLabel) modeLabel.textContent = format === 'mp4' ? '(경로 렌더링)' : '(실시간 녹화)';
   };
   $('format').addEventListener('change', syncRecordFormatLabel);
   syncRecordFormatLabel();
@@ -2263,7 +2266,7 @@ function initRecorder(map) {
       const done = new Promise((resolve) => {
         rec.onstop = () => {
           console.log('[REC] onstop 진입, 청크:', chunks.length, '총 크기:', chunks.reduce((s,c)=>s+c.size,0));
-          if (!chunks.length) { setStatus('녹화 데이터가 비었습니다 — 녹화 중 다른 탭/창으로 이동하면 캡처가 멈춥니다. 계속되면 "✦ 부드럽게 녹화"를 쓰거나, 크롬 하드웨어 가속을 켜세요 (chrome://settings/system 후 재시작).', ''); resolve(); return; }
+          if (!chunks.length) { setStatus('녹화 데이터가 비었습니다 — 녹화 중 다른 탭/창으로 이동하면 캡처가 멈춥니다. 계속되면 포맷을 MP4로 바꿔 경로 렌더링 저장을 사용하거나, 크롬 하드웨어 가속을 켜세요 (chrome://settings/system 후 재시작).', ''); resolve(); return; }
           const blob = new Blob(chunks, { type: mime.split(';')[0] });
           const url = URL.createObjectURL(blob);
           const name = `colormap_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'')}.${ext}`;
@@ -2316,8 +2319,6 @@ function initRecorder(map) {
       busy = false; setUI(true); if (pinRAF) cancelAnimationFrame(pinRAF); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
     }
   }
-  $('record').addEventListener('click', record);
-
   /* ── 부드럽게 녹화 (오프라인: 프레임 단위 렌더 → 캡처) ── */
   // 카메라 보간 헬퍼
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -2595,7 +2596,8 @@ function initRecorder(map) {
       busy = false; setUI(true); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
     }
   }
-  $('record-smooth').addEventListener('click', recordSmooth);
+  // MP4는 프레임 단위 경로 렌더링을 기본으로 사용한다. WebM 선택 시 기존 실시간 녹화를 유지한다.
+  $('record').addEventListener('click', () => $('format').value === 'webm' ? record() : recordSmooth());
 
   // 현재 지도 → PNG 저장 (preserveDrawingBuffer 덕분에 캔버스 그대로 추출)
   $('capture-png').addEventListener('click', () => {
@@ -3005,7 +3007,7 @@ function initRecorder(map) {
     el.hidden = !msg || msg === '대기 중';
   }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','record-smooth','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){

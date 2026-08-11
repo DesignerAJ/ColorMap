@@ -747,66 +747,53 @@ input[type="range"] {
 
 #export-actions .export-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
 }
 
 #export-actions .export-tile {
     display: flex;
-    min-height: 56px;
+    min-height: 62px;
     align-items: center;
     justify-content: center;
     flex-direction: column;
     gap: 2px;
-    padding: 7px;
-    border: 1px solid rgba(15, 38, 70, 0.22);
+    padding: 7px 4px;
+    border: 1px solid var(--export-color, rgba(15, 38, 70, 0.22));
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.9);
-    color: #334155;
+    background: var(--export-bg, rgba(255, 255, 255, 0.9));
+    color: var(--export-color, #334155);
 }
 
 #export-actions .export-tile:hover:not(:disabled) {
-    border-color: #2f62af;
-    background: #fff;
-    color: #1f4e95;
+    border-color: var(--export-hover, var(--export-color));
+    background: var(--export-hover, var(--export-color));
+    color: #fff;
 }
 
 #export-actions .export-tile strong {
-    font-size: 20px;
+    font-size: 17px;
     font-weight: 400;
     line-height: 1;
 }
 
 #export-actions .export-tile small {
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 400;
+    white-space: nowrap;
 }
 
-#export-actions .smooth-export {
-    margin-top: 7px;
-    padding: 7px 9px;
-    border-color: rgba(255, 255, 255, 0.22);
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.82);
-    font-size: 10px;
-}
-
-#export-actions .smooth-export:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
-}
-
-#export-actions .smooth-export small {
-    font-size: 9px;
-    font-weight: 400;
-    opacity: 0.72;
-}
+/* 내보내기 버튼별 색상 — 아래 4개 규칙의 색상값만 바꾸면 된다. */
+#record      { --export-color: #2563eb; --export-bg: #eaf2ff; --export-hover: #1d4ed8; }
+#capture-psd { --export-color: #7c3aed; --export-bg: #f3edff; --export-hover: #6d28d9; }
+#capture-png { --export-color: #059669; --export-bg: #e9fbf4; --export-hover: #047857; }
+#export-svg  { --export-color: #ea580c; --export-bg: #fff1e8; --export-hover: #c2410c; }
 
 #export-actions .svg-split-option {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 6px;
+    margin-top: 7px;
     color: rgba(255, 255, 255, 0.62);
     cursor: pointer;
     font-size: 9px;
