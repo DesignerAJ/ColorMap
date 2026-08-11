@@ -19,13 +19,13 @@
     <span class="sr-only">전체 패널 접기/펼치기</span>
   </button>
   <div class="colormap-panel-title">
-    <span>ColorMap</span>
-    <small>지도 디자인 · 카메라 녹화</small>
+    <span>ColorMap 3.0</span>
+    <!-- <small>지도 디자인 · 카메라 녹화</small> -->
   </div>
 
   <div id="controls">
     <details id="region-settings" class="adv" data-menu-section="region-selection" open>
-      <summary>지역 선택</summary>
+      <summary>국가·구역별 색상</summary>
       <div class="pad">
     <!-- ── 색칠 (국가 / 시도 토글) ── -->
     <div class="field">
@@ -40,7 +40,7 @@
 
       <div id="country-block">
         <div class="row" style="align-items:center; gap:8px;">
-          <input id="country-input" list="country-list" placeholder="나라 검색 (예: 독일)" style="flex:3" autocomplete="off" />
+          <input id="country-input" list="country-list" placeholder="국가 검색 (예: 독일)" style="flex:3" autocomplete="off" />
           <input id="country-color" type="color" list="palette" value="#5A8EDB" style="flex:0 0 38px; padding:2px; height:34px;" title="색상" />
         </div>
         <datalist id="country-list"></datalist>
@@ -203,7 +203,7 @@
     </details>
 
     <details id="camera-settings" class="adv" data-menu-section="camera-path">
-      <summary>카메라 경로 · 핀과 선</summary>
+      <summary>핀·녹화 경로 설정</summary>
       <div class="pad">
 
     <div class="field">
@@ -426,12 +426,12 @@
         <div class="field" style="margin-top:8px;">
           <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
             <input id="prewarm-path" type="checkbox" checked style="width:auto; flex:0 0 auto;" />
-            이동 경로 타일 미리 받기
+            경로의 지도 데이터 미리 받기
           </label>
-          <div style="font-size:10px; color:var(--muted); margin-top:4px; line-height:1.5;">
+          <!-- <div style="font-size:10px; color:var(--muted); margin-top:4px; line-height:1.5;">
             켜면 실제 이동 경로를 한 번 훑어 타일을 미리 받은 뒤 녹화합니다.
             이동 중에도 출발·도착과 같은 화질이 나오지만 녹화 준비가 그만큼 길어집니다.
-          </div>
+          </div> -->
         </div>
       </div>
     </details>
@@ -457,10 +457,6 @@
         <small>(색칠 영역만)</small>
       </button>
     </div>
-    <label class="svg-split-option">
-      <input id="svg-split" type="checkbox" />
-      SVG를 영역별 파일로 나눠 저장
-    </label>
   </section>
 
   <div id="panel-zoom-control" aria-label="지도 확대·축소">

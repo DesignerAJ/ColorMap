@@ -485,16 +485,17 @@ input[type="range"] {
 
 /* 상단 핸들 스타일 최소화 버튼 */
 .minimize-button {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.4);
     border: none;
-    border-radius: 10px;
+    padding: 0;
+    border-radius: 4px;
     cursor: pointer;
     width: 100px;
     height: 6px;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 0 auto 8px auto;
+    margin: 0 auto 12px auto;
     transition: all 0.2s ease;
     flex-shrink: 0;
 }
@@ -712,7 +713,7 @@ input[type="range"] {
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding-right: 4px;
+    /* padding-right: 4px; */
     scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
     scrollbar-width: thin;
 }
@@ -722,9 +723,9 @@ input[type="range"] {
 }
 
 #country-selector-container details.adv summary {
-    min-height: 42px;
+    min-height: 36px;
     color: #334155;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
 }
 
@@ -734,8 +735,8 @@ input[type="range"] {
 
 #export-actions {
     flex: 0 0 auto;
-    padding: 8px 2px 2px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 6px 0px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 #export-actions-title {
@@ -753,7 +754,7 @@ input[type="range"] {
 
 #export-actions .export-tile {
     display: flex;
-    min-height: 62px;
+    min-height: 40px;
     align-items: center;
     justify-content: center;
     flex-direction: column;
@@ -772,13 +773,13 @@ input[type="range"] {
 }
 
 #export-actions .export-tile strong {
-    font-size: 17px;
-    font-weight: 400;
+    font-size: 20px;
+    font-weight: 700;
     line-height: 1;
 }
 
 #export-actions .export-tile small {
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 400;
     white-space: nowrap;
 }
@@ -788,22 +789,6 @@ input[type="range"] {
 #capture-psd { --export-color: #7c3aed; --export-bg: #f3edff; --export-hover: #6d28d9; }
 #capture-png { --export-color: #059669; --export-bg: #e9fbf4; --export-hover: #047857; }
 #export-svg  { --export-color: #ea580c; --export-bg: #fff1e8; --export-hover: #c2410c; }
-
-#export-actions .svg-split-option {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 7px;
-    color: rgba(255, 255, 255, 0.62);
-    cursor: pointer;
-    font-size: 9px;
-    font-weight: 400;
-}
-
-#export-actions .svg-split-option input {
-    width: auto;
-    flex: 0 0 auto;
-}
 
 /* 작업 상태는 패널 안에 상주하지 않고 화면 중앙에서 잠시 나타났다 디졸브된다. */
 #status {

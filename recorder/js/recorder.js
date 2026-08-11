@@ -2309,7 +2309,7 @@ function initRecorder(map) {
       try { if (rec.state === 'recording') rec.requestData(); } catch (_) {}   // 버퍼된 마지막 데이터 flush
       rec.stop(); await done;
       console.log('[REC] 완료');
-      setStatus(`저장 완료 ✓ (.${ext} 다운로드됨)`,'done');
+      setStatus(`저장 준비 완료 ✓ (.${ext} 다운로드)`,'done');
     } catch (err) {
       pumping = false; console.error(err); setStatus('오류: ' + err.message, '');
     } finally {
@@ -2588,7 +2588,7 @@ function initRecorder(map) {
       setTimeout(() => URL.revokeObjectURL(url), 60000);
 
       const totalFrames = leadFrames + tailFrames + legs.reduce((s,l)=>s+legFrames+Math.round((l.hold||0)*fps),0);
-      setStatus(`부드럽게 저장 완료 ✓ (.mp4 · ${(totalFrames/fps).toFixed(1)}초)`,'done');
+      setStatus(`저장 준비 완료 ✓ (.mp4 · ${(totalFrames/fps).toFixed(1)}초)`,'done');
     } catch (err) {
       console.error(err); setStatus('오류: ' + err.message, '');
       try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch (_) {}
@@ -2642,7 +2642,7 @@ function initRecorder(map) {
         a.href = URL.createObjectURL(blob);
         a.download = `colormap_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'')}.png`;
         a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-        setStatus('PNG 저장 완료 ✓', 'done');
+        setStatus('PNG 저장 준비 완료 ✓', 'done');
       }, 'image/png');
     };
 
@@ -2888,10 +2888,10 @@ function initRecorder(map) {
       setTimeout(() => URL.revokeObjectURL(url), 5000);
       // 폴더 안의 레이어까지 세어 실제 개수를 알린다
       const countLayers = (arr) => arr.reduce((n, l) => n + (l.children ? l.children.length : 1), 0);
-      setStatus(`PSD 저장 완료 ✓ (${countLayers(layers)}개 레이어: ${layers.map(l => l.name).join(', ')})`, 'done');
+      setStatus(`PSD 저장 준비 완료 ✓ (${countLayers(layers)}개 레이어: ${layers.map(l => l.name).join(', ')})`, 'done');
     } catch (err) {
       console.error(err);
-      setStatus('PSD 저장 오류: ' + err.message, '');
+      setStatus('PSD 저장 준비 중 오류: ' + err.message, '');
     } finally {
       // 레이어 표시 상태와 핀을 원래대로
       removePsdBackdrop();   // 실패해도 임시 배경 레이어는 반드시 걷어낸다
@@ -2969,8 +2969,6 @@ function initRecorder(map) {
         // 그래야 편집 프로그램에서 그대로 겹쳐 올리면 원래 배치가 복원된다.
         const wrap = (inner) =>
           `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">\n${inner}\n</svg>\n`;
-        const safe = (s) => String(s).replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_');
-
         const save = (text, name) => {
           const url = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml;charset=utf-8' }));
           const a = document.createElement('a');
@@ -2979,16 +2977,8 @@ function initRecorder(map) {
           setTimeout(() => URL.revokeObjectURL(url), 5000);
         };
 
-        if ($('svg-split').checked && acc.length > 1) {
-          // 여러 파일을 한꺼번에 내리면 브라우저가 뒤쪽을 취소하는 일이 있어 간격을 둔다.
-          // (크롬은 이때 '여러 파일 다운로드 허용?' 을 한 번 묻는다 — 허용해야 전부 받아진다)
-          acc.forEach((p, i) => setTimeout(
-            () => save(wrap(pathTag(p)), `colormap_${safe(p.key)}_${stamp}.svg`), i * 250));
-          setStatus(`SVG ${acc.length}개 파일로 저장 ✓ (여러 파일 다운로드를 허용하세요)`, 'done');
-        } else {
-          save(wrap(acc.map(pathTag).join('\n')), `colormap_regions_${stamp}.svg`);
-          setStatus(`SVG 저장 완료 ✓ (${acc.length}개 영역)`, 'done');
-        }
+        save(wrap(acc.map(pathTag).join('\n')), `colormap_regions_${stamp}.svg`);
+        setStatus(`SVG 저장 준비 완료 ✓ (${acc.length}개 영역)`, 'done');
       } catch (err) { console.error(err); setStatus('SVG 내보내기 오류: ' + err.message, ''); }
     };
     if (map.loaded() && !map.isMoving()) run();
