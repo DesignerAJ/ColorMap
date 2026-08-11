@@ -6,9 +6,9 @@
 <!-- ── 지역/주소 검색 (화면 좌측 상단 플로팅) ── -->
 <div id="geo-float">
   <div class="field" id="geocode-field" style="position:relative; margin:0;">
-    <div class="row" style="align-items:center; gap:8px;">
-      <input id="geo-input" placeholder="지역·주소 검색 (예: 서울시청, Paris)" style="flex:1" autocomplete="off" />
-      <button id="geo-clear" title="지우기" style="flex:0 0 34px; height:34px; padding:0;">✕</button>
+    <div class="geo-input-wrap">
+      <input id="geo-input" placeholder="지역·주소 검색 (예: 서울시청, Paris)" autocomplete="off" />
+      <button type="button" id="geo-clear" title="검색어 지우기" aria-label="검색어 지우기">×</button>
     </div>
     <div id="geo-results" class="geo-results" style="display:none;"></div>
   </div>

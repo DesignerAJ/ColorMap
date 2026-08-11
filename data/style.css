@@ -949,8 +949,8 @@ input[type="range"] {
     font-family: "Nanum Gothic Coding", monospace;
 }
 
-#geo-float .row {
-    display: flex;
+#geo-float .geo-input-wrap {
+    position: relative;
 }
 
 #geo-float input,
@@ -969,7 +969,7 @@ input[type="range"] {
 
 #geo-float input {
     width: 100%;
-    padding: 9px 11px;
+    padding: 9px 42px 9px 11px;
 }
 
 #geo-float input::placeholder {
@@ -977,7 +977,32 @@ input[type="range"] {
 }
 
 #geo-float button {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 18px;
+    line-height: 1;
+    transform: translateY(-50%);
     cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+
+#geo-float button:hover,
+#geo-float button:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+#geo-input:placeholder-shown + #geo-clear {
+    opacity: 0;
+    pointer-events: none;
 }
 
 #geo-float .geo-results {
