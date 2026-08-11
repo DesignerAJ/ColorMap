@@ -1,5 +1,5 @@
 const TOKEN_FUNCTION_URL = 'https://asia-northeast3-manage-dev-tokens.cloudfunctions.net/getMapboxToken';
-const PANEL_URL = './recorder/panel.html?v=2.2.0';
+const PANEL_URL = './recorder/panel.html?v=2.2.1';
 
 let cachedToken = null;
 

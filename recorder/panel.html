@@ -26,13 +26,6 @@
     <details id="region-settings" class="adv" data-menu-section="region-selection" open>
       <summary>지역 선택</summary>
       <div class="pad">
-    <div class="field">
-      <label>줌 <span style="color:var(--muted); font-size:10px;">(키보드 −/+)</span> <span id="zoom-val" style="float:right; color:var(--txt);">—</span></label>
-      <input id="zoom-slider" type="range" min="0" max="22" step="0.05" value="6" style="padding:0;" />
-    </div>
-
-    <div class="divider"></div>
-
     <!-- ── 색칠 (국가 / 시도 토글) ── -->
     <div class="field">
       <div class="seg-toggle">
@@ -127,6 +120,84 @@
       </div>
     </div>
 
+      </div>
+    </details>
+
+    <details id="design-settings" class="adv" data-menu-section="map-design">
+      <summary>지도 디자인</summary>
+      <div class="pad">
+        <div class="row">
+          <div class="field">
+            <label>스타일</label>
+            <select id="style-select">
+              <option value="mono_terrain">단색지형</option>
+              <option value="mono">단색</option>
+              <option value="satellite">위성사진</option>
+              <option value="detail">지형도</option>
+              <option value="monotone">모노톤</option>
+              <option value="placenames">지명 참고용</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>투영</label>
+            <select id="proj-select">
+              <option value="mercator">2D 메르카토르</option>
+              <option value="equirectangular">2D WGS84</option>
+              <option value="globe">3D 구형</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="map-color-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
+          <div class="map-color-row">
+            <label class="mc-label">육지색</label>
+            <input id="land-color" type="color" list="palette" value="#e8e4dc" />
+          </div>
+          <div class="map-color-row">
+            <label class="mc-label">바다색 (호수 포함)</label>
+            <input id="sea-color" type="color" list="palette" value="#a8c8e0" />
+          </div>
+          <div class="map-color-row">
+            <label class="mc-toggle"><input type="checkbox" id="river-on" checked /> 강 표시</label>
+          </div>
+        </div>
+
+        <div id="boundary-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
+          <label style="display:block; margin-bottom:8px;">경계선</label>
+          <div class="bd-block" data-bd="country">
+            <div class="bd-head">
+              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 국경선</label>
+              <input type="color" class="bd-color" list="palette" value="#7a7a7a" />
+            </div>
+            <div class="bd-ctrls">
+              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
+              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1.5" /></span>
+              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" /> 점선</label>
+            </div>
+          </div>
+          <div class="bd-block" data-bd="disputed">
+            <div class="bd-head">
+              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 분쟁지역 국경선</label>
+              <input type="color" class="bd-color" list="palette" value="#7a7a7a" />
+            </div>
+            <div class="bd-ctrls">
+              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
+              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1.5" /></span>
+              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" checked /> 점선</label>
+            </div>
+          </div>
+          <div class="bd-block" data-bd="admin">
+            <div class="bd-head">
+              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 행정구역선</label>
+              <input type="color" class="bd-color" list="palette" value="#9a9a9a" />
+            </div>
+            <div class="bd-ctrls">
+              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
+              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1" /></span>
+              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" /> 점선</label>
+            </div>
+          </div>
+        </div>
       </div>
     </details>
 
@@ -243,122 +314,52 @@
       </div>
       <p class="hint" id="draw-hint" style="margin-top:6px;">그리기 모드 ON → 지도를 클릭해 점을 잇고, 더블클릭(또는 Enter)으로 한 선 완료. 카메라 이동에 맞춰 영상에서 그려집니다.</p>
     </div>
+
+    <div class="divider"></div>
+    <div class="row pin-style-row">
+      <div class="field">
+        <label>출발 핀</label>
+        <input id="pin-color-start" type="color" list="palette" value="#0F3564" />
+      </div>
+      <div class="field">
+        <label>경유 핀</label>
+        <input id="pin-color-wp" type="color" list="palette" value="#0F3564" />
+      </div>
+      <div class="field">
+        <label>도착 핀</label>
+        <input id="pin-color-end" type="color" list="palette" value="#0F3564" />
+      </div>
+      <div class="field">
+        <label>글자색</label>
+        <input id="locpin-text-color" type="color" list="palette" value="#0F3564" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px; align-items:flex-end;">
+      <div class="field" style="margin:0; flex:1;">
+        <label>위치 핀 글자 크기</label>
+        <input id="locpin-text-size" type="number" min="8" max="120" step="1" value="30" />
+      </div>
+      <div class="field" style="margin:0; flex:1;">
+        <label>등장 시점</label>
+        <select id="locpin-timing">
+          <option value="last">마지막 컷</option>
+          <option value="first">첫 컷</option>
+        </select>
+      </div>
+    </div>
+    <div id="locpin-font-name" style="font-size:10px; color:var(--muted); margin-top:4px;">라벨 폰트: 기본</div>
+
+    <div id="wp-hold-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px; display:none;">
+      <label style="display:block; margin-bottom:6px;">경유지 정지 시간</label>
+      <div id="wp-hold-list"></div>
+    </div>
       </div>
     </details>
 
-    <details id="detail-settings" class="adv" data-menu-section="design-recording">
-      <summary>지도 디자인 · 녹화 설정</summary>
+    <details id="recording-settings" class="adv" data-menu-section="recording-settings">
+      <summary>녹화 설정</summary>
       <div class="pad">
-        <div class="row">
-          <div class="field">
-            <label>스타일</label>
-            <select id="style-select">
-              <option value="mono_terrain">단색지형</option>
-              <option value="mono">단색</option>
-              <option value="satellite">위성사진</option>
-              <option value="detail">지형도</option>
-              <option value="monotone">모노톤</option>
-              <option value="placenames">지명 참고용</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>투영</label>
-            <select id="proj-select">
-              <option value="mercator">2D 메르카토르</option>
-              <option value="equirectangular">2D WGS84</option>
-              <option value="globe">3D 구형</option>
-            </select>
-          </div>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <div class="field" style="margin:0;">
-            <label>출발 핀</label>
-            <input id="pin-color-start" type="color" list="palette" value="#0F3564" style="height:34px; padding:2px;" />
-          </div>
-          <div class="field" style="margin:0;">
-            <label>경유 핀</label>
-            <input id="pin-color-wp" type="color" list="palette" value="#0F3564" style="height:34px; padding:2px;" />
-          </div>
-          <div class="field" style="margin:0;">
-            <label>도착 핀</label>
-            <input id="pin-color-end" type="color" list="palette" value="#0F3564" style="height:34px; padding:2px;" />
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:8px; align-items:flex-end;">
-          <div class="field" style="margin:0; flex:1;">
-            <label>위치 핀 글자 크기</label>
-            <input id="locpin-text-size" type="number" min="8" max="120" step="1" value="30" />
-          </div>
-          <div class="field" style="margin:0; flex:1;">
-            <label>등장 시점</label>
-            <select id="locpin-timing">
-              <option value="last">마지막 컷</option>
-              <option value="first">첫 컷</option>
-            </select>
-          </div>
-          <div class="field" style="margin:0; flex:0 0 auto;">
-            <label>글자색</label>
-            <input id="locpin-text-color" type="color" list="palette" value="#0F3564" style="height:34px; padding:2px;" />
-          </div>
-        </div>
-        <div id="locpin-font-name" style="font-size:10px; color:var(--muted); margin-top:4px;">라벨 폰트: 기본</div>
-
-        <div id="map-color-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
-          <div class="map-color-row">
-            <label class="mc-label">육지색</label>
-            <input id="land-color" type="color" list="palette" value="#e8e4dc" />
-          </div>
-          <div class="map-color-row">
-            <label class="mc-label">바다색 (호수 포함)</label>
-            <input id="sea-color" type="color" list="palette" value="#a8c8e0" />
-          </div>
-          <div class="map-color-row">
-            <label class="mc-toggle"><input type="checkbox" id="river-on" checked /> 강 표시</label>
-          </div>
-        </div>
-
-        <div id="boundary-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
-          <label style="display:block; margin-bottom:8px;">경계선</label>
-          <div class="bd-block" data-bd="country">
-            <div class="bd-head">
-              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 국경선</label>
-              <input type="color" class="bd-color" list="palette" value="#7a7a7a" />
-            </div>
-            <div class="bd-ctrls">
-              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
-              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1.5" /></span>
-              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" /> 점선</label>
-            </div>
-          </div>
-          <div class="bd-block" data-bd="disputed">
-            <div class="bd-head">
-              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 분쟁지역 국경선</label>
-              <input type="color" class="bd-color" list="palette" value="#7a7a7a" />
-            </div>
-            <div class="bd-ctrls">
-              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
-              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1.5" /></span>
-              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" checked /> 점선</label>
-            </div>
-          </div>
-          <div class="bd-block" data-bd="admin">
-            <div class="bd-head">
-              <label class="mc-toggle"><input type="checkbox" class="bd-on" checked /> 행정구역선</label>
-              <input type="color" class="bd-color" list="palette" value="#9a9a9a" />
-            </div>
-            <div class="bd-ctrls">
-              <span class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.05" value="1" /></span>
-              <span class="bd-cell">두께<input type="range" class="bd-width" min="0.5" max="6" step="0.5" value="1" /></span>
-              <label class="bd-dash-lbl"><input type="checkbox" class="bd-dash" /> 점선</label>
-            </div>
-          </div>
-        </div>
-
-        <div id="wp-hold-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px; display:none;">
-          <label style="display:block; margin-bottom:6px;">경유지 정지 시간</label>
-          <div id="wp-hold-list"></div>
-        </div>
         <div class="row">
           <div class="field"><label>줌 시간 (초)</label>
             <div class="stepper">
@@ -449,5 +450,22 @@
         <div id="status">대기 중</div>
       </div>
     </details>
+  </div>
+
+  <div id="panel-zoom-control" aria-label="지도 확대·축소">
+    <button type="button" id="zoom-out" class="zoom-icon-button" aria-label="지도 축소" title="지도 축소">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6.5"></circle>
+        <path d="M15.5 15.5 21 21M7.5 10.5h6"></path>
+      </svg>
+    </button>
+    <input id="zoom-slider" type="range" min="0" max="22" step="0.05" value="6" aria-label="지도 줌" />
+    <button type="button" id="zoom-in" class="zoom-icon-button" aria-label="지도 확대" title="지도 확대">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6.5"></circle>
+        <path d="M15.5 15.5 21 21M7.5 10.5h6M10.5 7.5v6"></path>
+      </svg>
+    </button>
+    <output id="zoom-val" hidden>6.00</output>
   </div>
 </div>

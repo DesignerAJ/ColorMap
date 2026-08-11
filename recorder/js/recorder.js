@@ -109,6 +109,9 @@ function initRecorder(map) {
   const zoomSlider = $('zoom-slider'), zoomVal = $('zoom-val');
   const syncZoomUI = () => { const z = map.getZoom(); zoomSlider.value = z; zoomVal.textContent = z.toFixed(2); };
   zoomSlider.addEventListener('input', () => map.setZoom(parseFloat(zoomSlider.value)));
+  const nudgeZoom = (delta) => map.setZoom(Math.min(22, Math.max(0, map.getZoom() + delta)));
+  $('zoom-out').addEventListener('click', () => nudgeZoom(-0.5));
+  $('zoom-in').addEventListener('click', () => nudgeZoom(0.5));
   map.on('zoom', syncZoomUI);
   syncZoomUI();
 
@@ -2986,7 +2989,7 @@ function initRecorder(map) {
 
   function setStatus(msg, cls){ const el=$('status'); el.textContent=msg; el.className=cls||''; }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','record-smooth','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','record-smooth','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){
