@@ -95,21 +95,15 @@ function initRecorder(map) {
      방송용 스타일로 돌아올 때는 반드시 null 로 되돌려 원본 디자인을 지켜야 한다.
      스타일 로드가 끝난 뒤 걸어야 라벨 레이어에 제대로 반영된다. */
   function applyStyleLanguage() {
-    try { map.setLanguage(KO_LABEL_STYLES.has($('recorder-style-select').value) ? 'ko' : null); } catch (_) {}
+    try { map.setLanguage(KO_LABEL_STYLES.has($('style-select').value) ? 'ko' : null); } catch (_) {}
   }
   map.on('style.load', applyStyleLanguage);
 
-  $('recorder-style-select').addEventListener('change', (e) => {
+  $('style-select').addEventListener('change', (e) => {
     map.setStyle(STYLES[e.target.value]);
-    const rootStyleSelect = document.getElementById('style-select');
-    if (rootStyleSelect) rootStyleSelect.value = STYLES[e.target.value];
     applyStyleColors();
   });
-  $('proj-select').addEventListener('change', (e) => {
-    map.setProjection(e.target.value);
-    const rootProjectionSelect = document.getElementById('projection-select');
-    if (rootProjectionSelect) rootProjectionSelect.value = e.target.value;
-  });
+  $('proj-select').addEventListener('change', (e) => map.setProjection(e.target.value));
 
   // 줌 슬라이더 (미세 조절) — 지도↔슬라이더 양방향 동기화
   const zoomSlider = $('zoom-slider'), zoomVal = $('zoom-val');
@@ -160,8 +154,8 @@ function initRecorder(map) {
 
   // 국가 경계 소스/레이어 추가 — 스타일이 바뀔 때마다 다시 깔아야 함
   function addCountryLayer() {
-    if (map.getSource('recorder-country-boundaries')) return;
-    map.addSource('recorder-country-boundaries', { type: 'vector', url: 'mapbox://mapbox.country-boundaries-v1' });
+    if (map.getSource('country-boundaries')) return;
+    map.addSource('country-boundaries', { type: 'vector', url: 'mapbox://mapbox.country-boundaries-v1' });
     // worldview 필터: 분쟁 경계 중복 방지 (US 세계관 + 'all')
     const filter = ['all',
       ['==', ['get', 'disputed'], 'false'],
@@ -170,7 +164,7 @@ function initRecorder(map) {
     // 라벨(symbol) 아래에 삽입 → 글씨는 색칠 위로
     const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     map.addLayer({
-      id: 'recorder-country-color-fill', type: 'fill', source: 'recorder-country-boundaries',
+      id: 'country-color-fill', type: 'fill', source: 'country-boundaries',
       'source-layer': 'country_boundaries', filter,
       paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': parseFloat($('country-opacity').value) }
     }, firstSymbol);
@@ -178,12 +172,12 @@ function initRecorder(map) {
   }
 
   function applyColors() {
-    if (!map.getLayer('recorder-country-color-fill')) return;
-    if (!colored.length) { map.setPaintProperty('recorder-country-color-fill', 'fill-color', 'rgba(0,0,0,0)'); return; }
+    if (!map.getLayer('country-color-fill')) return;
+    if (!colored.length) { map.setPaintProperty('country-color-fill', 'fill-color', 'rgba(0,0,0,0)'); return; }
     const expr = ['match', ['get', 'iso_3166_1_alpha_3']];
     colored.forEach(e => expr.push(e.iso, e.color));
     expr.push('rgba(0,0,0,0)');
-    map.setPaintProperty('recorder-country-color-fill', 'fill-color', expr);
+    map.setPaintProperty('country-color-fill', 'fill-color', expr);
   }
 
   function renderChips() {
@@ -217,7 +211,7 @@ function initRecorder(map) {
 
   $('country-clear').addEventListener('click', () => { colored.length = 0; applyColors(); renderChips(); syncDefaultColor(); });
   $('country-opacity').addEventListener('input', (e) => {
-    if (map.getLayer('recorder-country-color-fill')) map.setPaintProperty('recorder-country-color-fill', 'fill-opacity', parseFloat(e.target.value));
+    if (map.getLayer('country-color-fill')) map.setPaintProperty('country-color-fill', 'fill-opacity', parseFloat(e.target.value));
   });
 
   /* ── 대한민국 시도 색칠 ── */
@@ -891,7 +885,7 @@ function initRecorder(map) {
   // 스타일 로드: 피커를 현재 스타일의 실제 색으로 채우고, 강 표시 상태 반영
   function syncMapColorPickers() {
     for (const k in _origTonePaint) delete _origTonePaint[k];   // 새 스타일이므로 톤 백업 초기화
-    const styleKey = $('recorder-style-select').value;
+    const styleKey = $('style-select').value;
     // 위성은 사진이라 '색' 지정은 무의미 → 색 섹션만 숨김
     $('map-color-section').style.display = (styleKey === 'satellite') ? 'none' : '';
     // 경계선은 '선'이라 위성 위에도 의미 있음 → 경계선 레이어가 실제로 있을 때만 표시 (없으면 숨김)
@@ -1707,7 +1701,7 @@ function initRecorder(map) {
   const STYLE_COLORS = { satellite: '#d6dade', _default: '#0F3564' };
   let _lastStyleColor = '#0F3564';
   function applyStyleColors() {
-    const styleKey = $('recorder-style-select').value;
+    const styleKey = $('style-select').value;
     const color = STYLE_COLORS[styleKey] || STYLE_COLORS._default;
     if (color === _lastStyleColor) return;   // 변화 없으면 건너뜀
     _lastStyleColor = color;
@@ -2667,7 +2661,7 @@ function initRecorder(map) {
 
      ag-psd 는 이 기능에서만 쓰이므로 처음 누를 때 동적으로 불러온다 (810KB). */
   const OVERLAY_LAYERS = {
-    색칠: ['recorder-country-color-fill', 'admin1-color-fill', 'sido-color-fill', 'sigungu-color-fill'],
+    색칠: ['country-color-fill', 'admin1-color-fill', 'sido-color-fill', 'sigungu-color-fill'],
     경로선: ['route-line-layer', 'route-dots-layer', 'route-arrow-layer', 'draw-lines-layer'],
     핀: ['capture-pins-layer'],
   };
@@ -2676,7 +2670,7 @@ function initRecorder(map) {
      그 지역만 그려진다. 지역별로 레이어를 나눌 때 이 방식을 쓴다.
      (모드별로 레이어 id 와 키 속성이 달라 여기서 한 번에 정리해둔다) */
   const COLOR_SOURCES = [
-    { layer: 'recorder-country-color-fill', prop: 'iso_3166_1_alpha_3', list: () => colored,        keyOf: e => e.iso,  labelOf: e => e.name || e.iso },
+    { layer: 'country-color-fill', prop: 'iso_3166_1_alpha_3', list: () => colored,        keyOf: e => e.iso,  labelOf: e => e.name || e.iso },
     { layer: 'admin1-color-fill',  prop: 'name',              list: () => admin1Colored,  keyOf: e => e.name, labelOf: e => (admin1Meta[e.name] && admin1Meta[e.name].s) || e.name },
     { layer: 'sido-color-fill',    prop: 'name',              list: () => sidoColored,    keyOf: e => e.name, labelOf: e => e.name },
     { layer: 'sigungu-color-fill', prop: 'name',              list: () => sigunguColored, keyOf: e => e.name, labelOf: e => (sigunguMeta[e.name] && sigunguMeta[e.name].s) || e.name },
@@ -2942,7 +2936,7 @@ function initRecorder(map) {
           }
           for (const k in byKey) acc.push(byKey[k]);
         };
-        collect('recorder-country-color-fill', 'iso_3166_1_alpha_3',
+        collect('country-color-fill', 'iso_3166_1_alpha_3',
           (iso) => { const e = colored.find(x => x.iso === iso); return e && e.color; },
           parseFloat($('country-opacity').value) || 1);
         collect('sido-color-fill', 'name',
@@ -2992,7 +2986,7 @@ function initRecorder(map) {
 
   function setStatus(msg, cls){ const el=$('status'); el.textContent=msg; el.className=cls||''; }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','record-smooth','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','recorder-style-select','proj-select','zoom-slider','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','record-smooth','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){

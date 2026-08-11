@@ -657,3 +657,292 @@ input[type="range"] {
     text-align: center;
     letter-spacing: 0.5px;
 }
+
+/* ============================================================
+   v2.1 통합 패널
+   기존 유리 패널 디자인을 유지하고 recorder 기능을 한 패널에 배치한다.
+   ============================================================ */
+
+#country-selector-container {
+    width: 380px;
+    max-height: calc(100vh - 30px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    gap: 0;
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 400;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+#country-selector-container::-webkit-scrollbar {
+    width: 7px;
+}
+
+#country-selector-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 99px;
+}
+
+.colormap-panel-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 2px 12px;
+    color: #fff;
+}
+
+.colormap-panel-title > span {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+.colormap-panel-title > small {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 10px;
+    font-weight: 400;
+}
+
+#controls {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#country-selector-container details.adv {
+    flex: 0 0 auto;
+}
+
+#country-selector-container details.adv summary {
+    min-height: 42px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#country-selector-container details.adv .pad {
+    padding: 4px 12px 10px;
+}
+
+#country-selector-container .action-footer {
+    margin-top: 0;
+    padding: 10px;
+    border: 0;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: none;
+}
+
+#country-selector-container.minimized {
+    max-height: 24px;
+    overflow: hidden;
+}
+
+#country-selector-container.minimized > :not(.minimize-button) {
+    display: none !important;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* 지도 위 지역·주소 검색 */
+#geo-float {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 12;
+    width: 320px;
+    max-width: calc(100vw - 32px);
+    font-family: "Nanum Gothic Coding", monospace;
+}
+
+#geo-float .row {
+    display: flex;
+}
+
+#geo-float input,
+#geo-float button {
+    box-sizing: border-box;
+    min-height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    background: rgba(14, 23, 44, 0.78);
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+#geo-float input {
+    width: 100%;
+    padding: 9px 11px;
+}
+
+#geo-float input::placeholder {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+#geo-float button {
+    cursor: pointer;
+}
+
+#geo-float .geo-results {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    left: 0;
+    z-index: 20;
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(14, 23, 44, 0.94);
+    color: #fff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+#geo-float .geo-item {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+#geo-float .geo-item:last-child {
+    border-bottom: 0;
+}
+
+#geo-float .geo-item:hover {
+    background: rgba(47, 98, 175, 0.35);
+}
+
+#geo-float .geo-item .gi-ctx,
+#geo-float .geo-item.empty {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 10px;
+}
+
+#frame-guide {
+    position: absolute;
+    z-index: 5;
+    display: none;
+    pointer-events: none;
+    border: 1px dashed rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+}
+
+#drop-hint {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    z-index: 11;
+    display: none;
+    transform: translateX(-50%);
+    padding: 9px 18px;
+    border-radius: 20px;
+    background: rgba(15, 53, 100, 0.92);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+#drop-hint.show {
+    display: block;
+}
+
+/* Mapbox 마커는 패널 바깥 #map 아래에 생성된다. */
+.map-pin {
+    width: 28px;
+    height: 38px;
+    cursor: grab;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+    transition: opacity 0.15s;
+}
+
+.map-pin .pin-inner {
+    transform: translateY(-4px);
+    transform-origin: center bottom;
+}
+
+@keyframes pin-bounce {
+    0% { transform: translateY(-4px) scale(1); }
+    30% { transform: translateY(-14px) scale(1.15); }
+    60% { transform: translateY(-4px) scale(1); }
+    80% { transform: translateY(-9px) scale(1.06); }
+    100% { transform: translateY(-4px) scale(1); }
+}
+
+.map-pin.bounce .pin-inner {
+    animation: pin-bounce 0.6s ease-out;
+}
+
+.map-pin .label {
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.map-pin .loc-label {
+    position: absolute;
+    top: 12px;
+    transform: translateY(-50%);
+    color: #0f3564;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff;
+}
+
+.map-pin.label-right .loc-label { left: 32px; text-align: left; }
+.map-pin.label-left .loc-label { right: 32px; text-align: right; }
+.map-pin .loc-label:empty { display: none; }
+#map.pins-ghost .map-pin:not(.loc-pin) { opacity: 0.35 !important; }
+#map.locpins-ghost .map-pin.loc-pin { opacity: 0.35 !important; }
+
+.bootstrap-error {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    z-index: 100;
+    transform: translateX(-50%);
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: #7f1d1d;
+    color: #fff;
+    font-family: "Nanum Gothic Coding", monospace;
+}
+
+@media (max-width: 720px) {
+    #country-selector-container {
+        top: 8px;
+        right: 8px;
+        width: min(380px, calc(100vw - 16px));
+        max-height: calc(100vh - 16px);
+    }
+
+    #geo-float {
+        display: none;
+    }
+}

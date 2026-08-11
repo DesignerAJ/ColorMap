@@ -1,61 +1,18 @@
-  #recorder-shell {
-    --bg:#14161a; --panel:#1c1f26; --panel-2:#242832; --line:#2f3440;
-    --txt:#e6e8ec; --muted:#8b919e; --accent:#ff3b30; --accent-dim:#b3271f;
+  #country-selector-container {
+    --bg:#edf1f6; --panel:rgba(255,255,255,.96); --panel-2:#fff; --line:rgba(15,38,70,.14);
+    --txt:#1f2937; --muted:#64748b; --accent:#ff3b30; --accent-dim:#b3271f;
     --ok:#34c759; --radius:10px;
     --font:'Nanum Gothic Coding', ui-monospace, Menlo, Consolas, monospace;
   }
-  @scope (#recorder-shell) {
+  @scope (#country-selector-container) {
   * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; background:var(--bg); color:var(--txt); font-family:var(--font); }
-  #map { position:absolute; inset:0; }
-
-  /* 지역·주소 검색 — 화면 좌측 상단 플로팅 */
-  #geo-float { position:absolute; top:16px; left:16px; z-index:10; width:300px; max-width:calc(100vw - 32px); }
-  #geo-float .geo-results { box-shadow:0 10px 28px rgba(0,0,0,.5); }
-
-  #frame-guide { position:absolute; pointer-events:none; z-index:5; border:1px dashed rgba(255,255,255,.6); box-shadow:0 0 0 100vmax rgba(0,0,0,.5); display:none; }
-
-  #drop-hint {
-    position:absolute; z-index:9; top:18px; left:50%; transform:translateX(-50%);
-    background:rgba(15,53,100,.92); color:#fff; padding:9px 18px; border-radius:20px;
-    font-size:13px; font-weight:700; pointer-events:none; display:none;
-    box-shadow:0 4px 16px rgba(0,0,0,.4); white-space:nowrap;
-  }
-  #drop-hint.show { display:block; animation:dh-pulse 1.2s ease-in-out infinite; }
-  @keyframes dh-pulse { 0%,100%{ opacity:.75; } 50%{ opacity:1; } }
 
   /* 재지정 피드백 */
   @keyframes btn-flash { 0%{ background:var(--ok); border-color:var(--ok); color:#fff; } 100%{} }
   .flash { animation:btn-flash .45s ease-out; }
-  @keyframes pin-bounce { 0%{ transform:translateY(-4px) scale(1); } 30%{ transform:translateY(-14px) scale(1.15); } 60%{ transform:translateY(-4px) scale(1); } 80%{ transform:translateY(-9px) scale(1.06); } 100%{ transform:translateY(-4px) scale(1); } }
-  .map-pin.bounce .pin-inner { animation:pin-bounce .6s ease-out; }
-
-  #fatal {
-    display:none; position:absolute; inset:0; z-index:100; background:#14161a; color:var(--txt);
-    padding:40px; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:14px;
-  }
-  #fatal h2 { color:var(--accent); margin:0; font-size:18px; }
-  #fatal p { color:var(--muted); max-width:520px; line-height:1.7; font-size:13px; margin:0; }
-  #fatal code { background:var(--panel-2); padding:2px 6px; border-radius:4px; color:var(--txt); }
-
-  .panel {
-    position:absolute; top:16px; right:16px; z-index:10; width:320px; max-height:calc(100vh - 32px); overflow-y:auto;
-    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:0 12px 40px rgba(0,0,0,.5);
-  }
   /* 녹화 버튼 묶음 — 패널 하단, 스크롤해도 항상 보이게 고정 */
-  .action-footer { position:sticky; bottom:0; background:var(--panel); margin-top:4px; padding-top:10px; border-top:1px solid var(--line); }
+  .action-footer { position:static; background:var(--panel); margin-top:0; padding-top:10px; border-top:1px solid var(--line); }
   .action-footer button { width:100%; }
-
-  .panel h1 { font-size:14px; letter-spacing:.04em; margin:0 0 16px; display:flex; align-items:center; justify-content:center; gap:8px; }
-  .panel h1 .dot { width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
-  .sub { font-size:11px; color:var(--muted); margin:0 0 14px; }
-
-  /* 접기 핸들 (캡처용) */
-  .panel-handle { width:64px; height:6px; border-radius:3px; background:#4a5160; margin:0 auto 14px; cursor:pointer; transition:background .15s, width .15s; }
-  .panel-handle:hover { background:#5e6678; }
-  .panel.collapsed { width:320px; padding:10px 16px; overflow:visible; }
-  .panel.collapsed > :not(.panel-handle) { display:none !important; }
-  .panel.collapsed .panel-handle { margin:0 auto; width:100%; }
 
   .field { margin-bottom:12px; }
   .field > label { display:block; font-size:11px; color:var(--muted); margin-bottom:5px; letter-spacing:.03em; }
@@ -64,7 +21,7 @@
   .row { display:flex; gap:8px; } .row > * { flex:1; }
 
   button { width:100%; cursor:pointer; border:1px solid var(--line); background:var(--panel-2); color:var(--txt); border-radius:7px; padding:9px 10px; font-family:var(--font); font-size:12px; transition:background .12s, border-color .12s, opacity .12s; }
-  button:hover:not(:disabled){ background:#2c313d; }
+  button:hover:not(:disabled){ background:#eef3f8; }
   button:disabled{ opacity:.35; cursor:not-allowed; }
   button.set{ text-align:left; }
   button.set .tag{ color:var(--muted); font-size:10px; display:block; margin-top:3px; min-height:13px; }
@@ -110,11 +67,11 @@
   }
   .stepper .step:first-child{ border-radius:7px 0 0 7px; }
   .stepper .step:last-child{ border-radius:0 7px 7px 0; }
-  .stepper .step:hover:not(:disabled){ background:#39414f; }
+  .stepper .step:hover:not(:disabled){ background:#e2e8f0; }
   .stepper .step:active:not(:disabled){ background:var(--accent); border-color:var(--accent); color:#fff; }
 
   /* 접이식 세부 설정 */
-  details.adv{ margin-bottom:12px; border:1px solid var(--line); border-radius:7px; background:rgba(0,0,0,.15); overflow:hidden; }
+  details.adv{ margin-bottom:12px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.76); overflow:hidden; }
   details.adv summary{ cursor:pointer; padding:10px 11px; font-size:12px; color:var(--muted); list-style:none; display:flex; align-items:center; justify-content:space-between; }
   details.adv summary::-webkit-details-marker{ display:none; }
   details.adv summary::after{ content:'▾'; font-size:10px; }
@@ -162,15 +119,6 @@
   .pin-grab .tag{ color:var(--ok); font-size:10px; display:inline; margin-top:0; min-height:0; }
   .pin-grab .tag:not(:empty){ margin-left:auto; }
 
-  /* 지도 위 핀 마커 */
-  .map-pin{ width:28px; height:38px; cursor:grab; filter:drop-shadow(0 2px 3px rgba(0,0,0,.4)); transition:opacity .15s; }
-  #map.pins-ghost .map-pin:not(.loc-pin){ opacity:.35 !important; }   /* 출발·도착·경유지 핀 (Mapbox inline opacity 덮어쓰기 방지) */
-  #map.locpins-ghost .map-pin.loc-pin{ opacity:.35 !important; }      /* 위치 표시 핀 */
-  /* 위치 핀 라벨 (화면 위치에 따라 좌/우) */
-  .map-pin .loc-label{ position:absolute; top:12px; transform:translateY(-50%); white-space:nowrap; font-size:14px; font-weight:600; line-height:1; color:#000; pointer-events:none; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff; }
-  .map-pin.label-right .loc-label{ left:32px; text-align:left; }
-  .map-pin.label-left  .loc-label{ right:32px; text-align:right; }
-  .map-pin .loc-label:empty{ display:none; }
   #draw-mode.active{ background:#2F62AF; color:#fff; border-color:#2F62AF; }
   /* '직접 선 그리기'를 켜기만 하고 그리기 모드를 안 켜면 아무 일도 안 일어난다.
      그 상태에서만 버튼을 깜빡여 다음 동작을 유도한다 (모드를 켜거나 선을 그리면 멈춤) */
@@ -209,14 +157,6 @@
      중점 자체를 양옆으로 당긴다. -0.22em 이면 '시·군·구' 가 '행정구역' 과 비슷한 폭. */
   .seg-btn .mid{ font-style:normal; margin:0 -.22em; opacity:.55; }
   .hint-sm{ font-size:10px; color:var(--muted); margin-top:4px; line-height:1.5; }
-  .geo-results{ position:absolute; left:0; right:0; top:100%; z-index:20; margin-top:4px; background:var(--panel-2); border:1px solid var(--line); border-radius:8px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.4); max-height:260px; overflow-y:auto; }
-  .geo-item{ padding:9px 12px; font-size:12px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,.05); }
-  .geo-item:last-child{ border-bottom:none; }
-  .geo-item:hover{ background:rgba(47,98,175,.25); }
-  .geo-item .gi-name{ color:var(--txt); }
-  .geo-item .gi-ctx{ color:var(--muted); font-size:10px; margin-top:2px; }
-  .geo-item.empty{ color:var(--muted); cursor:default; text-align:center; }
-  .geo-item.empty:hover{ background:none; }
   .map-color-row .mc-toggle{ flex:1; display:flex; align-items:center; gap:7px; font-size:12px; cursor:pointer; margin:0; }
   .map-color-row .mc-label{ flex:1; font-size:12px; margin:0; }
   .map-color-row .mc-toggle input{ width:auto; flex:0 0 auto; }
@@ -248,7 +188,4 @@
   .wp-hold-row .wp-hold-wrap{ flex:0 0 64px; display:flex; align-items:center; gap:3px; }
   .wp-hold-row .wp-hold{ flex:1; width:100%; text-align:center; }
   .wp-hold-row .wp-sec{ font-size:10px; color:var(--muted); flex:0 0 auto; }
-  .pin-inner{ transform:translateY(-4px); transform-origin:center bottom; }
-  .map-pin:active{ cursor:grabbing; }
-  .map-pin .label{ position:absolute; top:5px; left:50%; transform:translateX(-50%); color:#fff; font-size:13px; font-weight:700; }
   }

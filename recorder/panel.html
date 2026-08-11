@@ -13,12 +13,18 @@
   </div>
 </div>
 
-<div class="panel" id="panel" style="display:none">
-  <div class="panel-handle" id="panel-handle" title="패널 접기/펼치기"></div>
+<div id="country-selector-container">
+  <button type="button" class="minimize-button" id="minimize-button" title="전체 패널 접기/펼치기">
+    <span class="sr-only">전체 패널 접기/펼치기</span>
+  </button>
+  <div class="colormap-panel-title">
+    <span>ColorMap</span>
+    <small>지도 디자인 · 카메라 녹화</small>
+  </div>
 
-  <div id="controls" style="display:none">
-    <details id="main-settings" class="adv" open>
-      <summary>주 설정</summary>
+  <div id="controls">
+    <details id="region-settings" class="adv" data-menu-section="region-selection" open>
+      <summary>지역 선택</summary>
       <div class="pad">
     <div class="field">
       <label>줌 <span style="color:var(--muted); font-size:10px;">(키보드 −/+)</span> <span id="zoom-val" style="float:right; color:var(--txt);">—</span></label>
@@ -121,7 +127,12 @@
       </div>
     </div>
 
-    <div class="divider"></div>
+      </div>
+    </details>
+
+    <details id="camera-settings" class="adv" data-menu-section="camera-path">
+      <summary>카메라 경로 · 핀과 선</summary>
+      <div class="pad">
 
     <div class="field">
       <div class="pin-row">
@@ -235,8 +246,8 @@
       </div>
     </details>
 
-    <details id="detail-settings" class="adv">
-      <summary>세부 설정</summary>
+    <details id="detail-settings" class="adv" data-menu-section="design-recording">
+      <summary>지도 디자인 · 녹화 설정</summary>
       <div class="pad">
         <div class="row">
           <div class="field">
@@ -422,22 +433,21 @@
         </div>
       </div>
     </details>
-  </div>
-</div>
 
-<!-- ── 액션 버튼 (우측 하단 플로팅 · 설정 패널과 위아래로 분리) ── -->
-<div id="action-panel" style="display:none">
-  <!-- 세부 설정(details.adv)은 로드 시 JS가 이 위(footer 앞)로 이동시킴 -->
-  <div class="action-footer">
-    <button id="record" class="rec">● 녹화 &amp; 저장</button>
-    <button id="record-smooth" style="margin-top:6px; border-color:var(--accent);"><span style="color:var(--accent);">●</span> 부드럽게 녹화 (인코딩 시간 소요)</button>
-    <button id="capture-png" style="margin-top:6px;">현재 지도 캡처</button>
-    <button id="capture-psd" style="margin-top:6px;">PSD로 저장 (레이어 분리)</button>
-    <button id="export-svg" style="margin-top:6px;">색칠 영역 SVG 내보내기</button>
-    <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:var(--muted); cursor:pointer;">
-      <input id="svg-split" type="checkbox" style="width:auto; flex:0 0 auto;" />
-      영역별로 파일 나눠 저장
-    </label>
-    <div id="status">대기 중</div>
+    <details id="export-settings" class="adv" data-menu-section="export-actions">
+      <summary>녹화 · 저장 · 내보내기</summary>
+      <div class="pad action-footer">
+        <button id="record" class="rec">● 녹화 &amp; 저장</button>
+        <button id="record-smooth" style="margin-top:6px; border-color:var(--accent);"><span style="color:var(--accent);">●</span> 부드럽게 녹화 (인코딩 시간 소요)</button>
+        <button id="capture-png" style="margin-top:6px;">현재 지도 캡처</button>
+        <button id="capture-psd" style="margin-top:6px;">PSD로 저장 (레이어 분리)</button>
+        <button id="export-svg" style="margin-top:6px;">색칠 영역 SVG 내보내기</button>
+        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:var(--muted); cursor:pointer;">
+          <input id="svg-split" type="checkbox" style="width:auto; flex:0 0 auto;" />
+          영역별로 파일 나눠 저장
+        </label>
+        <div id="status">대기 중</div>
+      </div>
+    </details>
   </div>
 </div>
