@@ -1,7 +1,10 @@
 const TOKEN_FUNCTION_URL = 'https://asia-northeast3-manage-dev-tokens.cloudfunctions.net/getMapboxToken';
-const PANEL_URL = './recorder/panel.html?v=2.2.1';
+const PANEL_URL = './recorder/panel.html?v=2.2.2';
 
 let cachedToken = null;
+let statusHideTimer = null;
+let statusResetTimer = null;
+let statusShowFrame = null;
 
 async function fetchMapboxToken() {
     if (cachedToken) return cachedToken;
@@ -28,9 +31,46 @@ async function loadControlPanel() {
 function setStatus(message, className = '') {
     const status = document.getElementById('status');
     if (!status) return;
-    status.textContent = message;
-    status.className = className;
+
+    clearTimeout(statusHideTimer);
+    clearTimeout(statusResetTimer);
+    if (statusShowFrame !== null) {
+        cancelAnimationFrame(statusShowFrame);
+        statusShowFrame = null;
+    }
+
+    const text = String(message || '').trim();
+    if (!text || text === '대기 중') {
+        status.className = '';
+        status.hidden = true;
+        return;
+    }
+
+    const tone = className || (/오류|실패|지원하지|지정하세요|비었습니다/.test(text) ? 'error' : '');
+    const wasShowing = !status.hidden && status.classList.contains('show');
+    status.textContent = text;
+    status.className = tone;
+    status.hidden = false;
+
+    // 녹화 진행률처럼 빠른 연속 갱신은 팝업을 유지하고, 처음 나타날 때만 페이드인한다.
+    if (wasShowing) {
+        status.classList.add('show');
+    } else {
+        statusShowFrame = requestAnimationFrame(() => {
+            if (!status.hidden) status.classList.add('show');
+            statusShowFrame = null;
+        });
+    }
+
+    const holdMs = tone === 'busy' ? 1700 : 2800;
+    statusHideTimer = setTimeout(() => status.classList.remove('show'), holdMs);
+    statusResetTimer = setTimeout(() => {
+        status.hidden = true;
+        status.className = '';
+    }, holdMs + 520);
 }
+
+window.showColorMapStatus = setStatus;
 
 function setupPanelShell(panel, map) {
     const minimizeButton = document.getElementById('minimize-button');

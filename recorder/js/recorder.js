@@ -2106,6 +2106,12 @@ function initRecorder(map) {
     if (pickMime('webm')) sel.add(new Option('WebM (VP9)', 'webm'));
     if (!sel.options.length) sel.add(new Option('지원 포맷 없음', ''));
   })();
+  const syncRecordFormatLabel = () => {
+    const label = $('record-format-label');
+    if (label) label.textContent = ($('format').value || 'video').toUpperCase();
+  };
+  $('format').addEventListener('change', syncRecordFormatLabel);
+  syncRecordFormatLabel();
 
   async function record() {
     console.log('[REC] 클릭됨. startCam=', !!startCam, 'endCam=', !!endCam);
@@ -2987,7 +2993,17 @@ function initRecorder(map) {
     else { setStatus('타일 로딩 대기 중…', 'busy'); map.once('idle', run); }
   });
 
-  function setStatus(msg, cls){ const el=$('status'); el.textContent=msg; el.className=cls||''; }
+  function setStatus(msg, cls){
+    if (typeof window.showColorMapStatus === 'function') {
+      window.showColorMapStatus(msg, cls || '');
+      return;
+    }
+    const el = $('status');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = cls || '';
+    el.hidden = !msg || msg === '대기 중';
+  }
   function setUI(enabled){
     ['set-start','set-end','go-start','go-end','label-start','label-end','record','record-smooth','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
       .forEach(id => { $(id).disabled = !enabled; });

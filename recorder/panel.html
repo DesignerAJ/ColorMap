@@ -1,6 +1,7 @@
 <!-- 기존 ColorMap의 #map에 연결되는 녹화 패널 조각. 단독 페이지가 아닙니다. -->
 <div id="frame-guide"></div>
 <div id="drop-hint">원하는 곳에 끌어다놓으세요</div>
+<div id="status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
 <!-- ── 지역/주소 검색 (화면 좌측 상단 플로팅) ── -->
 <div id="geo-float">
@@ -435,22 +436,32 @@
       </div>
     </details>
 
-    <details id="export-settings" class="adv" data-menu-section="export-actions">
-      <summary>녹화 · 저장 · 내보내기</summary>
-      <div class="pad action-footer">
-        <button id="record" class="rec">● 녹화 &amp; 저장</button>
-        <button id="record-smooth" style="margin-top:6px; border-color:var(--accent);"><span style="color:var(--accent);">●</span> 부드럽게 녹화 (인코딩 시간 소요)</button>
-        <button id="capture-png" style="margin-top:6px;">현재 지도 캡처</button>
-        <button id="capture-psd" style="margin-top:6px;">PSD로 저장 (레이어 분리)</button>
-        <button id="export-svg" style="margin-top:6px;">색칠 영역 SVG 내보내기</button>
-        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:var(--muted); cursor:pointer;">
-          <input id="svg-split" type="checkbox" style="width:auto; flex:0 0 auto;" />
-          영역별로 파일 나눠 저장
-        </label>
-        <div id="status">대기 중</div>
-      </div>
-    </details>
   </div>
+
+  <section id="export-actions" aria-labelledby="export-actions-title">
+    <div id="export-actions-title">저장 및 내보내기</div>
+    <div class="export-grid">
+      <button type="button" id="record" class="export-tile">
+        <strong id="record-format-label">MP4</strong>
+      </button>
+      <button type="button" id="capture-psd" class="export-tile">
+        <strong>PSD</strong>
+        <small>(레이어 분리)</small>
+      </button>
+      <button type="button" id="capture-png" class="export-tile">
+        <strong>PNG</strong>
+      </button>
+      <button type="button" id="export-svg" class="export-tile">
+        <strong>SVG</strong>
+        <small>(색칠 영역만)</small>
+      </button>
+    </div>
+    <button type="button" id="record-smooth" class="smooth-export">✦ 부드럽게 MP4 <small>(인코딩 시간 소요)</small></button>
+    <label class="svg-split-option">
+      <input id="svg-split" type="checkbox" />
+      SVG를 영역별 파일로 나눠 저장
+    </label>
+  </section>
 
   <div id="panel-zoom-control" aria-label="지도 확대·축소">
     <button type="button" id="zoom-out" class="zoom-icon-button" aria-label="지도 축소" title="지도 축소">
