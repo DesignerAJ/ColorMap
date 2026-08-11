@@ -19,7 +19,9 @@
     <script src='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js'></script>
     <link href='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css' rel='stylesheet' />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/monolith.min.css" />
-    <link href='./data/style.css' rel='stylesheet' />
+    <link href='./data/style.css?v=2.1.2' rel='stylesheet' />
+    <link href='./recorder/css/app.css?v=2.1.2' rel='stylesheet' />
+    <link href='./recorder/css/integration.css?v=2.1.2' rel='stylesheet' />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 
@@ -249,6 +251,8 @@
             </div>
         </div>
 
+        <button type="button" id="open-camera-recorder" disabled>녹화 기능 불러오는 중…</button>
+
         <div class="info-guide-section">
             <div class="guide-title">
                 <i class="fas fa-question-circle"></i> 사용법 참고
@@ -265,11 +269,17 @@
             © 2025-26 ColorMap Project for KBS News graphics Office.
         </div>
     </div>
+    <div id="recorder-shell" hidden></div>
     <div id='map'></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
-    <script src='./data/config.js'></script>
-    <script type='module' src='./data/script.js'></script>
+    <script src="./recorder/js/vendor/mp4-muxer.js?v=2.1.2"></script>
+    <script src="./recorder/js/config.js?v=2.1.2"></script>
+    <script src="./recorder/js/data/regions.js?v=2.1.2"></script>
+    <script src="./recorder/js/recorder.js?v=2.1.2"></script>
+    <script src="./recorder/js/integration.js?v=2.1.2"></script>
+    <script src='./data/config.js?v=2.1.2'></script>
+    <script type='module' src='./data/script.js?v=2.1.2'></script>
 </body>
 
 </html>

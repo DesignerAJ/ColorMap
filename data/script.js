@@ -191,9 +191,15 @@ const map = new mapboxgl.Map({
     center: [127, 36], // 초기 지도 중심 (한국)
     zoom: 6, // 초기 지도 줌 레벨
     projection: 'mercator', // 초기 투영법 설정 (기본값)
+    preserveDrawingBuffer: true, // PNG/PSD 캡처 및 카메라 녹화에 필요
+    fadeDuration: 600,
+    minTileCacheSize: 200,
+    maxTileCacheSize: 1500,
 });
 
 window.map = map;
+window.colorMapInstance = map;
+window.dispatchEvent(new CustomEvent('colormap:map-ready', { detail: { map } }));
 
 // 국가 목록 데이터는 config.js에서 가져옵니다.
 const countries = COUNTRIES_DATA;
