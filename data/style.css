@@ -10,6 +10,13 @@ body,
     padding: 0;
 }
 
+/* 자간 −20 (디자인 툴 기준, 1/1000em) — UI 텍스트 전체에 상속시킨다.
+   #colormap-ui 는 패널·상태 팝업·검색 플로팅을 모두 담는 마운트다.
+   지도 위 핀 라벨(.map-pin)은 녹화 결과물에 그대로 찍히므로 일부러 건드리지 않는다. */
+#colormap-ui {
+    letter-spacing: -0.02em;
+}
+
 #country-selector-container {
     font-family: "Nanum Gothic Coding", monospace;
     font-weight: 700;
@@ -656,7 +663,6 @@ input[type="range"] {
     font-weight: 400;
     color: rgba(255, 255, 255, 0.35);
     text-align: center;
-    letter-spacing: 0.5px;
 }
 
 /* ============================================================
@@ -697,7 +703,6 @@ input[type="range"] {
 .colormap-panel-title > span {
     font-size: 18px;
     font-weight: 700;
-    letter-spacing: -0.03em;
 }
 
 .colormap-panel-title > small {

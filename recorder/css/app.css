@@ -37,7 +37,6 @@
     font-size: 11px;
     color: var(--muted);
     margin-bottom: 5px;
-    letter-spacing: 0.03em;
   }
   input,
   select {
@@ -540,7 +539,6 @@
     padding: 8px 4px;
     font-size: 12px;
     font-weight: 700;
-    letter-spacing: -0.4px;
     white-space: nowrap;
     background: transparent;
     color: var(--muted);
@@ -749,4 +747,108 @@
     color: var(--muted);
     flex: 0 0 auto;
   }
+
+  /* 색·투명도 동그라미 — 체크무늬 위에 반투명 색을 얹어 투명도가 눈에 바로 보이게 한다.
+     누르면 직접 만든 색상 팝업이 뜬다 (네이티브 색상 창에는 투명도를 못 넣는다). */
+  .color-dot {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 26px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    cursor: pointer;
+    background:
+      conic-gradient(#d7dde5 0 25%, #ffffff 0 50%, #d7dde5 0 75%, #ffffff 0) 0 0 / 8px 8px;
+  }
+  .color-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--c, #5A8EDB);
+    opacity: var(--o, 0.6);
+  }
+  .color-dot:hover {
+    border-color: var(--muted);
+  }
+  .color-dot:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .chip .color-dot {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+  }
+}
+
+/* ── 색상 팝업 ──
+   body 에 붙으므로 위의 @scope (#country-selector-container) 밖이다.
+   그래서 패널 변수를 쓸 수 없고 값을 직접 적는다 (패널과 같은 값). */
+#color-popup {
+  position: fixed;
+  z-index: 10000;
+  width: 208px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 38, 70, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 38, 70, 0.18);
+  font-family: "Nanum Gothic Coding", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: -0.02em;   /* 패널 밖이라 #colormap-ui 상속을 못 받는다 */
+  color: #1f2937;
+}
+#color-popup[hidden] { display: none; }
+
+#color-popup .cp-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+#color-popup .cp-sw {
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(15, 38, 70, 0.14);
+  border-radius: 5px;
+  cursor: pointer;
+}
+#color-popup .cp-sw.on {
+  outline: 2px solid #1f2937;
+  outline-offset: 1px;
+}
+#color-popup .cp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#color-popup .cp-row > span {
+  flex: 0 0 56px;
+  color: #64748b;
+}
+#color-popup .cp-color {
+  flex: 1;
+  height: 26px;
+  padding: 0 2px;
+  border: 1px solid rgba(15, 38, 70, 0.14);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+#color-popup .cp-opacity {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+#color-popup .cp-val {
+  flex: 0 0 34px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }

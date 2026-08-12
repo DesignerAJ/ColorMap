@@ -142,11 +142,111 @@ function initRecorder(map) {
     stepField(b.dataset.t, parseInt(b.dataset.d, 10));
   });
 
+  /* ── 색상 팝업 (색과 투명도를 한 창에서) ──
+     <input type="color"> 를 누르면 macOS 색상 창이 뜨는데 그건 OS 가 그리는 창이라
+     투명도 같은 항목을 넣을 수 없다. 그래서 동그라미는 버튼으로 두고 팔레트·직접선택·
+     투명도를 담은 팝업을 직접 띄운다. 투명도는 구역마다 따로 가지므로 fill-opacity 도
+     fill-color 와 마찬가지로 데이터 기반 표현식으로 넘긴다. */
+  const PALETTE = ['#7FAEF5', '#5A8EDB', '#2F62AF', '#1F4E95', '#F17D38', '#22CC92'];
+  const DEFAULT_OPACITY = 0.6;
+  const pct = (o) => Math.round(o * 100) + '%';
+
+  const colorPopup = document.createElement('div');
+  colorPopup.id = 'color-popup';
+  colorPopup.hidden = true;
+  colorPopup.innerHTML =
+    `<div class="cp-swatches">${PALETTE.map(c =>
+        `<button type="button" class="cp-sw" data-c="${c}" style="background:${c}" aria-label="${c}"></button>`).join('')}</div>
+     <label class="cp-row"><span>직접 선택</span><input type="color" class="cp-color" /></label>
+     <label class="cp-row"><span>투명도</span><input type="range" class="cp-opacity" min="0" max="1" step="0.05" /><b class="cp-val"></b></label>`;
+  document.body.appendChild(colorPopup);
+
+  const cpColor = colorPopup.querySelector('.cp-color');
+  const cpOpacity = colorPopup.querySelector('.cp-opacity');
+  const cpVal = colorPopup.querySelector('.cp-val');
+  let cpTarget = null;   // { get() -> {color,opacity}, set(color, opacity) }
+
+  const closeColorPopup = () => { colorPopup.hidden = true; cpTarget = null; };
+  const markSwatch = (color) => colorPopup.querySelectorAll('.cp-sw')
+    .forEach(b => b.classList.toggle('on', b.dataset.c.toLowerCase() === String(color).toLowerCase()));
+
+  function openColorPopup(anchor, target) {
+    cpTarget = target;
+    const { color, opacity } = target.get();
+    cpColor.value = color;
+    cpOpacity.value = opacity;
+    cpVal.textContent = pct(opacity);
+    markSwatch(color);
+    colorPopup.hidden = false;
+    // 패널이 화면 끝에 붙어 있어도 잘리지 않게 앵커 기준으로 자리를 잡는다
+    const r = anchor.getBoundingClientRect();
+    const w = colorPopup.offsetWidth, h = colorPopup.offsetHeight;
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight) top = Math.max(8, r.top - h - 6);
+    colorPopup.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    colorPopup.style.top = top + 'px';
+  }
+  const cpApply = (color, opacity) => { if (cpTarget) cpTarget.set(color, opacity); };
+
+  colorPopup.addEventListener('click', (e) => {
+    const sw = e.target.closest('.cp-sw'); if (!sw) return;
+    cpColor.value = sw.dataset.c;
+    markSwatch(sw.dataset.c);
+    cpApply(sw.dataset.c, parseFloat(cpOpacity.value));
+  });
+  cpColor.addEventListener('input', () => { markSwatch(cpColor.value); cpApply(cpColor.value, parseFloat(cpOpacity.value)); });
+  cpOpacity.addEventListener('input', () => {
+    cpVal.textContent = pct(parseFloat(cpOpacity.value));
+    cpApply(cpColor.value, parseFloat(cpOpacity.value));
+  });
+  document.addEventListener('click', (e) => {
+    if (colorPopup.hidden || colorPopup.contains(e.target) || e.target.closest('.color-dot')) return;
+    closeColorPopup();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeColorPopup(); });
+
+  // 동그라미에 색과 투명도를 함께 보여준다 (체크무늬 위에 반투명 색을 얹는다)
+  const paintDot = (dot, color, opacity) => {
+    dot.style.setProperty('--c', color);
+    dot.style.setProperty('--o', opacity);
+  };
+  const dotHTML = (color, opacity) =>
+    `<button type="button" class="color-dot sw" title="색상·투명도" style="--c:${color}; --o:${opacity}"></button>`;
+
+  /* 검색창 옆 동그라미 = '다음에 칠할 색'. 값은 숨겨둔 <input type="color"> 에 그대로 두어
+     기존 코드가 읽던 경로를 바꾸지 않고, 투명도만 data-opacity 로 함께 들고 있는다. */
+  function wireNextDot(kind) {
+    const dot = $(`${kind}-dot`), input = $(`${kind}-color`);
+    if (!dot || !input) return () => {};
+    if (!input.dataset.opacity) input.dataset.opacity = DEFAULT_OPACITY;
+    const sync = () => paintDot(dot, input.value, parseFloat(input.dataset.opacity));
+    sync();
+    dot.addEventListener('click', () => openColorPopup(dot, {
+      get: () => ({ color: input.value, opacity: parseFloat(input.dataset.opacity) }),
+      set: (c, o) => { input.value = c; input.dataset.opacity = o; sync(); },
+    }));
+    return sync;
+  }
+  const nextOpacity = (kind) => parseFloat($(`${kind}-color`).dataset.opacity || DEFAULT_OPACITY);
+
+  /* 칩의 동그라미 = 이미 칠한 구역의 색·투명도.
+     슬라이더를 끄는 동안 목록을 다시 그리면 누르고 있던 버튼이 사라져 조작이 끊긴다.
+     그래서 여기서는 다시 그리지 않고 동그라미 모양만 그 자리에서 갱신한다. */
+  function wireChipDot(chip, entry, apply) {
+    const dot = chip.querySelector('.color-dot');
+    dot.addEventListener('click', () => openColorPopup(dot, {
+      get: () => ({ color: entry.color, opacity: entry.opacity }),
+      set: (c, o) => { entry.color = c; entry.opacity = o; paintDot(dot, c, o); apply(); },
+    }));
+  }
+
   /* ── 나라 색칠 ── */
-  const colored = [];                 // [{ iso, color, name }]
+  const colored = [];                 // [{ iso, color, name, opacity }]
   const DEFAULT_COLORS = ['#5A8EDB', '#F17D38']; // 1번/2번 기본색 (이후 순환)
   const nextDefaultColor = () => DEFAULT_COLORS[colored.length % DEFAULT_COLORS.length];
-  const syncDefaultColor = () => { $('country-color').value = nextDefaultColor(); };
+  const syncNextDots = { country: wireNextDot('country'), admin1: wireNextDot('admin1'),
+                         sido: wireNextDot('sido'), sigungu: wireNextDot('sigungu') };
+  const syncDefaultColor = () => { $('country-color').value = nextDefaultColor(); syncNextDots.country(); };
   syncDefaultColor();
   const cleanName = (n) => n.replace(/#[^#]*#/g, '').trim();
   const isoToCountry = {};
@@ -179,18 +279,22 @@ function initRecorder(map) {
     map.addLayer({
       id: 'country-color-fill', type: 'fill', source: 'country-boundaries',
       'source-layer': 'country_boundaries', filter,
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': parseFloat($('country-opacity').value) }
+      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
     }, firstSymbol);
     applyColors();
+    raiseBoundaries();   // 경계선을 이 색칠 위로
   }
 
   function applyColors() {
-    if (!map.getLayer('country-color-fill')) return;
-    if (!colored.length) { map.setPaintProperty('country-color-fill', 'fill-color', 'rgba(0,0,0,0)'); return; }
-    const expr = ['match', ['get', 'iso_3166_1_alpha_3']];
-    colored.forEach(e => expr.push(e.iso, e.color));
-    expr.push('rgba(0,0,0,0)');
-    map.setPaintProperty('country-color-fill', 'fill-color', expr);
+    const layer = 'country-color-fill';
+    if (!map.getLayer(layer)) return;
+    if (!colored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
+    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
+    const col = ['match', ['get', 'iso_3166_1_alpha_3']], op = ['match', ['get', 'iso_3166_1_alpha_3']];
+    colored.forEach(e => { col.push(e.iso, e.color); op.push(e.iso, e.opacity); });
+    col.push('rgba(0,0,0,0)'); op.push(0);
+    map.setPaintProperty(layer, 'fill-color', col);
+    map.setPaintProperty(layer, 'fill-opacity', op);
   }
 
   function renderChips() {
@@ -200,8 +304,8 @@ function initRecorder(map) {
     colored.forEach((e, i) => {
       const chip = document.createElement('div');
       chip.className = 'chip';
-      chip.innerHTML = `<input type="color" class="sw" list="palette" value="${e.color}" title="색상 변경" /><span class="nm">${e.name}</span><span class="x" title="제거">✕</span>`;
-      chip.querySelector('.sw').addEventListener('input', (ev) => { colored[i].color = ev.target.value; applyColors(); });
+      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm">${e.name}</span><span class="x" title="제거">✕</span>`;
+      wireChipDot(chip, colored[i], applyColors);
       chip.querySelector('.x').addEventListener('click', () => { colored.splice(i, 1); applyColors(); renderChips(); syncDefaultColor(); });
       box.appendChild(chip);
     });
@@ -211,10 +315,11 @@ function initRecorder(map) {
     const iso = nameToIso[$('country-input').value.trim()];
     if (!iso) { return; }
     const color = $('country-color').value;
+    const opacity = nextOpacity('country');
     const c = isoToCountry[iso];
     const existing = colored.find(e => e.iso === iso);
-    if (existing) { existing.color = color; }              // 이미 있으면 색만 갱신
-    else { colored.push({ iso, color, name: cleanName(c.n) }); syncDefaultColor(); } // 새 추가 시 다음 기본색으로
+    if (existing) { existing.color = color; existing.opacity = opacity; }              // 이미 있으면 색만 갱신
+    else { colored.push({ iso, color, name: cleanName(c.n), opacity }); syncDefaultColor(); } // 새 추가 시 다음 기본색으로
     applyColors(); renderChips();
     map.flyTo({ center: c.c, zoom: c.z, duration: 1200, essential: true });  // 추가한 나라로 이동
     $('country-input').value = '';
@@ -228,9 +333,6 @@ function initRecorder(map) {
   $('country-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addCountryFromInput(); } });   // 직접 입력 후 Enter
 
   $('country-clear').addEventListener('click', () => { colored.length = 0; applyColors(); renderChips(); syncDefaultColor(); });
-  $('country-opacity').addEventListener('input', (e) => {
-    if (map.getLayer('country-color-fill')) map.setPaintProperty('country-color-fill', 'fill-opacity', parseFloat(e.target.value));
-  });
 
   /* ── 대한민국 시도 색칠 ── */
   /* 시도 경계는 두 벌을 쓴다.
@@ -242,20 +344,25 @@ function initRecorder(map) {
   const SIDO_HIRES_URL = './recorder/js/data/sido-hires.json';
   let SIDO_HIRES = null;
   let _sidoHiresLoading = null;
+  const setSidoStatus = (msg) => { const el = $('sido-status'); if (el) el.textContent = msg || ''; };
   function loadSidoHires() {
     if (SIDO_HIRES) return Promise.resolve(true);
     if (_sidoHiresLoading) return _sidoHiresLoading;
+    // 색칠은 이미 되는 상태라 '불러오는 중'이 아니라 '정밀해지는 중'이라고 알린다
+    setSidoStatus('경계를 정밀하게 불러오는 중…');
     _sidoHiresLoading = fetch(SIDO_HIRES_URL)
       .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then((geo) => {
         SIDO_HIRES = geo;
         const src = map.getSource('sido-boundaries');
         if (src) src.setData(geo);   // 이미 깔려 있으면 형태만 교체 — 칠한 색은 그대로 유지된다
+        setSidoStatus('');
         return true;
       })
       .catch((e) => {
         _sidoHiresLoading = null;    // 다음 탭 진입 때 다시 시도
-        console.warn('시도 고해상도 경계를 불러오지 못했습니다 — 기본 경계로 표시합니다:', e.message);
+        setSidoStatus('정밀 경계를 불러오지 못했습니다 — 기본 경계로 표시합니다.');
+        console.warn('시도 고해상도 경계 로드 실패:', e.message);
         return false;
       });
     return _sidoHiresLoading;
@@ -294,17 +401,21 @@ function initRecorder(map) {
     const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     map.addLayer({
       id: 'sido-color-fill', type: 'fill', source: 'sido-boundaries',
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': parseFloat($('sido-opacity').value) }
+      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
     }, firstSymbol);
     applySidoColors();
+    raiseBoundaries();   // 경계선을 이 색칠 위로
   }
   function applySidoColors() {
-    if (!map.getLayer('sido-color-fill')) return;
-    if (!sidoColored.length) { map.setPaintProperty('sido-color-fill', 'fill-color', 'rgba(0,0,0,0)'); return; }
-    const expr = ['match', ['get', 'name']];
-    sidoColored.forEach(e => expr.push(e.name, e.color));
-    expr.push('rgba(0,0,0,0)');
-    map.setPaintProperty('sido-color-fill', 'fill-color', expr);
+    const layer = 'sido-color-fill';
+    if (!map.getLayer(layer)) return;
+    if (!sidoColored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
+    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
+    const col = ['match', ['get', 'name']], op = ['match', ['get', 'name']];
+    sidoColored.forEach(e => { col.push(e.name, e.color); op.push(e.name, e.opacity); });
+    col.push('rgba(0,0,0,0)'); op.push(0);
+    map.setPaintProperty(layer, 'fill-color', col);
+    map.setPaintProperty(layer, 'fill-opacity', op);
   }
   function renderSidoChips() {
     const wrap = $('sido-list-wrap'), box = $('sido-colored-list');
@@ -314,8 +425,8 @@ function initRecorder(map) {
       const chip = document.createElement('div');
       chip.className = 'chip';
       const short = e.name.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/,'') || e.name;
-      chip.innerHTML = `<input type="color" class="sw" list="palette" value="${e.color}" title="색상 변경" /><span class="nm">${short}</span><span class="x" title="제거">✕</span>`;
-      chip.querySelector('.sw').addEventListener('input', (ev) => { sidoColored[i].color = ev.target.value; applySidoColors(); });
+      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm">${short}</span><span class="x" title="제거">✕</span>`;
+      wireChipDot(chip, sidoColored[i], applySidoColors);
       chip.querySelector('.x').addEventListener('click', () => { sidoColored.splice(i, 1); applySidoColors(); renderSidoChips(); });
       box.appendChild(chip);
     });
@@ -324,9 +435,10 @@ function initRecorder(map) {
     const name = resolveSido($('sido-input').value);
     if (!name) return;
     const color = $('sido-color').value;
+    const opacity = nextOpacity('sido');
     const existing = sidoColored.find(e => e.name === name);
-    if (existing) existing.color = color;
-    else sidoColored.push({ name, color });
+    if (existing) { existing.color = color; existing.opacity = opacity; }
+    else sidoColored.push({ name, color, opacity });
     applySidoColors(); renderSidoChips();
     const m = sidoMeta[name];
     if (m) map.flyTo({ center: m.c, zoom: m.z, duration: 1200, essential: true });
@@ -335,9 +447,6 @@ function initRecorder(map) {
   $('sido-input').addEventListener('change', addSidoFromInput);   // 목록에서 선택(클릭) 시 바로 추가
   $('sido-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addSidoFromInput(); } });   // 직접 입력 후 Enter
   $('sido-clear').addEventListener('click', () => { sidoColored.length = 0; applySidoColors(); renderSidoChips(); });
-  $('sido-opacity').addEventListener('input', (e) => {
-    if (map.getLayer('sido-color-fill')) map.setPaintProperty('sido-color-fill', 'fill-opacity', parseFloat(e.target.value));
-  });
 
   /* ── 해외 행정구역(주·도) 색칠 ──
      국가 색칠은 Mapbox 타일(country-boundaries-v1)이라 우리 데이터가 필요 없지만,
@@ -405,17 +514,21 @@ function initRecorder(map) {
     const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     map.addLayer({
       id: 'admin1-color-fill', type: 'fill', source: 'admin1-boundaries',
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': parseFloat($('admin1-opacity').value) }
+      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
     }, firstSymbol);
     applyAdmin1Colors();
+    raiseBoundaries();   // 경계선을 이 색칠 위로
   }
   function applyAdmin1Colors() {
-    if (!map.getLayer('admin1-color-fill')) return;
-    if (!admin1Colored.length) { map.setPaintProperty('admin1-color-fill', 'fill-color', 'rgba(0,0,0,0)'); return; }
-    const expr = ['match', ['get', 'name']];
-    admin1Colored.forEach(e => expr.push(e.name, e.color));
-    expr.push('rgba(0,0,0,0)');
-    map.setPaintProperty('admin1-color-fill', 'fill-color', expr);
+    const layer = 'admin1-color-fill';
+    if (!map.getLayer(layer)) return;
+    if (!admin1Colored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
+    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
+    const col = ['match', ['get', 'name']], op = ['match', ['get', 'name']];
+    admin1Colored.forEach(e => { col.push(e.name, e.color); op.push(e.name, e.opacity); });
+    col.push('rgba(0,0,0,0)'); op.push(0);
+    map.setPaintProperty(layer, 'fill-color', col);
+    map.setPaintProperty(layer, 'fill-opacity', op);
   }
   function renderAdmin1Chips() {
     const wrap = $('admin1-list-wrap'), box = $('admin1-colored-list');
@@ -431,8 +544,8 @@ function initRecorder(map) {
       const s = shortOf(e.name);
       const ctry = (admin1Meta[e.name] && admin1Meta[e.name].country) || '';
       const label = cnt[s] > 1 && ctry ? `${ctry} ${s}` : s;
-      chip.innerHTML = `<input type="color" class="sw" list="palette" value="${e.color}" title="색상 변경" /><span class="nm" title="${escAttr(e.name)}">${label}</span><span class="x" title="제거">✕</span>`;
-      chip.querySelector('.sw').addEventListener('input', (ev) => { admin1Colored[i].color = ev.target.value; applyAdmin1Colors(); });
+      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm" title="${escAttr(e.name)}">${label}</span><span class="x" title="제거">✕</span>`;
+      wireChipDot(chip, admin1Colored[i], applyAdmin1Colors);
       chip.querySelector('.x').addEventListener('click', () => { admin1Colored.splice(i, 1); applyAdmin1Colors(); renderAdmin1Chips(); });
       box.appendChild(chip);
     });
@@ -441,9 +554,10 @@ function initRecorder(map) {
     const name = resolveAdmin1($('admin1-input').value);
     if (!name) return;
     const color = $('admin1-color').value;
+    const opacity = nextOpacity('admin1');
     const existing = admin1Colored.find(e => e.name === name);
-    if (existing) existing.color = color;
-    else admin1Colored.push({ name, color });
+    if (existing) { existing.color = color; existing.opacity = opacity; }
+    else admin1Colored.push({ name, color, opacity });
     applyAdmin1Colors(); renderAdmin1Chips();
     const m = admin1Meta[name];
     if (m && m.c) map.flyTo({ center: m.c, zoom: m.z || 6, duration: 1200, essential: true });
@@ -474,9 +588,6 @@ function initRecorder(map) {
   $('admin1-input').addEventListener('change', addAdmin1FromInput);
   $('admin1-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addAdmin1FromInput(); } });
   $('admin1-clear').addEventListener('click', () => { admin1Colored.length = 0; applyAdmin1Colors(); renderAdmin1Chips(); });
-  $('admin1-opacity').addEventListener('input', (e) => {
-    if (map.getLayer('admin1-color-fill')) map.setPaintProperty('admin1-color-fill', 'fill-opacity', parseFloat(e.target.value));
-  });
 
   /* ── 대한민국 시군구 색칠 ──
      시도(17개)와 달리 229개라 경계 데이터가 수 MB다. 앱 첫 로딩을 무겁게 하지 않도록
@@ -554,17 +665,21 @@ function initRecorder(map) {
     const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     map.addLayer({
       id: 'sigungu-color-fill', type: 'fill', source: 'sigungu-boundaries',
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': parseFloat($('sigungu-opacity').value) }
+      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
     }, firstSymbol);
     applySigunguColors();
+    raiseBoundaries();   // 경계선을 이 색칠 위로
   }
   function applySigunguColors() {
-    if (!map.getLayer('sigungu-color-fill')) return;
-    if (!sigunguColored.length) { map.setPaintProperty('sigungu-color-fill', 'fill-color', 'rgba(0,0,0,0)'); return; }
-    const expr = ['match', ['get', 'name']];
-    sigunguColored.forEach(e => expr.push(e.name, e.color));
-    expr.push('rgba(0,0,0,0)');
-    map.setPaintProperty('sigungu-color-fill', 'fill-color', expr);
+    const layer = 'sigungu-color-fill';
+    if (!map.getLayer(layer)) return;
+    if (!sigunguColored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
+    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
+    const col = ['match', ['get', 'name']], op = ['match', ['get', 'name']];
+    sigunguColored.forEach(e => { col.push(e.name, e.color); op.push(e.name, e.opacity); });
+    col.push('rgba(0,0,0,0)'); op.push(0);
+    map.setPaintProperty(layer, 'fill-color', col);
+    map.setPaintProperty(layer, 'fill-opacity', op);
   }
   function renderSigunguChips() {
     const wrap = $('sigungu-list-wrap'), box = $('sigungu-colored-list');
@@ -582,8 +697,8 @@ function initRecorder(map) {
       const s = shortOf(e.name);
       const sido = (sigunguMeta[e.name] && sigunguMeta[e.name].sido) || '';
       const short = shortCount[s] > 1 && sido ? `${sido.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/, '')} ${s}` : s;
-      chip.innerHTML = `<input type="color" class="sw" list="palette" value="${e.color}" title="색상 변경" /><span class="nm" title="${e.name}">${short}</span><span class="x" title="제거">✕</span>`;
-      chip.querySelector('.sw').addEventListener('input', (ev) => { sigunguColored[i].color = ev.target.value; applySigunguColors(); });
+      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm" title="${e.name}">${short}</span><span class="x" title="제거">✕</span>`;
+      wireChipDot(chip, sigunguColored[i], applySigunguColors);
       chip.querySelector('.x').addEventListener('click', () => { sigunguColored.splice(i, 1); applySigunguColors(); renderSigunguChips(); });
       box.appendChild(chip);
     });
@@ -592,9 +707,10 @@ function initRecorder(map) {
     const name = resolveSigungu($('sigungu-input').value);
     if (!name) return;
     const color = $('sigungu-color').value;
+    const opacity = nextOpacity('sigungu');
     const existing = sigunguColored.find(e => e.name === name);
-    if (existing) existing.color = color;
-    else sigunguColored.push({ name, color });
+    if (existing) { existing.color = color; existing.opacity = opacity; }
+    else sigunguColored.push({ name, color, opacity });
     applySigunguColors(); renderSigunguChips();
     const m = sigunguMeta[name];
     if (m && m.c) map.flyTo({ center: m.c, zoom: m.z || 10, duration: 1200, essential: true });
@@ -630,9 +746,6 @@ function initRecorder(map) {
   $('sigungu-input').addEventListener('change', addSigunguFromInput);
   $('sigungu-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addSigunguFromInput(); } });
   $('sigungu-clear').addEventListener('click', () => { sigunguColored.length = 0; applySigunguColors(); renderSigunguChips(); });
-  $('sigungu-opacity').addEventListener('input', (e) => {
-    if (map.getLayer('sigungu-color-fill')) map.setPaintProperty('sigungu-color-fill', 'fill-opacity', parseFloat(e.target.value));
-  });
 
   /* 색칠 모드 4종. 여기에 한 줄로 모아둬야 아래 토글·SVG 내보내기·녹화 중 잠금에서
      빠뜨리지 않는다. (모드를 늘릴 때마다 한 군데씩 누락돼 버그가 났던 부분) */
@@ -991,6 +1104,20 @@ function initRecorder(map) {
   };
   function bdExistingLayers(kind) {
     return BOUNDARY_LAYERS[kind].filter(id => map.getLayer(id));
+  }
+
+  /* 색칠 레이어는 라벨 바로 아래에 깔리는데, 스타일의 경계선 레이어는 그보다 더 아래에 있다.
+     확인해보면 네 스타일 모두 그렇다 (단색지형 admin-boundaries #8 < 첫 symbol #13).
+     그래서 불투명도 0.6 짜리 색칠이 국경선·행정구역선 위를 덮어 선 색이 탁해졌다.
+     색칠을 올린 뒤 경계선만 그 위로 끌어올린다 — 스타일 원래의 상하 순서는 그대로 둔다. */
+  function raiseBoundaries() {
+    const layers = map.getStyle()?.layers || [];
+    const firstSymbol = layers.find(l => l.type === 'symbol')?.id;
+    const wanted = new Set(Object.values(BOUNDARY_LAYERS).flat());
+    // layers 는 그리는 순서대로다. 그 순서 그대로 옮겨야 -bg 외곽선이 본선 아래에 남는다.
+    layers.filter(l => wanted.has(l.id)).forEach((l) => {
+      try { map.moveLayer(l.id, firstSymbol); } catch (_) {}
+    });
   }
   // 한 종류 경계선에 현재 UI 값 적용
   function applyBoundary(kind) {
@@ -3006,29 +3133,21 @@ function initRecorder(map) {
           return d;
         };
         const acc = [];   // { key, d, color, opacity }
-        const collect = (layerId, keyProp, colorOf, opacity) => {
+        const collect = (layerId, keyProp, entryOf) => {
           if (!map.getLayer(layerId)) return;
           const byKey = {};
           for (const f of map.queryRenderedFeatures({ layers: [layerId] })) {
             const key = f.properties && f.properties[keyProp];
-            const color = colorOf(key); if (!color) continue;       // 색칠 안 된 것 제외
+            const e = entryOf(key); if (!e) continue;                // 색칠 안 된 것 제외
             const d = geomToPath(f.geometry); if (!d) continue;
-            (byKey[key] || (byKey[key] = { key, d: '', color, opacity })).d += d;
+            (byKey[key] || (byKey[key] = { key, d: '', color: e.color, opacity: e.opacity })).d += d;
           }
           for (const k in byKey) acc.push(byKey[k]);
         };
-        collect('country-color-fill', 'iso_3166_1_alpha_3',
-          (iso) => { const e = colored.find(x => x.iso === iso); return e && e.color; },
-          parseFloat($('country-opacity').value) || 1);
-        collect('sido-color-fill', 'name',
-          (nm) => { const e = sidoColored.find(x => x.name === nm); return e && e.color; },
-          parseFloat($('sido-opacity').value) || 1);
-        collect('admin1-color-fill', 'name',
-          (nm) => { const e = admin1Colored.find(x => x.name === nm); return e && e.color; },
-          parseFloat($('admin1-opacity').value) || 1);
-        collect('sigungu-color-fill', 'name',
-          (nm) => { const e = sigunguColored.find(x => x.name === nm); return e && e.color; },
-          parseFloat($('sigungu-opacity').value) || 1);
+        collect('country-color-fill', 'iso_3166_1_alpha_3', (iso) => colored.find(x => x.iso === iso));
+        collect('sido-color-fill', 'name', (nm) => sidoColored.find(x => x.name === nm));
+        collect('admin1-color-fill', 'name', (nm) => admin1Colored.find(x => x.name === nm));
+        collect('sigungu-color-fill', 'name', (nm) => sigunguColored.find(x => x.name === nm));
 
         if (!acc.length) { setStatus('화면에 보이는 색칠 영역이 없습니다.', ''); return; }
 
@@ -3067,7 +3186,7 @@ function initRecorder(map) {
     el.hidden = !msg || msg === '대기 중';
   }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-opacity','admin1-input','admin1-color','admin1-clear','admin1-opacity','sido-input','sido-color','sido-clear','sido-opacity','sigungu-input','sigungu-color','sigungu-clear','sigungu-opacity','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){

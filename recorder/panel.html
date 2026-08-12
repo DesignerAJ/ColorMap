@@ -41,7 +41,8 @@
       <div id="country-block">
         <div class="row" style="align-items:center; gap:8px;">
           <input id="country-input" list="country-list" placeholder="국가 검색 (예: 독일)" style="flex:3" autocomplete="off" />
-          <input id="country-color" type="color" list="palette" value="#5A8EDB" style="flex:0 0 38px; padding:2px; height:34px;" title="색상" />
+          <input id="country-color" type="color" value="#5A8EDB" hidden />
+          <button type="button" class="color-dot" id="country-dot" title="색상·투명도" aria-label="색상과 투명도 조절"></button>
         </div>
         <datalist id="country-list"></datalist>
         <datalist id="palette">
@@ -55,10 +56,6 @@
         <div id="country-list-wrap" style="display:none; margin-top:10px;">
           <div id="colored-list"></div>
           <div class="row" style="align-items:center; gap:10px; margin-top:6px;">
-            <div class="field" style="margin:0; flex:3;">
-              <label style="margin-bottom:3px;">색칠 투명도</label>
-              <input id="country-opacity" type="range" min="0" max="1" step="0.05" value="0.6" style="padding:0;" />
-            </div>
             <button id="country-clear" style="flex:1; height:34px;">전체 삭제</button>
           </div>
         </div>
@@ -67,17 +64,14 @@
       <div id="admin1-block" style="display:none;">
         <div class="row" style="align-items:center; gap:8px;">
           <input id="admin1-input" list="admin1-list" placeholder="해외 주·도 검색 (예: 캘리포니아, 오사카부)" style="flex:3" autocomplete="off" disabled />
-          <input id="admin1-color" type="color" list="palette" value="#7FAEF5" style="flex:0 0 38px; padding:2px; height:34px;" title="색상" />
+          <input id="admin1-color" type="color" value="#7FAEF5" hidden />
+          <button type="button" class="color-dot" id="admin1-dot" title="색상·투명도" aria-label="색상과 투명도 조절"></button>
         </div>
         <datalist id="admin1-list"></datalist>
         <div id="admin1-status" class="hint" style="margin-top:6px;">경계 데이터를 불러오는 중…</div>
         <div id="admin1-list-wrap" style="display:none; margin-top:10px;">
           <div id="admin1-colored-list"></div>
           <div class="row" style="align-items:center; gap:10px; margin-top:6px;">
-            <div class="field" style="margin:0; flex:3;">
-              <label style="margin-bottom:3px;">색칠 투명도</label>
-              <input id="admin1-opacity" type="range" min="0" max="1" step="0.05" value="0.6" style="padding:0;" />
-            </div>
             <button id="admin1-clear" style="flex:1; height:34px;">전체 삭제</button>
           </div>
         </div>
@@ -86,16 +80,14 @@
       <div id="sido-block" style="display:none;">
         <div class="row" style="align-items:center; gap:8px;">
           <input id="sido-input" list="sido-list" placeholder="시도 검색 (예: 경기)" style="flex:3" autocomplete="off" />
-          <input id="sido-color" type="color" list="palette" value="#F17D38" style="flex:0 0 38px; padding:2px; height:34px;" title="색상" />
+          <input id="sido-color" type="color" value="#F17D38" hidden />
+          <button type="button" class="color-dot" id="sido-dot" title="색상·투명도" aria-label="색상과 투명도 조절"></button>
         </div>
         <datalist id="sido-list"></datalist>
+        <div id="sido-status" class="hint" style="margin-top:6px;"></div>
         <div id="sido-list-wrap" style="display:none; margin-top:10px;">
           <div id="sido-colored-list"></div>
           <div class="row" style="align-items:center; gap:10px; margin-top:6px;">
-            <div class="field" style="margin:0; flex:3;">
-              <label style="margin-bottom:3px;">색칠 투명도</label>
-              <input id="sido-opacity" type="range" min="0" max="1" step="0.05" value="0.6" style="padding:0;" />
-            </div>
             <button id="sido-clear" style="flex:1; height:34px;">전체 삭제</button>
           </div>
         </div>
@@ -104,17 +96,14 @@
       <div id="sigungu-block" style="display:none;">
         <div class="row" style="align-items:center; gap:8px;">
           <input id="sigungu-input" list="sigungu-list" placeholder="시군구 검색 (예: 강남구, 성남시)" style="flex:3" autocomplete="off" disabled />
-          <input id="sigungu-color" type="color" list="palette" value="#22CC92" style="flex:0 0 38px; padding:2px; height:34px;" title="색상" />
+          <input id="sigungu-color" type="color" value="#22CC92" hidden />
+          <button type="button" class="color-dot" id="sigungu-dot" title="색상·투명도" aria-label="색상과 투명도 조절"></button>
         </div>
         <datalist id="sigungu-list"></datalist>
         <div id="sigungu-status" class="hint" style="margin-top:6px;">경계 데이터를 불러오는 중…</div>
         <div id="sigungu-list-wrap" style="display:none; margin-top:10px;">
           <div id="sigungu-colored-list"></div>
           <div class="row" style="align-items:center; gap:10px; margin-top:6px;">
-            <div class="field" style="margin:0; flex:3;">
-              <label style="margin-bottom:3px;">색칠 투명도</label>
-              <input id="sigungu-opacity" type="range" min="0" max="1" step="0.05" value="0.6" style="padding:0;" />
-            </div>
             <button id="sigungu-clear" style="flex:1; height:34px;">전체 삭제</button>
           </div>
         </div>
