@@ -99,7 +99,17 @@ function initRecorder(map) {
   }
   map.on('style.load', applyStyleLanguage);
 
+  /* 색칠 소스·레이어를 지금 붙여도 되는지 추적한다.
+     map.isStyleLoaded() 로 판단하면 안 된다 — 그건 '스타일 + 모든 소스의 타일'이 다 와야
+     true 라서 지도를 쓰는 동안에는 사실상 늘 false 다. style.load 안에서 그걸로 판단하면
+     매번 styledata 대기로 빠지는데 styledata 는 그 뒤로 다시 안 올 수 있어서, 스타일을
+     바꾸면 행정구역·시군구 색칠이 영영 돌아오지 않았다.
+     (국가·시도 레이어는 이 검사가 없어서 멀쩡했다 — 증상이 둘로 갈렸던 이유) */
+  let styleReady = false;
+  map.on('style.load', () => { styleReady = true; });
+
   $('style-select').addEventListener('change', (e) => {
+    styleReady = false;                     // 교체 시작 — style.load 가 올 때까지는 레이어를 못 붙인다
     map.setStyle(STYLES[e.target.value]);
     applyStyleColors();
   });
@@ -210,7 +220,12 @@ function initRecorder(map) {
     $('country-input').value = '';
   }
   $('country-input').addEventListener('change', addCountryFromInput);   // 목록에서 선택(클릭) 시 바로 추가
-  $('country-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCountryFromInput(); } });   // 직접 입력 후 Enter
+  /* 한글 입력 중(조합 중)의 Enter 는 글자를 확정하는 키다. 이때 추가 처리를 하면 안 된다.
+     처리해버리면 입력창을 비운 직후 IME 가 조합 중이던 마지막 글자('도봉구' 의 '구')를
+     빈 칸에 써넣고, 그 값으로 change 가 한 번 더 돌아 엉뚱한 지역이 함께 칠해졌다.
+     ('구' 는 정식명 부분일치로 목록 첫 항목인 종로구를 집어냈다) */
+  const isComposingEnter = (e) => e.isComposing || e.keyCode === 229;
+  $('country-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addCountryFromInput(); } });   // 직접 입력 후 Enter
 
   $('country-clear').addEventListener('click', () => { colored.length = 0; applyColors(); renderChips(); syncDefaultColor(); });
   $('country-opacity').addEventListener('input', (e) => {
@@ -218,6 +233,34 @@ function initRecorder(map) {
   });
 
   /* ── 대한민국 시도 색칠 ── */
+  /* 시도 경계는 두 벌을 쓴다.
+     regions.js 의 SIDO_GEO 는 17개를 통틀어 19,286점뿐이고 편차가 극심하다
+     (서울 67점 · 광주 48점 ↔ 전남 8,871점). 광역시를 확대하면 다각형이 그대로 드러난다.
+     그래서 시군구를 시도 단위로 합친 고해상도본(384,303점)을 따로 두고, 시도 탭을 열 때
+     받아서 소스만 갈아끼운다. 받기 전에도 색칠은 그대로 되고 도착하면 형태만 정교해진다.
+     만드는 법: node recorder/tools/build-sido-hires.mjs */
+  const SIDO_HIRES_URL = './recorder/js/data/sido-hires.json';
+  let SIDO_HIRES = null;
+  let _sidoHiresLoading = null;
+  function loadSidoHires() {
+    if (SIDO_HIRES) return Promise.resolve(true);
+    if (_sidoHiresLoading) return _sidoHiresLoading;
+    _sidoHiresLoading = fetch(SIDO_HIRES_URL)
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then((geo) => {
+        SIDO_HIRES = geo;
+        const src = map.getSource('sido-boundaries');
+        if (src) src.setData(geo);   // 이미 깔려 있으면 형태만 교체 — 칠한 색은 그대로 유지된다
+        return true;
+      })
+      .catch((e) => {
+        _sidoHiresLoading = null;    // 다음 탭 진입 때 다시 시도
+        console.warn('시도 고해상도 경계를 불러오지 못했습니다 — 기본 경계로 표시합니다:', e.message);
+        return false;
+      });
+    return _sidoHiresLoading;
+  }
+
   const sidoColored = [];   // [{ name, color }]
   const sidoMeta = {};      // name → {c, z}
   SIDO_META.forEach(s => { sidoMeta[s.n] = s; });
@@ -230,11 +273,15 @@ function initRecorder(map) {
   function resolveSido(q) {
     q = q.trim(); if (!q) return null;
     if (sidoMeta[q]) return q;
-    const hit = SIDO_META.find(s =>
-      s.n === q || s.s === q || s.n.includes(q) || s.s.includes(q) ||
-      s.n.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/,'') === q
-    );
-    return hit ? hit.n : null;
+    const strip = (n) => n.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/, '');
+    const exact = SIDO_META.find(s => s.n === q || s.s === q || strip(s.n) === q);
+    if (exact) return exact.n;
+    // 시군구와 같은 이유로 후보가 하나일 때만, 그리고 두 글자 이상일 때만 받아들인다
+    // ('도' 한 글자에 경기도가 잡히던 문제 — resolveSigungu 주석 참고)
+    const only = (list) => (list.length === 1 ? list[0].n : null);
+    if (q.length < 2) return null;
+    return only(SIDO_META.filter(s => s.s.startsWith(q) || strip(s.n).startsWith(q)))
+        || only(SIDO_META.filter(s => s.n.includes(q) || s.s.includes(q)));
   }
 
   function addSidoLayer() {
@@ -243,7 +290,7 @@ function initRecorder(map) {
        단순화한다 (기본 0.375). 실측하니 줌 6 에서 도네츠크주가 3,055개 중
        1,197개만 남았다. 데이터를 아무리 촘촘하게 만들어도 화면에서는 각져 보이던
        원인. 0 으로 두면 우리가 준비한 정밀도가 그대로 그려진다. */
-    map.addSource('sido-boundaries', { type: 'geojson', tolerance: 0, data: SIDO_GEO });
+    map.addSource('sido-boundaries', { type: 'geojson', tolerance: 0, data: SIDO_HIRES || SIDO_GEO });
     const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     map.addLayer({
       id: 'sido-color-fill', type: 'fill', source: 'sido-boundaries',
@@ -286,7 +333,7 @@ function initRecorder(map) {
     $('sido-input').value = '';
   }
   $('sido-input').addEventListener('change', addSidoFromInput);   // 목록에서 선택(클릭) 시 바로 추가
-  $('sido-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSidoFromInput(); } });   // 직접 입력 후 Enter
+  $('sido-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addSidoFromInput(); } });   // 직접 입력 후 Enter
   $('sido-clear').addEventListener('click', () => { sidoColored.length = 0; applySidoColors(); renderSidoChips(); });
   $('sido-opacity').addEventListener('input', (e) => {
     if (map.getLayer('sido-color-fill')) map.setPaintProperty('sido-color-fill', 'fill-opacity', parseFloat(e.target.value));
@@ -344,13 +391,16 @@ function initRecorder(map) {
     const all = Object.values(admin1Meta);
     const exact = all.find((s) => s.s === q);
     if (exact) return exact.n;
-    const hit = all.find((s) => s.n === q || s.n.includes(q) || s.s.includes(q));
-    return hit ? hit.n : null;
+    // 시군구와 같은 이유로 후보가 하나일 때만 받아들인다 (resolveSigungu 주석 참고)
+    const only = (list) => (list.length === 1 ? list[0].n : null);
+    return only(all.filter((s) => s.s.startsWith(q)))
+        || only(all.filter((s) => s.s.includes(q)))
+        || only(all.filter((s) => s.n.includes(q)));
   }
 
   function addAdmin1Layer() {
     if (!ADMIN1_GEO || map.getSource('admin1-boundaries')) return;
-    if (!map.isStyleLoaded()) { map.once('styledata', addAdmin1Layer); return; }
+    if (!styleReady) return;   // 스타일 교체 중 — 위에 걸어둔 style.load 핸들러가 다시 부른다
     map.addSource('admin1-boundaries', { type: 'geojson', tolerance: 0, data: ADMIN1_GEO });   // tolerance 0 이유는 sido-boundaries 주석 참고
     const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     map.addLayer({
@@ -422,7 +472,7 @@ function initRecorder(map) {
   }
   $('admin1-input').addEventListener('input', refreshAdmin1Suggestions);
   $('admin1-input').addEventListener('change', addAdmin1FromInput);
-  $('admin1-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addAdmin1FromInput(); } });
+  $('admin1-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addAdmin1FromInput(); } });
   $('admin1-clear').addEventListener('click', () => { admin1Colored.length = 0; applyAdmin1Colors(); renderAdmin1Chips(); });
   $('admin1-opacity').addEventListener('input', (e) => {
     if (map.getLayer('admin1-color-fill')) map.setPaintProperty('admin1-color-fill', 'fill-opacity', parseFloat(e.target.value));
@@ -482,8 +532,16 @@ function initRecorder(map) {
     const all = Object.values(sigunguMeta);
     const exact = all.find((s) => s.s === q);
     if (exact) return exact.n;
-    const hit = all.find((s) => s.n === q || s.n.includes(q) || s.s.includes(q));
-    return hit ? hit.n : null;
+    /* 폴백은 후보가 하나로 좁혀질 때만 받아들인다.
+       예전에는 첫 일치를 그대로 썼는데, '구'·'시' 처럼 여러 곳에 걸리는 조각이 들어오면
+       목록 맨 앞(종로구)이 조용히 잡혔다. 애매하면 아무것도 고르지 않는 편이 낫다.
+       한 글자는 아예 보지 않는다 — 시군구 약칭은 모두 두 글자 이상이라 한 글자 입력은
+       검색어가 아니라 조합 중 흘러든 조각으로 보는 게 맞다 ('시' → 시흥시 같은 오작동 방지). */
+    const only = (list) => (list.length === 1 ? list[0].n : null);
+    if (q.length < 2) return null;
+    return only(all.filter((s) => s.s.startsWith(q)))
+        || only(all.filter((s) => s.s.includes(q)))
+        || only(all.filter((s) => s.n.includes(q)));
   }
 
   function addSigunguLayer() {
@@ -491,7 +549,7 @@ function initRecorder(map) {
     // 스타일 교체 직후에는 소스·레이어를 붙일 수 없고 예외가 난다. 준비되면 다시 시도한다.
     // (여기서 던지면 loadSigungu 의 catch 가 '로드 실패'로 처리해버리는데, 이미
     //  SIGUNGU_GEO 는 채워져 있어서 재시도해도 early return 으로 영영 복구가 안 됐다)
-    if (!map.isStyleLoaded()) { map.once('styledata', addSigunguLayer); return; }
+    if (!styleReady) return;   // 스타일 교체 중 — 위에 걸어둔 style.load 핸들러가 다시 부른다
     map.addSource('sigungu-boundaries', { type: 'geojson', tolerance: 0, data: SIGUNGU_GEO }); // tolerance 0 이유는 sido-boundaries 주석 참고
     const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
     map.addLayer({
@@ -570,7 +628,7 @@ function initRecorder(map) {
   }
   $('sigungu-input').addEventListener('input', refreshSigunguSuggestions);
   $('sigungu-input').addEventListener('change', addSigunguFromInput);
-  $('sigungu-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSigunguFromInput(); } });
+  $('sigungu-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addSigunguFromInput(); } });
   $('sigungu-clear').addEventListener('click', () => { sigunguColored.length = 0; applySigunguColors(); renderSigunguChips(); });
   $('sigungu-opacity').addEventListener('input', (e) => {
     if (map.getLayer('sigungu-color-fill')) map.setPaintProperty('sigungu-color-fill', 'fill-opacity', parseFloat(e.target.value));
@@ -581,7 +639,7 @@ function initRecorder(map) {
   const COLOR_MODES = [
     { id: 'country', seg: 'seg-country', block: 'country-block' },
     { id: 'admin1',  seg: 'seg-admin1',  block: 'admin1-block',  load: loadAdmin1 },
-    { id: 'sido',    seg: 'seg-sido',    block: 'sido-block' },
+    { id: 'sido',    seg: 'seg-sido',    block: 'sido-block',    load: loadSidoHires },
     { id: 'sigungu', seg: 'seg-sigungu', block: 'sigungu-block', load: loadSigungu },
   ];
   function setColorMode(mode) {
@@ -732,14 +790,13 @@ function initRecorder(map) {
   const restoreLabelFade = () => setLabelFade(LABEL_FADE_DEFAULT);
 
   // 초기 + 스타일 전환 시마다 레이어 재생성
+  // (뒤의 즉시 호출은 initRecorder 가 style.load 이후에 불린 경우를 위한 대비다.
+  //  판단은 styleReady 로 한다 — isStyleLoaded() 를 쓰면 안 되는 이유는 위쪽 주석 참고)
   map.on('style.load', addCountryLayer);
-  if (map.isStyleLoaded()) addCountryLayer();
   map.on('style.load', addSidoLayer);
-  if (map.isStyleLoaded()) addSidoLayer();
   map.on('style.load', addAdmin1Layer);
-  if (map.isStyleLoaded()) addAdmin1Layer();
   map.on('style.load', addSigunguLayer);   // 데이터 로드 전이면 내부에서 알아서 건너뜀
-  if (map.isStyleLoaded()) addSigunguLayer();
+  if (styleReady) { addCountryLayer(); addSidoLayer(); addAdmin1Layer(); addSigunguLayer(); }
 
   /* ── 육지색 / 바다색 (직접 변경 + 스타일 색 자동 읽기) / 강 표시 ── */
   // 스타일별 육지 레이어 (색 값으로 확인한 정확한 매핑)
