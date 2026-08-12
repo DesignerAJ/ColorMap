@@ -1,5 +1,5 @@
 #country-selector-container {
-  --bg: #edf1f6;
+  --bg: #e5e9f5;          /* 국가·행정구역·시도·시군구 탭을 감싸는 박스 바탕 */
   --panel: rgba(255, 255, 255, 0.96);
   --panel-2: #fff;
   --line: rgba(15, 38, 70, 0.14);
@@ -46,7 +46,6 @@
     border: 1px solid var(--line);
     border-radius: 7px;
     padding: 8px 9px;
-    font-family: var(--font);
     font-size: 12px;
   }
   input:focus,
@@ -70,7 +69,6 @@
     color: var(--txt);
     border-radius: 12px;
     padding: 9px 10px;
-    font-family: var(--font);
     font-size: 12px;
     transition:
       background 0.12s,
@@ -557,7 +555,7 @@
     color: var(--txt);
   }
   .seg-toggle .seg-btn.active {
-    background: #2f62af;
+    background: #347bf7;
     color: #fff;
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.45),
@@ -568,10 +566,12 @@
   }
   /* 라벨 사이 중점(·). 모노스페이스라 한 글자 폭을 그대로 먹어서 '시 · 군 · 구' 처럼
      벌어져 보인다. 자간(letter-spacing)만으로는 59px → 57.5px 로 거의 안 줄어들어
-     중점 자체를 양옆으로 당긴다. -0.22em 이면 '시·군·구' 가 '행정구역' 과 비슷한 폭. */
+     중점 자체를 양옆으로 당긴다.
+     처음엔 -0.22em 이었는데, 그 뒤 UI 전체에 자간 -0.02em 이 들어가면서 겹쳐 붙어
+     너무 좁아졌다. 중점 몫만 절반 정도로 되돌린다. */
   .seg-btn .mid {
     font-style: normal;
-    margin: 0 -0.22em;
+    margin: 0 -0.12em;
     opacity: 0.55;
   }
   .hint-sm {

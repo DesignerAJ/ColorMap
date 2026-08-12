@@ -14,8 +14,15 @@ body,
    #colormap-ui 는 패널·상태 팝업·검색 플로팅을 모두 담는 마운트다.
    지도 위 핀 라벨(.map-pin)은 녹화 결과물에 그대로 찍히므로 일부러 건드리지 않는다. */
 #colormap-ui {
+    font-family: "Nanum Gothic Coding", monospace;
     letter-spacing: -0.02em;
 }
+
+/* 폼 요소(input·select·button)에는 일부러 font-family 를 걸지 않는다.
+   폼 요소는 지정이 없으면 부모 폰트를 물려받지 않고 OS 기본 폰트로 그려지는데,
+   2.0 이 바로 그 상태였다 — 드롭다운·버튼은 시스템 산세리프, 나머지 글자는
+   Nanum Gothic Coding. 그 조합을 그대로 유지한다.
+   예외는 국가 검색 입력창 하나로, 2.0 에도 있던 .datalist-wrapper input[list] 규칙이다. */
 
 #country-selector-container {
     font-family: "Nanum Gothic Coding", monospace;
@@ -691,6 +698,9 @@ input[type="range"] {
     border-radius: 99px;
 }
 
+/* 제목만 시스템 산세리프로 둔다. 패널 본문은 Nanum Gothic Coding 고정폭이고,
+   폼 요소는 폰트를 지정하지 않아 OS 기본 폰트로 그려진다 — 제목을 그 쪽에 맞춘 것.
+   폼 요소가 실제로 쓰는 폰트와 같아 보이도록 시스템 UI 서체를 직접 지정한다. */
 .colormap-panel-title {
     display: flex;
     align-items: baseline;
@@ -698,6 +708,8 @@ input[type="range"] {
     gap: 12px;
     padding: 0 2px 12px;
     color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo",
+        "Helvetica Neue", Arial, sans-serif;
 }
 
 .colormap-panel-title > span {
@@ -778,7 +790,7 @@ input[type="range"] {
 }
 
 #export-actions .export-tile strong {
-    font-size: 20px;
+    font-size: 13px;   /* 20px 의 2/3 — MP4·PSD·PNG·SVG 글자가 타일에 비해 과했다 */
     font-weight: 700;
     line-height: 1;
 }
@@ -966,7 +978,6 @@ input[type="range"] {
     border-radius: 10px;
     background: rgba(230, 230, 230, 0.78);
     color: #000000;
-    font-family: inherit;
     font-size: 14px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
