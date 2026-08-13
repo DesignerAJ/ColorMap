@@ -58,19 +58,32 @@ function nearLine(pt, segs) {
   const ringsOf = (g) => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
   const key = (p) => p[0].toFixed(6) + ',' + p[1].toFixed(6);
 
-  // 경기·강원의 링 변 중 국경선 근처인 것만
-  const edges = [];
+  /* 경기·강원의 링 변을 모은다. 방향을 무시한 같은 변이 두 번 나오면 두 도가 맞대고 있는
+     내부 경계다 (연천–철원 사이 도 경계가 대표적). 국경선은 나라 바깥쪽 가장자리라 한 번만
+     나온다. 이걸로 걸러내지 않으면, DMZ 와 5km 안쪽에서 만나는 도 경계 구간이 국경선
+     굵기·색으로 그려진다 — 실제로 연천–철원 접점에서 160개 변이 그렇게 새어 들어갔었다. */
+  const und = (a, b) => { const ka = key(a), kb = key(b); return ka < kb ? ka + '|' + kb : kb + '|' + ka; };
+  const seen = new Map();
+  const all = [];
   for (const nm of ['경기도', '강원특별자치도']) {
     const f = H.features.find(x => x.properties.name === nm);
     for (const poly of ringsOf(f.geometry)) for (const ring of poly)
       for (let i = 1; i < ring.length; i++) {
         const a = ring[i-1], b = ring[i];
         if (a[1] < 37.6 || b[1] < 37.6) continue;
-        const mid = [(a[0]+b[0])/2, (a[1]+b[1])/2];
-        if (nearLine(mid, mbSegs)) edges.push([a, b]);
+        const k = und(a, b);
+        seen.set(k, (seen.get(k) || 0) + 1);
+        all.push([a, b, k]);
       }
   }
-  console.log(`국경선 근처로 골라낸 변 ${edges.length}개`);
+  const edges = [];
+  let dropped = 0;
+  for (const [a, b, k] of all) {
+    if (seen.get(k) >= 2) { dropped++; continue; }          // 도끼리 공유하는 내부 경계
+    const mid = [(a[0]+b[0])/2, (a[1]+b[1])/2];
+    if (nearLine(mid, mbSegs)) edges.push([a, b]);
+  }
+  console.log(`도 경계(공유 변) 제외 ${dropped}개 · 국경선 근처로 골라낸 변 ${edges.length}개`);
 
   // 변을 이어 연속된 선으로 (끝점이 맞는 것끼리)
   const byStart = new Map();
@@ -109,6 +122,12 @@ function nearLine(pt, segs) {
   });
 
   fs.writeFileSync('recorder/js/data/korea-border.json', JSON.stringify({
+    _note: '북쪽 육상 국경선(군사분계선 구간). 화면의 국경선을 우리 시도 데이터에서 뽑아 그리기 위한 선이다. '
+         + 'Mapbox 의 KP-KR 국경선(admin 레이어)은 우리 행정경계와 최대 3.1km 어긋나서, 색칠이 선을 넘거나 못 미치는 것처럼 보였다. '
+         + '같은 데이터에서 뽑은 선을 쓰면 색칠과 꼭짓점 단위로 정확히 붙는다.',
+    _howto: 'sido-hires 의 경기도·강원특별자치도 링에서 (1) 두 도가 공유하는 내부 변(연천–철원 도 경계 등)을 빼고 '
+          + '(2) Mapbox 국경선 5km 이내인 변만 골라 이어붙였다. 해안선은 그 범위 밖이라 안 걸린다. '
+          + '재생성: MAPBOX_TOKEN=... node recorder/tools/build-korea-border.mjs',
     type: 'FeatureCollection',
     features: kept.map(c => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c } })),
   }));
