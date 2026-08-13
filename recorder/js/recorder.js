@@ -449,7 +449,19 @@ function initRecorder(map) {
     function reset() { entries.length = 0; applyColors(); renderChips(); syncDefaultColor(); }
 
     input.addEventListener('change', addFromInput);   // 목록에서 선택(클릭) 시 바로 추가
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addFromInput(); } });   // 직접 입력 후 Enter
+    /* Enter 는 브라우저 기본 동작이 끝난 '다음'에 처리한다.
+       후보 목록에서 방향키로 항목을 고르면 그 값이 입력창에 실제로 들어가는 건
+       Enter 의 기본 동작이 끝난 뒤다. 예전처럼 keydown 시점에 값을 읽으면 아직
+       타이핑하던 글자('일')만 보여서, 목록에서 '일본' 을 골라 Enter 를 눌러도
+       resolve 가 실패하고 아무 일도 일어나지 않았다.
+       preventDefault 도 하면 안 된다 — 그걸 막으면 목록 선택 자체가 취소된다.
+       (폼이 없으므로 Enter 로 제출될 걱정은 없다)
+       목록 선택이 값에 반영되면 change 가 먼저 돌아 이미 추가되는데, 그 경우
+       입력창이 비워진 뒤라 아래 호출은 빈 값으로 그냥 빠져나간다. */
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || isComposingEnter(e)) return;   // 조합 중 Enter 는 글자 확정용
+      setTimeout(addFromInput, 0);
+    });
     el('clear').addEventListener('click', reset);
     if (cfg.suggest) input.addEventListener('input', refreshSuggestions);
     syncDefaultColor();
