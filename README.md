@@ -30,3 +30,21 @@ python -m http.server 5500
 `recorder/js/data/admin1.json`과 `sigungu.json`은 해당 탭을 처음 열 때만 불러옵니다.
 위치 핀 라벨은 기본 폰트를 사용합니다. 팀 폰트를 연결하려면 사용권을 먼저 확인한 뒤
 `recorder/js/recorder.js`의 `EMBEDDED_LABEL_FONT`에 파일 경로를 지정합니다.
+
+## 데이터 출처
+
+시도 경계(`sido-hires.json`)는 `sigungu.json`을 시도 단위로 합쳐 만듭니다
+(`node recorder/tools/build-sido-hires.mjs`).
+
+여기에 새만금 보충 폴리곤(`saemangeum.json`) 하나가 얹힙니다. 새만금 방조제 안쪽은
+어느 시군구에도 배정돼 있지 않아서 — 국토교통부 VWorld 시군구 레이어에서도 그 지점은
+`NOT_FOUND`입니다 — 시군구를 합치기만 해서는 전북 한복판이 빈 채로 남습니다.
+시군구 관할은 아직 미확정이지만 시도 단위로는 전북이 분명하므로 전북에 포함시켰습니다.
+
+> 이 폴리곤은 OpenStreetMap 데이터로 만들었습니다 (새만금호 `relation/12336578`,
+> 새만금 방조제 `relation/13076572`).
+> © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright)
+
+장소 검색은 VWorld(국토교통부)와 Google Places를 씁니다 — 인증키는
+`recorder/js/config.js`의 `SEARCH_KEYS`에 넣습니다. 두 키 모두 브라우저에 노출되는
+값이라 발급처에서 사용 도메인·HTTP 리퍼러 제한을 걸어야 합니다.

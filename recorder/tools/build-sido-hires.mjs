@@ -32,6 +32,13 @@ import path from 'node:path';
 const SRC = 'recorder/js/data/sigungu.json';
 const OUT = 'recorder/js/data/sido-hires.json';
 
+/* 시군구 경계만으로는 메울 수 없는 구역을 마지막에 얹는다.
+   지금은 새만금 하나다 — 방조제 안쪽은 어느 시군구에도 배정돼 있지 않아
+   (국토부 VWorld 시군구 레이어에서도 그 지점은 NOT_FOUND) 아무리 잘 합쳐도
+   전북 한복판이 빈 채로 남는다. 시군구 관할은 미확정이지만 시도로는 전북이 분명하다.
+   파일 안의 _source·_howto 에 출처와 만든 방법을 적어 두었다. */
+const PATCHES = ['recorder/js/data/saemangeum.json'];
+
 const key = (p) => `${p[0]},${p[1]}`;                    // 좌표는 이미 소수 4자리로 고정돼 있다
 const ringsOf = (g) =>
   g.type === 'Polygon' ? [g.coordinates]
@@ -216,6 +223,20 @@ for (const [sido, feats] of groups) {
       ? { type: 'Polygon', coordinates: polys[0] }
       : { type: 'MultiPolygon', coordinates: polys },
   });
+}
+
+// 보충 폴리곤 얹기 — 겹치지 않는 조각이라 MultiPolygon 에 그대로 덧붙이면 된다
+for (const p of PATCHES) {
+  if (!fs.existsSync(p)) { console.warn(`보충 파일 없음, 건너뜀: ${p}`); continue; }
+  const patch = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const target = features.find((f) => f.properties.name === patch.appendTo);
+  if (!target) { console.warn(`${patch.appendTo} 를 못 찾음 — ${p} 건너뜀`); continue; }
+  const polys = target.geometry.type === 'Polygon' ? [target.geometry.coordinates] : target.geometry.coordinates;
+  polys.push(...patch.geometry.coordinates);
+  target.geometry = { type: 'MultiPolygon', coordinates: polys };
+  const pts = patch.geometry.coordinates.reduce((s, poly) => s + poly.reduce((t, r) => t + r.length, 0), 0);
+  totalPts += pts;
+  console.log(`보충: ${patch.appendTo} ← ${path.basename(p)} (폴리곤 ${patch.geometry.coordinates.length}개 ${pts}점)`);
 }
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
