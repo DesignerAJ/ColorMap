@@ -49,6 +49,15 @@ python -m http.server 5500
 > 새만금 방조제 `relation/13076572`).
 > © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright)
 
+북쪽 육상 국경선은 Mapbox가 아니라 **우리 시도 데이터에서 뽑은 선**(`korea-border.json`)을
+그립니다. Mapbox의 KP-KR 국경선은 우리 행정경계와 최대 3.1km 어긋나서 — 벡터 타일을 직접
+디코딩해 재보면 77%는 200m 이내지만 나머지가 벌어지고, 줌 12까지 올려도 최대값이 줄지
+않습니다 — 색칠이 국경선을 넘거나 못 미치는 것처럼 보였습니다. 같은 데이터에서 뽑은 선을
+쓰면 색칠과 꼭짓점 단위로 정확히 붙습니다. Mapbox의 해당 구간은 `admin` 소스를 쓰는
+레이어에 `iso_3166_1 != 'KP-KR'` 조건을 덧붙여 가리며, 다른 나라 국경선은 그대로 둡니다.
+다시 만들려면 `MAPBOX_TOKEN=... node recorder/tools/build-korea-border.mjs`
+(`npm i @mapbox/vector-tile pbf` 필요).
+
 장소 검색은 VWorld(국토교통부)와 Google Places를 씁니다 — 인증키는
 `recorder/js/config.js`의 `SEARCH_KEYS`에 넣습니다. 두 키 모두 브라우저에 노출되는
 값이라 발급처에서 사용 도메인·HTTP 리퍼러 제한을 걸어야 합니다.

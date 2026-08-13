@@ -1059,11 +1059,61 @@ function initRecorder(map) {
   $('sea-color').addEventListener('input',  () => paintGroup(seaPaintLayers(),  $('sea-color').value));
   $('river-on').addEventListener('change',  () => setRiverVisible($('river-on').checked));
 
+  /* ── 북쪽 육상 국경선을 우리 데이터로 그리기 ──
+     화면의 국경선은 Mapbox 의 admin 레이어(KP-KR)에서 오는데, 우리 시군구 행정경계와
+     같은 선이 아니다. 벡터 타일을 직접 디코딩해 재보니 국경선 점의 77% 는 200m 이내로
+     맞지만 나머지는 최대 3.1km 벌어졌고, 줌을 12까지 올려도 그 최대값이 줄지 않았다
+     (= 선의 단순화 문제가 아니라 두 데이터가 실제로 다르다). 그래서 연천 쪽은 색칠이
+     선을 넘고 양구 쪽은 선까지 못 미치는 것처럼 보였다.
+
+     DMZ 구간은 우리 데이터에서 뽑은 선으로 대신 그린다. 색칠과 선이 같은 출처라
+     어느 줌에서도 정확히 붙는다. Mapbox 쪽 KP-KR 구간은 아래에서 가린다. */
+  const KR_BORDER_LAYER = 'kr-land-border';
+  const KR_BORDER_URL = './recorder/js/data/korea-border.json';
+  let KR_BORDER = null;
+
+  function addKoreaBorderLayer() {
+    if (!KR_BORDER || !styleReady || map.getLayer(KR_BORDER_LAYER)) return;
+    if (!map.getSource(KR_BORDER_LAYER)) {
+      map.addSource(KR_BORDER_LAYER, { type: 'geojson', tolerance: 0, data: KR_BORDER });
+    }
+    map.addLayer({
+      id: KR_BORDER_LAYER, type: 'line', source: KR_BORDER_LAYER,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': 2.5, 'line-opacity': 1 },
+    });
+    applyBoundary('country');   // 국경선 컨트롤(색·투명도·두께·점선)을 그대로 받는다
+    raiseBoundaries();
+  }
+
+  /* Mapbox 의 한반도 국경선 구간만 숨긴다. admin 소스를 쓰는 레이어 전부에
+     iso_3166_1 이 'KP-KR' 인 것을 빼는 조건을 덧붙인다 ('KP-KR-dispute' 도 함께).
+     다른 나라 국경선은 그대로 둔다. */
+  function hideMapboxKoreanBorder() {
+    if (!styleReady) return;   // 스타일 로드 전엔 getStyle() 이 던진다 — style.load 에서 다시 부른다
+    for (const l of map.getStyle().layers || []) {
+      if (l['source-layer'] !== 'admin') continue;
+      try {
+        const f = map.getFilter(l.id);
+        if (!f || JSON.stringify(f).includes('KP-KR')) continue;   // 이미 처리한 레이어
+        map.setFilter(l.id, ['all', f, ['!', ['in', 'KP-KR', ['coalesce', ['get', 'iso_3166_1'], '']]]]);
+      } catch (_) {}
+    }
+  }
+
+  fetch(KR_BORDER_URL)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((geo) => { if (!geo) return; KR_BORDER = geo; hideMapboxKoreanBorder(); addKoreaBorderLayer(); })
+    .catch(() => {});   // 못 받으면 Mapbox 국경선이 그대로 쓰인다
+
+  map.on('style.load', () => { hideMapboxKoreanBorder(); addKoreaBorderLayer(); });
+
   /* ── 경계선 (국경선 / 분쟁지역 / 행정구역선) ── */
   // 종류별 레이어 후보 (스타일마다 이름 다름, -bg 외곽선 포함)
   const BOUNDARY_LAYERS = {
     country:  ['admin-0-boundary', 'admin-0-boundary-bg',     // 도로표시/모노톤
-               'country-border-dot'],                         // 단색/단색지형: 국경선
+               'country-border-dot',                          // 단색/단색지형: 국경선
+               KR_BORDER_LAYER],                              // 북쪽 육상 국경선 — 우리 데이터로 그린다 (아래 참고)
     disputed: ['admin-0-boundary-disputed',                   // 도로표시/모노톤
                'dispute-boundaries'],                         // 단색/단색지형: 분쟁지역
     admin:    ['admin-1-boundary', 'admin-1-boundary-bg',     // 도로표시/모노톤
