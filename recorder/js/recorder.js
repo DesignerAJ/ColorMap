@@ -1019,10 +1019,18 @@ function initRecorder(map) {
     for (const k in _origTonePaint) delete _origTonePaint[k];   // 새 스타일이므로 톤 백업 초기화
     const styleKey = $('style-select').value;
     // 위성은 사진이라 '색' 지정은 무의미 → 색 섹션만 숨김
-    $('map-color-section').style.display = (styleKey === 'satellite') ? 'none' : '';
+    const isPhoto = (styleKey === 'satellite');
+    $('map-color-section').style.display = isPhoto ? 'none' : '';
     // 경계선은 '선'이라 위성 위에도 의미 있음 → 경계선 레이어가 실제로 있을 때만 표시 (없으면 숨김)
     const hasBd = ['country','disputed','admin'].some(k => bdExistingLayers(k).length > 0);
     $('boundary-section').style.display = hasBd ? '' : 'none';
+    /* 위성사진은 여기서 멈춘다.
+       이 스타일의 landColor·water 는 디자이너가 visibility:none 으로 꺼둔 반투명(0.56)
+       오버레이다. 그런데 아래 강·호수 처리는 '배경 바다가 있으면 water = 강' 규칙에 따라
+       위성의 water 를 켜버렸고, 연한 하늘색 hsl(194,63%,91%) 이 사진 위를 덮어
+       바다가 탁한 흰색으로 보였다. 사진 위에 우리 색을 얹을 이유가 없고,
+       색 섹션은 어차피 숨겨 놓았으므로 스타일이 정한 표시 상태를 그대로 둔다. */
+    if (isPhoto) { _riverInitStyle = styleKey; return; }
     ensureSeaBgVisible();   // 배경 바다(baseColor 등) 강제로 켜기 — water=강 끄면 바다가 보이게
     const landId = findLandLayer();
     const land = landId ? readGroupColor([landId]) : null;
