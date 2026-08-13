@@ -486,6 +486,11 @@ function initRecorder(map) {
   let SIDO_HIRES = null;
   const sidoMeta = {};
   SIDO_META.forEach(s => { sidoMeta[s.n] = { n: s.n, s: s.s, c: s.c, z: s.z }; });
+  /* 시도를 짧게 부를 때는 SIDO_META 의 약칭을 쓴다.
+     접미사만 떼면(stripSido) '충청북도 → 충청북', '경상남도 → 경상남' 처럼 세 글자가 나와
+     평소 쓰는 말과 다르다. 실제로 쓰는 두 글자(충북·경남)는 SIDO_META 에 이미 들어 있다.
+     stripSido 는 검색어 별칭('충청북'으로 쳐도 찾히게)으로만 남긴다. */
+  const sidoShort = (n) => (sidoMeta[n] && sidoMeta[n].s) || stripSido(n) || n;
   (function fillSidoList() {                          // 짧은 별칭(경기·서울)으로도 검색되게 약칭을 올린다
     const dl = $('sido-list');
     SIDO_META.forEach(s => { const opt = document.createElement('option'); opt.value = s.s; dl.appendChild(opt); });
@@ -535,7 +540,7 @@ function initRecorder(map) {
       sourceSpec: () => ({ type: 'geojson', tolerance: 0, data: SIDO_HIRES || SIDO_GEO }),
       resolve:  (q) => resolveByMeta(sidoMeta, q, (s) => stripSido(s.n)),
       fullName: (n) => n,
-      label:    (n) => stripSido(n) || n,
+      label:    sidoShort,
       target:   (n) => sidoMeta[n] && { center: sidoMeta[n].c, zoom: sidoMeta[n].z },
       // 색칠은 SIDO_GEO 로 이미 되는 상태라 '불러오는 중'이 아니라 '정밀해지는 중'이라고 알린다
       load: (setText) => {
@@ -563,7 +568,7 @@ function initRecorder(map) {
       suggest:   (q) => suggestByMeta(sigunguMeta, q),
       fullName:  (n) => n,
       label:     (n) => (sigunguMeta[n] && sigunguMeta[n].s) || n,
-      qualifier: (n) => stripSido((sigunguMeta[n] && sigunguMeta[n].q) || ''),
+      qualifier: (n) => sidoShort((sigunguMeta[n] && sigunguMeta[n].q) || ''),   // '경남 중구' 처럼 두 글자로
       target:    (n) => sigunguMeta[n] && { center: sigunguMeta[n].c, zoom: sigunguMeta[n].z },
       load: lazyGeoLoad('./recorder/js/data/sigungu.json', 'js/data/sigungu.json',
         (geo) => { SIGUNGU_GEO = geo; Object.assign(sigunguMeta, buildMeta(geo, 'sido', 10)); }),
