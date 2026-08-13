@@ -16,6 +16,13 @@
      이어붙이면 시도 외곽선이 된다. 실측으로 확인했다 — 공유 변 112,596개가
      정확히 두 번씩만 쓰여 위상이 깨끗하다.
 
+   핀치(자기교차) 처리:
+     변을 이을 때 한 점에서 셋 이상이 뻗어나가는 분기점을 만나면 다음 변을 임의로
+     고르게 되는데, 그러면 링이 그 점을 두 번 지나며 자기 자신과 만난다. 그대로 두면
+     mapbox-gl 의 삼각분할이 그 지점을 가로질러 이어버려 화면에 얇고 긴 삼각형이
+     뻗어나온다 — 줌에 따라 나타났다 사라지는 '중첩된 삼각형'의 정체다.
+     splitAtPinches 로 그 점에서 링을 나눠 없앤다 (41곳 → 0곳, 면적은 그대로).
+
    사용법: node recorder/tools/build-sido-hires.mjs
 */
 
@@ -51,6 +58,21 @@ function bboxOf(ring) {
 
 const bboxInside = (a, b) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
 
+/* 링이 다른 링 안에 들어 있는지. 한 점만 보고 정하면 안 된다 —
+   핀치를 잘라 만든 링은 첫 점이 바깥 링과 맞닿은 공유 꼭짓점이라
+   그 점 하나로는 안팎 판정이 흔들린다. 여러 점을 고르게 뽑아 다수결로 정한다. */
+function ringInside(ring, outer) {
+  const n = ring.length - 1;
+  let inside = 0, tested = 0;
+  for (let s = 1; s <= 7; s++) {
+    const p = ring[Math.floor((n * s) / 8)];
+    if (!p) continue;
+    tested++;
+    if (pointInRing(p, outer)) inside++;
+  }
+  return tested > 0 && inside * 2 > tested;
+}
+
 function pointInRing(pt, ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -59,6 +81,31 @@ function pointInRing(pt, ring) {
         pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
   }
   return inside;
+}
+
+/* 한 링이 같은 점을 두 번 지나면 그 지점에서 자기 자신과 만난다(핀치).
+   분기점(한 점에서 변이 셋 이상 뻗는 곳)에서 다음 변을 아무거나 집어 들면 이런 링이 생긴다.
+   그대로 두면 mapbox-gl 의 삼각분할이 그 지점을 가로질러 이어버려, 화면에 얇고 긴
+   삼각형이 뻗어나온다 — 줌에 따라 나타났다 사라지는 '중첩된 삼각형'의 정체다.
+
+   위상적으로 이런 링은 '한 점에서 붙어 있는 두 개의 링'이다. 그 점에서 잘라 나누면
+   양쪽 다 온전한 링이 되고 면적도 그대로 보존된다. 스택을 쌓고 가다 이미 지나온 점을
+   다시 만나면 그 사이 구간을 닫힌 링으로 떼어낸다. */
+function splitAtPinches(ring) {
+  const out = [], stack = [], pos = new Map();
+  for (const k of ring) {
+    if (pos.has(k)) {
+      const at = pos.get(k);
+      const loop = stack.slice(at).concat([k]);
+      if (loop.length > 3) out.push(loop);
+      for (let t = at + 1; t < stack.length; t++) pos.delete(stack[t]);
+      stack.length = at + 1;
+    } else {
+      pos.set(k, stack.length);
+      stack.push(k);
+    }
+  }
+  return out;
 }
 
 /* 남은 방향 변들을 이어 닫힌 링으로 만든다.
@@ -83,7 +130,7 @@ function assembleRings(edges) {
         cur = nxt;
         if (cur === start) break;
       }
-      if (ring.length > 3 && ring[0] === ring[ring.length - 1]) rings.push(ring);
+      if (ring.length > 3 && ring[0] === ring[ring.length - 1]) rings.push(...splitAtPinches(ring));
     }
   }
   return rings;
@@ -143,7 +190,7 @@ for (const [sido, feats] of groups) {
     let parent = -1;
     for (let j = 0; j < outers.length; j++) {
       const o = info[outers[j]];
-      if (bboxInside(info[i].bbox, o.bbox) && pointInRing(info[i].ring[0], o.ring)) { parent = outers[j]; break; }
+      if (bboxInside(info[i].bbox, o.bbox) && ringInside(info[i].ring, o.ring)) { parent = outers[j]; break; }
     }
     if (parent === -1) { outers.push(i); holesOf.set(i, []); }
     else holesOf.get(parent).push(i);
