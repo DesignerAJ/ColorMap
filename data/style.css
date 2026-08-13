@@ -243,12 +243,21 @@ input[list]::placeholder {
 /* 드롭다운 내부 옵션 (country-select, projection-select) 공통 스타일 */
 select option {
     font-weight: 400;
-    font-size: 16px;
+    font-size: 12px;   /* 드롭다운 본체(12px)와 맞춤 — 16px 은 2.0 패널 기준이었다 */
     padding: 5px;
 }
 
+/* 패널 라벨 기본 크기.
+   2.0 에서는 16px 이었는데, 그건 패널이 이 항목들만 담고 있을 때 이야기다.
+   3.0 은 같은 360px 폭에 훨씬 많은 줄이 들어가서 16px 이면 다 커 보인다.
+   더 큰 문제는 이 규칙이 ID 를 끼고 있어 명시도가 [1,0,1] 이라는 점이었다 —
+   app.css 가 컴포넌트별로 정해둔 크기(.field>label 11px, .bd-cell 10px …)를
+   전부 이겨버려서, 그 값들이 통째로 죽어 있었다. (@scope 는 명시도를 올려주지 않는다)
+   여기를 3.0 의 기본값인 11px 로 낮춰, 개별 규칙이 있는 곳은 그쪽이 이기고
+   없는 곳은 이 값으로 떨어지게 한다. 지우지 않는 이유는, 지우면 규칙 없는 라벨이
+   컨테이너의 20px 을 상속받아 오히려 더 커지기 때문이다. */
 #country-selector-container label {
-    font-size: 16px;
+    font-size: 11px;
     color: rgba(40, 40, 40, 1);
     white-space: nowrap;
 }
@@ -801,11 +810,14 @@ input[type="range"] {
     white-space: nowrap;
 }
 
-/* 내보내기 버튼별 색상 — 아래 4개 규칙의 색상값만 바꾸면 된다. */
-#record      { --export-color: #2563eb; --export-bg: #eaf2ff; --export-hover: #1d4ed8; }
-#capture-psd { --export-color: #7c3aed; --export-bg: #f3edff; --export-hover: #6d28d9; }
-#capture-png { --export-color: #059669; --export-bg: #e9fbf4; --export-hover: #047857; }
-#export-svg  { --export-color: #ea580c; --export-bg: #fff1e8; --export-hover: #c2410c; }
+/* 내보내기 버튼 색상 — 네 개가 한 색을 쓴다 (국가·구역별 색상의 선택 탭과 같은 파랑).
+   버튼마다 파랑·보라·초록·주황으로 갈라두니 한 줄이 알록달록해서 시선이 분산됐다.
+   기본 상태는 글자와 테두리만 그 색이고, 마우스를 올리면 그 색으로 꽉 채운다
+   (--export-hover 를 --export-color 와 같게 둔 것). 색을 바꾸려면 이 한 줄만 고치면 된다. */
+#record,
+#capture-psd,
+#capture-png,
+#export-svg { --export-color: #347bf7; --export-bg: #e9f1fe; --export-hover: #347bf7; }
 
 /* 작업 상태는 패널 안에 상주하지 않고 화면 중앙에서 잠시 나타났다 디졸브된다. */
 #status {

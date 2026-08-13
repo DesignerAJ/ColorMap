@@ -7,6 +7,8 @@ function initRecorder(map) {
   const grabCam = () => ({ center: map.getCenter().toArray(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() });
   const easeInOut = (t) => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;   // 선 자라남 ease 공용
   const idle = () => new Promise((res) => map.once('idle', res));
+  // innerHTML 로 목록을 그리는 곳이 많다. 지명·라벨을 끼워 넣기 전에 항상 이걸 거친다.
+  const escAttr = (s) => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   /* ── 타일 완전 로딩 대기 ──
      idle 이벤트만으로는 부족하다. idle 은 "지금 화면에 그릴 게 없다"는 뜻이라
@@ -240,21 +242,229 @@ function initRecorder(map) {
     }));
   }
 
-  /* ── 나라 색칠 ── */
-  const colored = [];                 // [{ iso, color, name, opacity }]
-  const DEFAULT_COLORS = ['#5A8EDB', '#F17D38']; // 1번/2번 기본색 (이후 순환)
-  const nextDefaultColor = () => DEFAULT_COLORS[colored.length % DEFAULT_COLORS.length];
-  const syncNextDots = { country: wireNextDot('country'), admin1: wireNextDot('admin1'),
-                         sido: wireNextDot('sido'), sigungu: wireNextDot('sigungu') };
-  const syncDefaultColor = () => { $('country-color').value = nextDefaultColor(); syncNextDots.country(); };
-  syncDefaultColor();
-  const cleanName = (n) => n.replace(/#[^#]*#/g, '').trim();
-  const isoToCountry = {};
-  COUNTRIES.forEach(c => { isoToCountry[c.i] = c; });
+  /* ── 구역 색칠 (국가 · 해외 행정구역 · 시도 · 시군구) ──
+     네 모드가 하는 일은 같다. 경계 소스에서 키 속성을 읽어 match 표현식으로
+     구역마다 색·투명도를 칠하고, 칠한 목록을 칩으로 보여준다.
+     예전에는 이 네 벌을 따로 두었는데, 그래서 뭘 고치거나 늘릴 때마다 한 군데씩
+     빠뜨려 버그가 났다 (구역별 투명도, 스타일 교체 후 복구가 그렇게 새어 나갔다).
+     지금은 다른 부분 — 경계 소스 · 키 이름 · 검색 방식 · 칩에 쓸 이름 — 만
+     설정으로 받고, 나머지 로직은 createRegionPainter 한 곳에만 있다. */
 
-  // 검색 데이터리스트 채우기 (표시이름 → ISO 매핑)
-  const nameToIso = {};
-  (function fillCountryList() {
+  const DEFAULT_COLORS = ['#5A8EDB', '#F17D38'];   // 1번/2번 기본색 (이후 순환)
+  const SIDO_SUFFIX = /(특별자치도|특별자치시|특별시|광역시|도)$/;
+  const stripSido = (n) => n.replace(SIDO_SUFFIX, '');
+  const cleanName = (n) => n.replace(/#[^#]*#/g, '').trim();
+  const SUGGEST_MAX = 12;                          // datalist 후보 최대 개수
+
+  /* 한글 입력 중(조합 중)의 Enter 는 글자를 확정하는 키다. 이때 추가 처리를 하면 안 된다.
+     처리해버리면 입력창을 비운 직후 IME 가 조합 중이던 마지막 글자('도봉구' 의 '구')를
+     빈 칸에 써넣고, 그 값으로 change 가 한 번 더 돌아 엉뚱한 지역이 함께 칠해졌다.
+     ('구' 는 정식명 부분일치로 목록 첫 항목인 종로구를 집어냈다) */
+  const isComposingEnter = (e) => e.isComposing || e.keyCode === 229;
+
+  const fetchGeo = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
+
+  /* 정식명 → { n 정식명, s 약칭, q 구분어(국가·시도), c 중심, z 줌 }.
+     약칭이 겹치는 것(중구·동구, 여러 나라의 '북부')은 dup 로 표시해 후보 목록에는
+     정식명으로 올린다 — 그래야 서로 구분되어 고를 수 있다. */
+  function buildMeta(geo, qualProp, defZoom) {
+    const meta = {};
+    (geo.features || []).forEach((f) => {
+      const p = f.properties || {};
+      if (!p.name) return;
+      meta[p.name] = { n: p.name, s: p.short || p.name, q: p[qualProp] || '', c: p.c, z: p.z || defZoom };
+    });
+    const seen = {};
+    Object.values(meta).forEach(s => { seen[s.s] = (seen[s.s] || 0) + 1; });
+    Object.values(meta).forEach(s => { s.dup = seen[s.s] > 1; });
+    return meta;
+  }
+
+  /* 입력 → 정식명. 폴백은 후보가 하나로 좁혀질 때만 받아들인다.
+     예전에는 첫 일치를 그대로 썼는데, '구'·'시' 처럼 여러 곳에 걸리는 조각이 들어오면
+     목록 맨 앞(종로구)이 조용히 잡혔다. 애매하면 아무것도 고르지 않는 편이 낫다.
+     한 글자는 아예 보지 않는다 — 약칭은 모두 두 글자 이상이라 한 글자 입력은
+     검색어가 아니라 조합 중 흘러든 조각으로 보는 게 맞다 ('시' → 시흥시 방지).
+     alias 는 시도의 '경기도 → 경기' 처럼 정식명에서 접미사를 뗀 별칭이다. */
+  function resolveByMeta(meta, q, alias) {
+    q = String(q).trim(); if (!q) return null;
+    if (meta[q]) return q;
+    const all = Object.values(meta);
+    const alt = alias ? ((s) => alias(s) || '') : (() => '');
+    const exact = all.find((s) => s.s === q || alt(s) === q);
+    if (exact) return exact.n;
+    if (q.length < 2) return null;
+    const only = (l) => (l.length === 1 ? l[0].n : null);
+    return only(all.filter((s) => s.s.startsWith(q) || alt(s).startsWith(q)))
+        || only(all.filter((s) => s.s.includes(q)))
+        || only(all.filter((s) => s.n.includes(q)));
+  }
+
+  /* 후보 순위: 약칭 앞글자 → 약칭 부분 → 정식명 부분.
+     정식명에는 국가·시도가 붙어 있어서('강원특별자치도 춘천시') 같이 취급하면
+     '강' 을 쳤을 때 강원도 시·군이 강남구보다 앞에 끼어든다. 이름 자체가 맞는 것을 먼저. */
+  function suggestByMeta(meta, q) {
+    const byName = [], byPart = [], byFull = [];
+    for (const s of Object.values(meta)) {
+      if (s.s.startsWith(q)) byName.push(s);
+      else if (s.s.includes(q)) byPart.push(s);
+      else if (s.n.includes(q)) byFull.push(s);
+    }
+    return byName.concat(byPart, byFull);
+  }
+
+  /* 시군구(229개, 11MB)·해외 행정구역(4,589개, 29MB)은 경계 파일이 크다.
+     앱 첫 로딩을 무겁게 하지 않도록 해당 탭을 처음 열 때만 받아온다.
+     실패하면 false 를 돌려주고, 다음 탭 진입 때 다시 시도한다. */
+  function lazyGeoLoad(url, hint, install) {
+    return (setText) => {
+      setText('경계 데이터를 불러오는 중…');
+      return fetchGeo(url)
+        .then((geo) => { install(geo); setText(''); return true; })
+        .catch((e) => {
+          setText(e.message === '404'
+            ? `경계 데이터 파일이 없습니다 (${hint}). README 의 준비 절차를 참고하세요.`
+            : '경계 데이터를 불러오지 못했습니다: ' + e.message);
+          return false;
+        });
+    };
+  }
+
+  function createRegionPainter(cfg) {
+    const entries = [];                              // [{ key, color, opacity }]
+    const el = (suffix) => $(`${cfg.id}-${suffix}`);
+    const input = el('input');
+    const syncNextDot = wireNextDot(cfg.id);
+    const setText = (msg) => { const s = el('status'); if (s) s.textContent = msg || ''; };
+    let loading = null, loaded = !cfg.load;
+
+    // 다음에 칠할 기본색 — 칠한 개수만큼 번갈아 (국가만 사용. 나머지는 마지막에 고른 색 유지)
+    function syncDefaultColor() {
+      if (!cfg.cycleDefaultColor) return;
+      el('color').value = DEFAULT_COLORS[entries.length % DEFAULT_COLORS.length];
+      syncNextDot();
+    }
+
+    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
+    function applyColors() {
+      if (!map.getLayer(cfg.layer)) return;
+      if (!entries.length) { map.setPaintProperty(cfg.layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
+      const col = ['match', ['get', cfg.prop]], op = ['match', ['get', cfg.prop]];
+      entries.forEach(e => { col.push(e.key, e.color); op.push(e.key, e.opacity); });
+      col.push('rgba(0,0,0,0)'); op.push(0);
+      map.setPaintProperty(cfg.layer, 'fill-color', col);
+      map.setPaintProperty(cfg.layer, 'fill-opacity', op);
+    }
+
+    /* 소스·레이어는 스타일을 바꿀 때마다 다시 깔아야 한다.
+       붙여도 되는 시점인지는 styleReady 로 판단한다 (isStyleLoaded() 를 쓰면 안 되는
+       이유는 위쪽 주석 참고). 지연 로드 모드는 데이터가 오기 전이면 그냥 건너뛰고,
+       데이터가 도착하면 load() 가 다시 부른다. */
+    function addLayer() {
+      if (!styleReady || map.getLayer(cfg.layer)) return;
+      const spec = cfg.sourceSpec();
+      if (!spec) return;
+      if (!map.getSource(cfg.source)) map.addSource(cfg.source, spec);
+      const def = {
+        id: cfg.layer, type: 'fill', source: cfg.source,
+        paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY },
+      };
+      if (cfg.sourceLayer) def['source-layer'] = cfg.sourceLayer;
+      if (cfg.filter) def.filter = cfg.filter;
+      // 라벨(symbol) 아래에 삽입 → 글씨는 색칠 위로
+      map.addLayer(def, (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id);
+      applyColors();
+      raiseBoundaries();                             // 경계선을 이 색칠 위로
+    }
+
+    /* 칩 이름은 짧은 이름을 쓴다. 지금 칠한 것들 중에 같은 짧은 이름이 여럿일 때만
+       구분어(국가·시도)를 앞에 붙인다 — '중구' 6곳, 여러 나라의 '북부' 같은 경우.
+       슬라이더를 끄는 동안 목록을 다시 그리면 조작이 끊기므로, 색 변경은 여기서
+       다시 그리지 않고 wireChipDot 이 동그라미만 그 자리에서 갱신한다. */
+    function renderChips() {
+      const box = el('colored-list');
+      el('list-wrap').style.display = entries.length ? 'block' : 'none';
+      box.innerHTML = '';
+      const seen = {};
+      entries.forEach(e => { const s = cfg.label(e.key); seen[s] = (seen[s] || 0) + 1; });
+      entries.forEach((entry, i) => {
+        const short = cfg.label(entry.key);
+        const qual = (seen[short] > 1 && cfg.qualifier) ? cfg.qualifier(entry.key) : '';
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `${dotHTML(entry.color, entry.opacity)}` +
+          `<span class="nm" title="${escAttr(cfg.fullName(entry.key))}">${escAttr(qual ? `${qual} ${short}` : short)}</span>` +
+          `<span class="x" title="제거">✕</span>`;
+        wireChipDot(chip, entry, applyColors);
+        chip.querySelector('.x').addEventListener('click', () => {
+          entries.splice(i, 1); applyColors(); renderChips(); syncDefaultColor();
+        });
+        box.appendChild(chip);
+      });
+    }
+
+    function addFromInput() {
+      const key = cfg.resolve(input.value);
+      if (!key) return;
+      const color = el('color').value, opacity = nextOpacity(cfg.id);
+      const existing = entries.find(e => e.key === key);
+      if (existing) { existing.color = color; existing.opacity = opacity; }   // 이미 있으면 색만 갱신
+      else { entries.push({ key, color, opacity }); syncDefaultColor(); }     // 새로 추가하면 다음 기본색으로
+      applyColors(); renderChips();
+      const t = cfg.target(key);                                              // 추가한 곳으로 이동
+      if (t && t.center) map.flyTo({ center: t.center, zoom: t.zoom, duration: 1200, essential: true });
+      input.value = '';
+      if (cfg.suggest) el('list').innerHTML = '';    // 입력창을 비웠으니 후보도 같이 치운다
+    }
+
+    /* 입력한 글자에 맞는 후보만 datalist 에 채운다. 미리 다 넣어두면 입력창을
+       누르는 것만으로 수백 개가 통째로 펼쳐져 쓸모가 없다. */
+    function refreshSuggestions() {
+      const dl = el('list');
+      dl.innerHTML = '';
+      const q = input.value.trim();
+      if (!q) return;
+      cfg.suggest(q).slice(0, SUGGEST_MAX).forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s.dup ? s.n : s.s;               // 동명이면 정식명으로 올려 서로 구분
+        if (s.dup) opt.label = s.n;
+        dl.appendChild(opt);
+      });
+    }
+
+    function load() {
+      if (!cfg.load || loaded) return Promise.resolve(true);
+      if (loading) return loading;
+      loading = Promise.resolve(cfg.load(setText)).then((ok) => {
+        if (ok === false) { loading = null; return false; }   // 다음 탭 진입 때 재시도
+        loaded = true;
+        // datalist 는 비워둔 채로 시작한다 (입력에 따라 refreshSuggestions 가 채운다)
+        if (cfg.lazyInput) { el('list').innerHTML = ''; input.disabled = false; }
+        addLayer(); applyColors();
+        return true;
+      });
+      return loading;
+    }
+
+    function reset() { entries.length = 0; applyColors(); renderChips(); syncDefaultColor(); }
+
+    input.addEventListener('change', addFromInput);   // 목록에서 선택(클릭) 시 바로 추가
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addFromInput(); } });   // 직접 입력 후 Enter
+    el('clear').addEventListener('click', reset);
+    if (cfg.suggest) input.addEventListener('input', refreshSuggestions);
+    syncDefaultColor();
+
+    return {
+      id: cfg.id, layer: cfg.layer, prop: cfg.prop, label: cfg.label,
+      entries: () => entries, addLayer, applyColors, reset, load,
+      ready: () => !cfg.lazyInput || loaded,          // 입력창을 열어도 되는지 (setUI 가 물어본다)
+    };
+  }
+
+  /* ── 국가 ── */
+  const isoToCountry = {}, nameToIso = {};
+  COUNTRIES.forEach(c => { isoToCountry[c.i] = c; });
+  (function fillCountryList() {                       // 검색 데이터리스트 채우기 (표시이름 → ISO 매핑)
     const dl = $('country-list');
     COUNTRIES.forEach(c => {
       const nm = cleanName(c.n);
@@ -265,77 +475,8 @@ function initRecorder(map) {
     });
   })();
 
-  // 국가 경계 소스/레이어 추가 — 스타일이 바뀔 때마다 다시 깔아야 함
-  function addCountryLayer() {
-    if (map.getSource('country-boundaries')) return;
-    map.addSource('country-boundaries', { type: 'vector', url: 'mapbox://mapbox.country-boundaries-v1' });
-    // worldview 필터: 분쟁 경계 중복 방지 (US 세계관 + 'all')
-    const filter = ['all',
-      ['==', ['get', 'disputed'], 'false'],
-      ['any', ['==', 'all', ['get', 'worldview']], ['in', 'US', ['get', 'worldview']]]
-    ];
-    // 라벨(symbol) 아래에 삽입 → 글씨는 색칠 위로
-    const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
-    map.addLayer({
-      id: 'country-color-fill', type: 'fill', source: 'country-boundaries',
-      'source-layer': 'country_boundaries', filter,
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
-    }, firstSymbol);
-    applyColors();
-    raiseBoundaries();   // 경계선을 이 색칠 위로
-  }
-
-  function applyColors() {
-    const layer = 'country-color-fill';
-    if (!map.getLayer(layer)) return;
-    if (!colored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
-    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
-    const col = ['match', ['get', 'iso_3166_1_alpha_3']], op = ['match', ['get', 'iso_3166_1_alpha_3']];
-    colored.forEach(e => { col.push(e.iso, e.color); op.push(e.iso, e.opacity); });
-    col.push('rgba(0,0,0,0)'); op.push(0);
-    map.setPaintProperty(layer, 'fill-color', col);
-    map.setPaintProperty(layer, 'fill-opacity', op);
-  }
-
-  function renderChips() {
-    const wrap = $('country-list-wrap'), box = $('colored-list');
-    wrap.style.display = colored.length ? 'block' : 'none';
-    box.innerHTML = '';
-    colored.forEach((e, i) => {
-      const chip = document.createElement('div');
-      chip.className = 'chip';
-      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm">${e.name}</span><span class="x" title="제거">✕</span>`;
-      wireChipDot(chip, colored[i], applyColors);
-      chip.querySelector('.x').addEventListener('click', () => { colored.splice(i, 1); applyColors(); renderChips(); syncDefaultColor(); });
-      box.appendChild(chip);
-    });
-  }
-
-  function addCountryFromInput() {
-    const iso = nameToIso[$('country-input').value.trim()];
-    if (!iso) { return; }
-    const color = $('country-color').value;
-    const opacity = nextOpacity('country');
-    const c = isoToCountry[iso];
-    const existing = colored.find(e => e.iso === iso);
-    if (existing) { existing.color = color; existing.opacity = opacity; }              // 이미 있으면 색만 갱신
-    else { colored.push({ iso, color, name: cleanName(c.n), opacity }); syncDefaultColor(); } // 새 추가 시 다음 기본색으로
-    applyColors(); renderChips();
-    map.flyTo({ center: c.c, zoom: c.z, duration: 1200, essential: true });  // 추가한 나라로 이동
-    $('country-input').value = '';
-  }
-  $('country-input').addEventListener('change', addCountryFromInput);   // 목록에서 선택(클릭) 시 바로 추가
-  /* 한글 입력 중(조합 중)의 Enter 는 글자를 확정하는 키다. 이때 추가 처리를 하면 안 된다.
-     처리해버리면 입력창을 비운 직후 IME 가 조합 중이던 마지막 글자('도봉구' 의 '구')를
-     빈 칸에 써넣고, 그 값으로 change 가 한 번 더 돌아 엉뚱한 지역이 함께 칠해졌다.
-     ('구' 는 정식명 부분일치로 목록 첫 항목인 종로구를 집어냈다) */
-  const isComposingEnter = (e) => e.isComposing || e.keyCode === 229;
-  $('country-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addCountryFromInput(); } });   // 직접 입력 후 Enter
-
-  $('country-clear').addEventListener('click', () => { colored.length = 0; applyColors(); renderChips(); syncDefaultColor(); });
-
-  /* ── 대한민국 시도 색칠 ── */
-  /* 시도 경계는 두 벌을 쓴다.
+  /* ── 대한민국 시도 ──
+     시도 경계는 두 벌을 쓴다.
      regions.js 의 SIDO_GEO 는 17개를 통틀어 19,286점뿐이고 편차가 극심하다
      (서울 67점 · 광주 48점 ↔ 전남 8,871점). 광역시를 확대하면 다각형이 그대로 드러난다.
      그래서 시군구를 시도 단위로 합친 고해상도본(384,303점)을 따로 두고, 시도 탭을 열 때
@@ -343,432 +484,104 @@ function initRecorder(map) {
      만드는 법: node recorder/tools/build-sido-hires.mjs */
   const SIDO_HIRES_URL = './recorder/js/data/sido-hires.json';
   let SIDO_HIRES = null;
-  let _sidoHiresLoading = null;
-  const setSidoStatus = (msg) => { const el = $('sido-status'); if (el) el.textContent = msg || ''; };
-  function loadSidoHires() {
-    if (SIDO_HIRES) return Promise.resolve(true);
-    if (_sidoHiresLoading) return _sidoHiresLoading;
-    // 색칠은 이미 되는 상태라 '불러오는 중'이 아니라 '정밀해지는 중'이라고 알린다
-    setSidoStatus('경계를 정밀하게 불러오는 중…');
-    _sidoHiresLoading = fetch(SIDO_HIRES_URL)
-      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
-      .then((geo) => {
-        SIDO_HIRES = geo;
-        const src = map.getSource('sido-boundaries');
-        if (src) src.setData(geo);   // 이미 깔려 있으면 형태만 교체 — 칠한 색은 그대로 유지된다
-        setSidoStatus('');
-        return true;
-      })
-      .catch((e) => {
-        _sidoHiresLoading = null;    // 다음 탭 진입 때 다시 시도
-        setSidoStatus('정밀 경계를 불러오지 못했습니다 — 기본 경계로 표시합니다.');
-        console.warn('시도 고해상도 경계 로드 실패:', e.message);
-        return false;
-      });
-    return _sidoHiresLoading;
-  }
-
-  const sidoColored = [];   // [{ name, color }]
-  const sidoMeta = {};      // name → {c, z}
-  SIDO_META.forEach(s => { sidoMeta[s.n] = s; });
-  // 검색 키워드: 짧은 별칭도 매칭 (경기, 서울 등). 시도명/약칭에 입력이 포함되면 OK
-  (function fillSidoList() {
+  const sidoMeta = {};
+  SIDO_META.forEach(s => { sidoMeta[s.n] = { n: s.n, s: s.s, c: s.c, z: s.z }; });
+  (function fillSidoList() {                          // 짧은 별칭(경기·서울)으로도 검색되게 약칭을 올린다
     const dl = $('sido-list');
     SIDO_META.forEach(s => { const opt = document.createElement('option'); opt.value = s.s; dl.appendChild(opt); });
   })();
-  // 입력 → 정식 시도명 (부분일치 허용: '경기'·'경기도' → '경기도', 약칭도 매칭)
-  function resolveSido(q) {
-    q = q.trim(); if (!q) return null;
-    if (sidoMeta[q]) return q;
-    const strip = (n) => n.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/, '');
-    const exact = SIDO_META.find(s => s.n === q || s.s === q || strip(s.n) === q);
-    if (exact) return exact.n;
-    // 시군구와 같은 이유로 후보가 하나일 때만, 그리고 두 글자 이상일 때만 받아들인다
-    // ('도' 한 글자에 경기도가 잡히던 문제 — resolveSigungu 주석 참고)
-    const only = (list) => (list.length === 1 ? list[0].n : null);
-    if (q.length < 2) return null;
-    return only(SIDO_META.filter(s => s.s.startsWith(q) || strip(s.n).startsWith(q)))
-        || only(SIDO_META.filter(s => s.n.includes(q) || s.s.includes(q)));
-  }
 
-  function addSidoLayer() {
-    if (map.getSource('sido-boundaries')) return;
-    /* tolerance: 0 — mapbox-gl 은 GeoJSON 을 타일로 만들 때 자체적으로 한 번 더
-       단순화한다 (기본 0.375). 실측하니 줌 6 에서 도네츠크주가 3,055개 중
-       1,197개만 남았다. 데이터를 아무리 촘촘하게 만들어도 화면에서는 각져 보이던
-       원인. 0 으로 두면 우리가 준비한 정밀도가 그대로 그려진다. */
-    map.addSource('sido-boundaries', { type: 'geojson', tolerance: 0, data: SIDO_HIRES || SIDO_GEO });
-    const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
-    map.addLayer({
-      id: 'sido-color-fill', type: 'fill', source: 'sido-boundaries',
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
-    }, firstSymbol);
-    applySidoColors();
-    raiseBoundaries();   // 경계선을 이 색칠 위로
-  }
-  function applySidoColors() {
-    const layer = 'sido-color-fill';
-    if (!map.getLayer(layer)) return;
-    if (!sidoColored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
-    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
-    const col = ['match', ['get', 'name']], op = ['match', ['get', 'name']];
-    sidoColored.forEach(e => { col.push(e.name, e.color); op.push(e.name, e.opacity); });
-    col.push('rgba(0,0,0,0)'); op.push(0);
-    map.setPaintProperty(layer, 'fill-color', col);
-    map.setPaintProperty(layer, 'fill-opacity', op);
-  }
-  function renderSidoChips() {
-    const wrap = $('sido-list-wrap'), box = $('sido-colored-list');
-    wrap.style.display = sidoColored.length ? 'block' : 'none';
-    box.innerHTML = '';
-    sidoColored.forEach((e, i) => {
-      const chip = document.createElement('div');
-      chip.className = 'chip';
-      const short = e.name.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/,'') || e.name;
-      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm">${short}</span><span class="x" title="제거">✕</span>`;
-      wireChipDot(chip, sidoColored[i], applySidoColors);
-      chip.querySelector('.x').addEventListener('click', () => { sidoColored.splice(i, 1); applySidoColors(); renderSidoChips(); });
-      box.appendChild(chip);
-    });
-  }
-  function addSidoFromInput() {
-    const name = resolveSido($('sido-input').value);
-    if (!name) return;
-    const color = $('sido-color').value;
-    const opacity = nextOpacity('sido');
-    const existing = sidoColored.find(e => e.name === name);
-    if (existing) { existing.color = color; existing.opacity = opacity; }
-    else sidoColored.push({ name, color, opacity });
-    applySidoColors(); renderSidoChips();
-    const m = sidoMeta[name];
-    if (m) map.flyTo({ center: m.c, zoom: m.z, duration: 1200, essential: true });
-    $('sido-input').value = '';
-  }
-  $('sido-input').addEventListener('change', addSidoFromInput);   // 목록에서 선택(클릭) 시 바로 추가
-  $('sido-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addSidoFromInput(); } });   // 직접 입력 후 Enter
-  $('sido-clear').addEventListener('click', () => { sidoColored.length = 0; applySidoColors(); renderSidoChips(); });
-
-  /* ── 해외 행정구역(주·도) 색칠 ──
+  /* ── 해외 행정구역(주·도) ──
      국가 색칠은 Mapbox 타일(country-boundaries-v1)이라 우리 데이터가 필요 없지만,
      그 아래 단위(미국 주·일본 도도부현 등)는 Mapbox 기본 타일에 없다.
-     Natural Earth 4,589개를 파일로 두고 시군구와 같이 탭을 열 때만 받아온다. */
-  const ADMIN1_URL = './recorder/js/data/admin1.json';
-  const admin1Colored = [];
-  const admin1Meta = {};
-  let ADMIN1_GEO = null;
-  let _admin1Loading = null;
+     Natural Earth 4,589개를 파일로 두고 탭을 열 때만 받아온다. */
+  const admin1Meta = {}, sigunguMeta = {};
+  let ADMIN1_GEO = null, SIGUNGU_GEO = null;
 
-  const setAdmin1Status = (msg) => { const el = $('admin1-status'); if (el) el.textContent = msg || ''; };
-
-  function loadAdmin1() {
-    if (ADMIN1_GEO) return Promise.resolve(true);
-    if (_admin1Loading) return _admin1Loading;
-    setAdmin1Status('경계 데이터를 불러오는 중…');
-    _admin1Loading = fetch(ADMIN1_URL)
-      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
-      .then((geo) => {
-        ADMIN1_GEO = geo;
-        (geo.features || []).forEach((f) => {
-          const p = f.properties || {};
-          if (!p.name) return;
-          admin1Meta[p.name] = { n: p.name, s: p.short || p.name, country: p.country || '', c: p.c, z: p.z || 6 };
-        });
-        const seen = {};
-        Object.values(admin1Meta).forEach(s => { seen[s.s] = (seen[s.s] || 0) + 1; });
-        Object.values(admin1Meta).forEach(s => { s.dup = seen[s.s] > 1; });
-        $('admin1-list').innerHTML = '';
-        $('admin1-input').disabled = false;
-        setAdmin1Status('');
-        addAdmin1Layer();
-        return true;
-      })
-      .catch((e) => {
-        _admin1Loading = null;
-        setAdmin1Status(
-          e.message === '404'
-            ? '경계 데이터 파일이 없습니다 (js/data/admin1.json). README 의 준비 절차를 참고하세요.'
-            : '경계 데이터를 불러오지 못했습니다: ' + e.message
-        );
-        return false;
-      });
-    return _admin1Loading;
-  }
-
-  function resolveAdmin1(q) {
-    q = q.trim(); if (!q) return null;
-    if (admin1Meta[q]) return q;
-    const all = Object.values(admin1Meta);
-    const exact = all.find((s) => s.s === q);
-    if (exact) return exact.n;
-    // 시군구와 같은 이유로 후보가 하나일 때만 받아들인다 (resolveSigungu 주석 참고)
-    const only = (list) => (list.length === 1 ? list[0].n : null);
-    return only(all.filter((s) => s.s.startsWith(q)))
-        || only(all.filter((s) => s.s.includes(q)))
-        || only(all.filter((s) => s.n.includes(q)));
-  }
-
-  function addAdmin1Layer() {
-    if (!ADMIN1_GEO || map.getSource('admin1-boundaries')) return;
-    if (!styleReady) return;   // 스타일 교체 중 — 위에 걸어둔 style.load 핸들러가 다시 부른다
-    map.addSource('admin1-boundaries', { type: 'geojson', tolerance: 0, data: ADMIN1_GEO });   // tolerance 0 이유는 sido-boundaries 주석 참고
-    const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
-    map.addLayer({
-      id: 'admin1-color-fill', type: 'fill', source: 'admin1-boundaries',
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
-    }, firstSymbol);
-    applyAdmin1Colors();
-    raiseBoundaries();   // 경계선을 이 색칠 위로
-  }
-  function applyAdmin1Colors() {
-    const layer = 'admin1-color-fill';
-    if (!map.getLayer(layer)) return;
-    if (!admin1Colored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
-    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
-    const col = ['match', ['get', 'name']], op = ['match', ['get', 'name']];
-    admin1Colored.forEach(e => { col.push(e.name, e.color); op.push(e.name, e.opacity); });
-    col.push('rgba(0,0,0,0)'); op.push(0);
-    map.setPaintProperty(layer, 'fill-color', col);
-    map.setPaintProperty(layer, 'fill-opacity', op);
-  }
-  function renderAdmin1Chips() {
-    const wrap = $('admin1-list-wrap'), box = $('admin1-colored-list');
-    wrap.style.display = admin1Colored.length ? 'block' : 'none';
-    box.innerHTML = '';
-    // 같은 약칭('북부' 등)을 여러 개 칠했을 때만 국가명을 앞에 붙인다
-    const shortOf = (n) => (admin1Meta[n] && admin1Meta[n].s) || n;
-    const cnt = {};
-    admin1Colored.forEach(e => { const s = shortOf(e.name); cnt[s] = (cnt[s] || 0) + 1; });
-    admin1Colored.forEach((e, i) => {
-      const chip = document.createElement('div');
-      chip.className = 'chip';
-      const s = shortOf(e.name);
-      const ctry = (admin1Meta[e.name] && admin1Meta[e.name].country) || '';
-      const label = cnt[s] > 1 && ctry ? `${ctry} ${s}` : s;
-      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm" title="${escAttr(e.name)}">${label}</span><span class="x" title="제거">✕</span>`;
-      wireChipDot(chip, admin1Colored[i], applyAdmin1Colors);
-      chip.querySelector('.x').addEventListener('click', () => { admin1Colored.splice(i, 1); applyAdmin1Colors(); renderAdmin1Chips(); });
-      box.appendChild(chip);
-    });
-  }
-  function addAdmin1FromInput() {
-    const name = resolveAdmin1($('admin1-input').value);
-    if (!name) return;
-    const color = $('admin1-color').value;
-    const opacity = nextOpacity('admin1');
-    const existing = admin1Colored.find(e => e.name === name);
-    if (existing) { existing.color = color; existing.opacity = opacity; }
-    else admin1Colored.push({ name, color, opacity });
-    applyAdmin1Colors(); renderAdmin1Chips();
-    const m = admin1Meta[name];
-    if (m && m.c) map.flyTo({ center: m.c, zoom: m.z || 6, duration: 1200, essential: true });
-    $('admin1-input').value = '';
-    $('admin1-list').innerHTML = '';
-  }
-  const ADMIN1_SUGGEST_MAX = 12;
-  function refreshAdmin1Suggestions() {
-    const dl = $('admin1-list');
-    dl.innerHTML = '';
-    const q = $('admin1-input').value.trim();
-    if (!q || !ADMIN1_GEO) return;
-    // 시군구와 같은 순위: 지역명 앞글자 → 지역명 부분 → 국가명까지 포함한 정식명
-    const byName = [], byPart = [], byCountry = [];
-    for (const s of Object.values(admin1Meta)) {
-      if (s.s.startsWith(q)) byName.push(s);
-      else if (s.s.includes(q)) byPart.push(s);
-      else if (s.n.includes(q)) byCountry.push(s);
-    }
-    byName.concat(byPart, byCountry).slice(0, ADMIN1_SUGGEST_MAX).forEach((s) => {
-      const opt = document.createElement('option');
-      opt.value = s.dup ? s.n : s.s;
-      if (s.dup) opt.label = s.n;
-      dl.appendChild(opt);
-    });
-  }
-  $('admin1-input').addEventListener('input', refreshAdmin1Suggestions);
-  $('admin1-input').addEventListener('change', addAdmin1FromInput);
-  $('admin1-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addAdmin1FromInput(); } });
-  $('admin1-clear').addEventListener('click', () => { admin1Colored.length = 0; applyAdmin1Colors(); renderAdmin1Chips(); });
-
-  /* ── 대한민국 시군구 색칠 ──
-     시도(17개)와 달리 229개라 경계 데이터가 수 MB다. 앱 첫 로딩을 무겁게 하지 않도록
-     regions.js 에 인라인으로 넣지 않고, 시군구 탭을 처음 열 때만 파일을 받아온다. */
-  const SIGUNGU_URL = './recorder/js/data/sigungu.json';
-  const sigunguColored = [];   // [{ name, color }]
-  const sigunguMeta = {};      // 정식명 → { n, s, c, z }
-  let SIGUNGU_GEO = null;      // 로드 전 null
-  let _sigunguLoading = null;  // 중복 fetch 방지
-
-  const setSigunguStatus = (msg) => { const el = $('sigungu-status'); if (el) el.textContent = msg || ''; };
-
-  function loadSigungu() {
-    if (SIGUNGU_GEO) return Promise.resolve(true);
-    if (_sigunguLoading) return _sigunguLoading;
-    setSigunguStatus('경계 데이터를 불러오는 중…');
-    _sigunguLoading = fetch(SIGUNGU_URL)
-      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
-      .then((geo) => {
-        SIGUNGU_GEO = geo;
-        (geo.features || []).forEach((f) => {
-          const p = f.properties || {};
-          if (!p.name) return;
-          sigunguMeta[p.name] = { n: p.name, s: p.short || p.name, sido: p.sido || '', c: p.c, z: p.z || 10 };
-        });
-        // 약칭이 겹치는 것(중구·동구 등)은 후보에 정식명으로 올려야 서로 구분되어 고를 수 있다
-        const seen = {};
-        Object.values(sigunguMeta).forEach(s => { seen[s.s] = (seen[s.s] || 0) + 1; });
-        Object.values(sigunguMeta).forEach(s => { s.dup = seen[s.s] > 1; });
-        // datalist 는 비워둔 채 시작한다 — 채워두면 입력창을 누르는 순간 252개가 통째로 펼쳐진다
-        $('sigungu-list').innerHTML = '';
-        $('sigungu-input').disabled = false;
-        setSigunguStatus('');   // 로딩이 끝나면 안내를 지운다 (로딩 중·오류 문구만 남김)
-        addSigunguLayer();
-        return true;
-      })
-      .catch((e) => {
-        _sigunguLoading = null;   // 다음 탭 진입 때 다시 시도할 수 있게
-        setSigunguStatus(
-          e.message === '404'
-            ? '경계 데이터 파일이 없습니다 (js/data/sigungu.json). README 의 시군구 데이터 준비 절차를 참고하세요.'
-            : '경계 데이터를 불러오지 못했습니다: ' + e.message
-        );
-        return false;
-      });
-    return _sigunguLoading;
-  }
-
-  // 입력 → 정식 시군구명. 동명이 많아(중구·남구 등) 시도명까지 포함한 정식명으로 해석한다.
-  function resolveSigungu(q) {
-    q = q.trim(); if (!q) return null;
-    if (sigunguMeta[q]) return q;
-    const all = Object.values(sigunguMeta);
-    const exact = all.find((s) => s.s === q);
-    if (exact) return exact.n;
-    /* 폴백은 후보가 하나로 좁혀질 때만 받아들인다.
-       예전에는 첫 일치를 그대로 썼는데, '구'·'시' 처럼 여러 곳에 걸리는 조각이 들어오면
-       목록 맨 앞(종로구)이 조용히 잡혔다. 애매하면 아무것도 고르지 않는 편이 낫다.
-       한 글자는 아예 보지 않는다 — 시군구 약칭은 모두 두 글자 이상이라 한 글자 입력은
-       검색어가 아니라 조합 중 흘러든 조각으로 보는 게 맞다 ('시' → 시흥시 같은 오작동 방지). */
-    const only = (list) => (list.length === 1 ? list[0].n : null);
-    if (q.length < 2) return null;
-    return only(all.filter((s) => s.s.startsWith(q)))
-        || only(all.filter((s) => s.s.includes(q)))
-        || only(all.filter((s) => s.n.includes(q)));
-  }
-
-  function addSigunguLayer() {
-    if (!SIGUNGU_GEO || map.getSource('sigungu-boundaries')) return;
-    // 스타일 교체 직후에는 소스·레이어를 붙일 수 없고 예외가 난다. 준비되면 다시 시도한다.
-    // (여기서 던지면 loadSigungu 의 catch 가 '로드 실패'로 처리해버리는데, 이미
-    //  SIGUNGU_GEO 는 채워져 있어서 재시도해도 early return 으로 영영 복구가 안 됐다)
-    if (!styleReady) return;   // 스타일 교체 중 — 위에 걸어둔 style.load 핸들러가 다시 부른다
-    map.addSource('sigungu-boundaries', { type: 'geojson', tolerance: 0, data: SIGUNGU_GEO }); // tolerance 0 이유는 sido-boundaries 주석 참고
-    const firstSymbol = (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id;
-    map.addLayer({
-      id: 'sigungu-color-fill', type: 'fill', source: 'sigungu-boundaries',
-      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY }
-    }, firstSymbol);
-    applySigunguColors();
-    raiseBoundaries();   // 경계선을 이 색칠 위로
-  }
-  function applySigunguColors() {
-    const layer = 'sigungu-color-fill';
-    if (!map.getLayer(layer)) return;
-    if (!sigunguColored.length) { map.setPaintProperty(layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
-    // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
-    const col = ['match', ['get', 'name']], op = ['match', ['get', 'name']];
-    sigunguColored.forEach(e => { col.push(e.name, e.color); op.push(e.name, e.opacity); });
-    col.push('rgba(0,0,0,0)'); op.push(0);
-    map.setPaintProperty(layer, 'fill-color', col);
-    map.setPaintProperty(layer, 'fill-opacity', op);
-  }
-  function renderSigunguChips() {
-    const wrap = $('sigungu-list-wrap'), box = $('sigungu-colored-list');
-    wrap.style.display = sigunguColored.length ? 'block' : 'none';
-    box.innerHTML = '';
-    // 동명 시군구(중구 6곳, 동구 6곳 …)를 여러 개 칠하면 약칭만으로는 목록에서 구분이 안 된다.
-    // 지금 칠한 것들 중에 약칭이 겹치는 경우에만 시도명을 앞에 붙인다.
-    const shortOf = (n) => (sigunguMeta[n] && sigunguMeta[n].s) || n;
-    const shortCount = {};
-    sigunguColored.forEach(e => { const s = shortOf(e.name); shortCount[s] = (shortCount[s] || 0) + 1; });
-
-    sigunguColored.forEach((e, i) => {
-      const chip = document.createElement('div');
-      chip.className = 'chip';
-      const s = shortOf(e.name);
-      const sido = (sigunguMeta[e.name] && sigunguMeta[e.name].sido) || '';
-      const short = shortCount[s] > 1 && sido ? `${sido.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/, '')} ${s}` : s;
-      chip.innerHTML = `${dotHTML(e.color, e.opacity)}<span class="nm" title="${e.name}">${short}</span><span class="x" title="제거">✕</span>`;
-      wireChipDot(chip, sigunguColored[i], applySigunguColors);
-      chip.querySelector('.x').addEventListener('click', () => { sigunguColored.splice(i, 1); applySigunguColors(); renderSigunguChips(); });
-      box.appendChild(chip);
-    });
-  }
-  function addSigunguFromInput() {
-    const name = resolveSigungu($('sigungu-input').value);
-    if (!name) return;
-    const color = $('sigungu-color').value;
-    const opacity = nextOpacity('sigungu');
-    const existing = sigunguColored.find(e => e.name === name);
-    if (existing) { existing.color = color; existing.opacity = opacity; }
-    else sigunguColored.push({ name, color, opacity });
-    applySigunguColors(); renderSigunguChips();
-    const m = sigunguMeta[name];
-    if (m && m.c) map.flyTo({ center: m.c, zoom: m.z || 10, duration: 1200, essential: true });
-    $('sigungu-input').value = '';
-    $('sigungu-list').innerHTML = '';   // 입력창을 비웠으니 후보도 같이 치운다
-  }
-  /* 입력한 글자에 맞는 후보만 datalist 에 채운다.
-     252개를 미리 넣어두면 입력창을 누르는 것만으로 목록 전체가 펼쳐져 쓸모가 없다.
-     앞글자 일치를 먼저, 그다음 부분 일치 순으로 최대 12개까지만. */
-  const SIGUNGU_SUGGEST_MAX = 12;
-  function refreshSigunguSuggestions() {
-    const dl = $('sigungu-list');
-    dl.innerHTML = '';
-    const q = $('sigungu-input').value.trim();
-    if (!q || !SIGUNGU_GEO) return;
-    // 순위를 나눠야 한다. 정식명에는 시도가 붙어 있어서('강원특별자치도 춘천시'),
-    // 정식명 일치를 같이 취급하면 '강' 을 쳤을 때 강원도 시·군이 강남구보다 앞에 끼어든다.
-    // 시군구 이름 자체가 맞는 것을 먼저 보여주고, 시도로 훑는 검색(예: 경기)은 뒤로 민다.
-    const byName = [], byPart = [], bySido = [];
-    for (const s of Object.values(sigunguMeta)) {
-      if (s.s.startsWith(q)) byName.push(s);
-      else if (s.s.includes(q)) byPart.push(s);
-      else if (s.n.includes(q)) bySido.push(s);
-    }
-    byName.concat(byPart, bySido).slice(0, SIGUNGU_SUGGEST_MAX).forEach((s) => {
-      const opt = document.createElement('option');
-      opt.value = s.dup ? s.n : s.s;   // 동명이면 정식명으로 올려 서로 구분
-      if (s.dup) opt.label = s.n;
-      dl.appendChild(opt);
-    });
-  }
-  $('sigungu-input').addEventListener('input', refreshSigunguSuggestions);
-  $('sigungu-input').addEventListener('change', addSigunguFromInput);
-  $('sigungu-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !isComposingEnter(e)) { e.preventDefault(); addSigunguFromInput(); } });
-  $('sigungu-clear').addEventListener('click', () => { sigunguColored.length = 0; applySigunguColors(); renderSigunguChips(); });
-
-  /* 색칠 모드 4종. 여기에 한 줄로 모아둬야 아래 토글·SVG 내보내기·녹화 중 잠금에서
-     빠뜨리지 않는다. (모드를 늘릴 때마다 한 군데씩 누락돼 버그가 났던 부분) */
-  const COLOR_MODES = [
-    { id: 'country', seg: 'seg-country', block: 'country-block' },
-    { id: 'admin1',  seg: 'seg-admin1',  block: 'admin1-block',  load: loadAdmin1 },
-    { id: 'sido',    seg: 'seg-sido',    block: 'sido-block',    load: loadSidoHires },
-    { id: 'sigungu', seg: 'seg-sigungu', block: 'sigungu-block', load: loadSigungu },
+  const PAINTERS = [
+    createRegionPainter({
+      id: 'country', source: 'country-boundaries', layer: 'country-color-fill', prop: 'iso_3166_1_alpha_3',
+      sourceSpec: () => ({ type: 'vector', url: 'mapbox://mapbox.country-boundaries-v1' }),
+      sourceLayer: 'country_boundaries',
+      // worldview 필터: 분쟁 경계 중복 방지 (US 세계관 + 'all')
+      filter: ['all',
+        ['==', ['get', 'disputed'], 'false'],
+        ['any', ['==', 'all', ['get', 'worldview']], ['in', 'US', ['get', 'worldview']]]],
+      cycleDefaultColor: true,
+      resolve:  (q) => nameToIso[String(q).trim()] || null,
+      fullName: (iso) => cleanName(isoToCountry[iso].n),
+      label:    (iso) => cleanName(isoToCountry[iso].n),
+      target:   (iso) => ({ center: isoToCountry[iso].c, zoom: isoToCountry[iso].z }),
+    }),
+    createRegionPainter({
+      id: 'admin1', source: 'admin1-boundaries', layer: 'admin1-color-fill', prop: 'name',
+      sourceSpec: () => ADMIN1_GEO && { type: 'geojson', tolerance: 0, data: ADMIN1_GEO },   // tolerance 0 이유는 sido 주석 참고
+      lazyInput: true,
+      resolve:   (q) => resolveByMeta(admin1Meta, q),
+      suggest:   (q) => suggestByMeta(admin1Meta, q),
+      fullName:  (n) => n,
+      label:     (n) => (admin1Meta[n] && admin1Meta[n].s) || n,
+      qualifier: (n) => (admin1Meta[n] && admin1Meta[n].q) || '',
+      target:    (n) => admin1Meta[n] && { center: admin1Meta[n].c, zoom: admin1Meta[n].z },
+      load: lazyGeoLoad('./recorder/js/data/admin1.json', 'js/data/admin1.json',
+        (geo) => { ADMIN1_GEO = geo; Object.assign(admin1Meta, buildMeta(geo, 'country', 6)); }),
+    }),
+    createRegionPainter({
+      id: 'sido', source: 'sido-boundaries', layer: 'sido-color-fill', prop: 'name',
+      /* tolerance: 0 — mapbox-gl 은 GeoJSON 을 타일로 만들 때 자체적으로 한 번 더
+         단순화한다 (기본 0.375). 실측하니 줌 6 에서 도네츠크주가 3,055개 중
+         1,197개만 남았다. 데이터를 아무리 촘촘하게 만들어도 화면에서는 각져 보이던
+         원인. 0 으로 두면 우리가 준비한 정밀도가 그대로 그려진다. */
+      sourceSpec: () => ({ type: 'geojson', tolerance: 0, data: SIDO_HIRES || SIDO_GEO }),
+      resolve:  (q) => resolveByMeta(sidoMeta, q, (s) => stripSido(s.n)),
+      fullName: (n) => n,
+      label:    (n) => stripSido(n) || n,
+      target:   (n) => sidoMeta[n] && { center: sidoMeta[n].c, zoom: sidoMeta[n].z },
+      // 색칠은 SIDO_GEO 로 이미 되는 상태라 '불러오는 중'이 아니라 '정밀해지는 중'이라고 알린다
+      load: (setText) => {
+        setText('경계를 정밀하게 불러오는 중…');
+        return fetchGeo(SIDO_HIRES_URL)
+          .then((geo) => {
+            SIDO_HIRES = geo;
+            const src = map.getSource('sido-boundaries');
+            if (src) src.setData(geo);   // 이미 깔려 있으면 형태만 교체 — 칠한 색은 그대로 유지된다
+            setText('');
+            return true;
+          })
+          .catch((e) => {
+            setText('정밀 경계를 불러오지 못했습니다 — 기본 경계로 표시합니다.');
+            console.warn('시도 고해상도 경계 로드 실패:', e.message);
+            return false;
+          });
+      },
+    }),
+    createRegionPainter({
+      id: 'sigungu', source: 'sigungu-boundaries', layer: 'sigungu-color-fill', prop: 'name',
+      sourceSpec: () => SIGUNGU_GEO && { type: 'geojson', tolerance: 0, data: SIGUNGU_GEO },
+      lazyInput: true,
+      resolve:   (q) => resolveByMeta(sigunguMeta, q),
+      suggest:   (q) => suggestByMeta(sigunguMeta, q),
+      fullName:  (n) => n,
+      label:     (n) => (sigunguMeta[n] && sigunguMeta[n].s) || n,
+      qualifier: (n) => stripSido((sigunguMeta[n] && sigunguMeta[n].q) || ''),
+      target:    (n) => sigunguMeta[n] && { center: sigunguMeta[n].c, zoom: sigunguMeta[n].z },
+      load: lazyGeoLoad('./recorder/js/data/sigungu.json', 'js/data/sigungu.json',
+        (geo) => { SIGUNGU_GEO = geo; Object.assign(sigunguMeta, buildMeta(geo, 'sido', 10)); }),
+    }),
   ];
+
+  /* 색칠 모드 4종. 여기 PAINTERS 한 곳에 모여 있어야 토글·PSD/SVG 내보내기·녹화 중
+     잠금에서 빠뜨리지 않는다. (모드를 늘릴 때마다 한 군데씩 누락돼 버그가 났던 부분) */
   function setColorMode(mode) {
-    COLOR_MODES.forEach((m) => {
-      $(m.seg).classList.toggle('active', m.id === mode);
-      $(m.block).style.display = m.id === mode ? '' : 'none';
+    PAINTERS.forEach((p) => {
+      $(`seg-${p.id}`).classList.toggle('active', p.id === mode);
+      $(`${p.id}-block`).style.display = p.id === mode ? '' : 'none';
+      p.reset();                     // 모드 전환 시 색칠 전부 초기화
     });
-    // 모드 전환 시 색칠 전부 초기화
-    colored.length = 0; applyColors(); renderChips(); syncDefaultColor();
-    admin1Colored.length = 0; applyAdmin1Colors(); renderAdmin1Chips();
-    sidoColored.length = 0; applySidoColors(); renderSidoChips();
-    sigunguColored.length = 0; applySigunguColors(); renderSigunguChips();
-    const m = COLOR_MODES.find(x => x.id === mode);
-    if (m && m.load) m.load();   // 처음 열 때만 실제로 받아옴
+    const p = PAINTERS.find(x => x.id === mode);
+    if (p) p.load();                 // 처음 열 때만 실제로 받아옴
   }
-  COLOR_MODES.forEach((m) => $(m.seg).addEventListener('click', () => setColorMode(m.id)));
+  PAINTERS.forEach((p) => $(`seg-${p.id}`).addEventListener('click', () => setColorMode(p.id)));
 
   /* ── 지역/주소 검색 (Mapbox Geocoding) ── */
   let _geoTimer = null, _geoSeq = 0;
@@ -816,7 +629,9 @@ function initRecorder(map) {
       list.forEach(p => {
         const item = document.createElement('div');
         item.className = 'geo-item';
-        item.innerHTML = `<div class="gi-name">${escAttr(p.name)}</div>${p.ctx ? `<div class="gi-ctx">${escAttr(p.ctx)}</div>` : ''}`;
+        // 출처를 같이 보여준다 — 같은 이름이 여러 곳에 있을 때 어느 DB 가 준 값인지가 판단에 도움이 된다
+        const meta = [p.ctx, p.src].filter(Boolean).map(escAttr).join(' · ');
+        item.innerHTML = `<div class="gi-name">${escAttr(p.name)}</div>${meta ? `<div class="gi-ctx">${meta}</div>` : ''}`;
         item.addEventListener('click', () => {
           const [lng, lat] = p.center;
           if (p.bbox && p.bbox.length === 4) {
@@ -834,8 +649,130 @@ function initRecorder(map) {
       if (seq === _geoSeq) showGeoMessage('검색 오류');
     }
   }
-  // 장소 검색: Search Box(약칭·POI 매칭 우수) 우선, 0건/실패 시 Geocoding v5 폴백. 현재 화면 중심으로 근접 가중.
-  async function fetchPlaces(q, token) {
+  /* ── 장소 검색 제공자 ──
+     결과는 모두 { name, ctx, center:[lng,lat], bbox?, poi?, src } 로 맞춰서 돌려준다.
+     src 는 결과 줄에 작게 표시해 어디서 온 값인지 알 수 있게 하는 용도. */
+  const keys = (typeof SEARCH_KEYS !== 'undefined') ? SEARCH_KEYS : { vworld: '', google: '' };
+  const hasKo = (s) => /[가-힣]/.test(s);
+
+  /* VWorld 는 CORS 헤더를 안 보내서 fetch 로는 브라우저에서 못 부른다.
+     대신 callback 파라미터(JSONP)를 지원하므로 script 태그로 받아온다.
+     응답이 없거나 키가 틀리면 영영 안 돌아오므로 반드시 시간제한을 건다. */
+  let _jsonpSeq = 0;
+  function jsonp(url, timeoutMs = 4000) {
+    return new Promise((resolve) => {
+      const cb = '__cmGeo' + (++_jsonpSeq);
+      const s = document.createElement('script');
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        delete window[cb];
+        s.remove();
+        resolve(v);
+      };
+      const timer = setTimeout(() => finish(null), timeoutMs);
+      window[cb] = (data) => finish(data);
+      s.onerror = () => finish(null);
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+      document.head.appendChild(s);
+    });
+  }
+
+  /* 같은 오류를 검색할 때마다 쏟아내지 않도록 한 번만 알린다.
+     인증키 문제는 대개 둘 중 하나다 — 키 오타, 아니면 지금 주소가 VWorld 에 등록한
+     '사용 도메인' 과 다른 것 (로컬에서 쓰려면 127.0.0.1 도 등록해야 한다). */
+  let _vworldWarned = '';
+  function warnVWorld(msg) {
+    if (_vworldWarned === msg) return;
+    _vworldWarned = msg;
+    console.warn(`[검색] VWorld 사용 불가: ${msg}\n` +
+      `  · 인증키를 recorder/js/config.js 의 SEARCH_KEYS.vworld 에 넣었는지\n` +
+      `  · VWorld 에 등록한 사용 도메인에 현재 주소(${location.hostname || 'file://'})가 있는지 확인하세요.\n` +
+      `  키가 풀릴 때까지는 Mapbox 로 검색합니다 (한국 지명은 잘 안 나옵니다).`);
+  }
+
+  /* VWorld 검색 API 2.0. type=place(관심지점)를 먼저 보고, 없으면 address(주소)로 한 번 더.
+     좌표계는 EPSG:4326(위경도)로 받아 그대로 쓴다. */
+  async function searchVWorld(q) {
+    if (!keys.vworld) return [];
+    const base = 'https://api.vworld.kr/req/search?service=search&request=search&version=2.0'
+               + '&crs=EPSG:4326&size=8&page=1&format=json&errorformat=json'
+               + `&key=${encodeURIComponent(keys.vworld)}&query=${encodeURIComponent(q)}`;
+    for (const type of ['place', 'address']) {
+      const d = await jsonp(`${base}&type=${type}`);
+      // 무응답(시간제한·네트워크 오류)이면 두 번째 타입도 마찬가지다. 기다리게 하지 말고 바로 다음 제공자로.
+      if (d === null) { warnVWorld('응답 없음 (시간 초과)'); return []; }
+      const res = d && d.response;
+      /* 키가 거부되면(INVALID_KEY·도메인 불일치) 결과가 0건인 것과 겉보기가 같아서,
+         조용히 넘어가면 "검색이 안 되네"로만 보이고 원인을 알 수 없다. 콘솔에 한 번 남긴다. */
+      if (res && res.status === 'ERROR') {
+        warnVWorld((res.error && (res.error.text || res.error.code)) || '알 수 없는 오류');
+        return [];
+      }
+      if (!res || res.status !== 'OK') continue;
+      const items = (res.result && res.result.items) || [];
+      const out = items.map((it) => {
+        const x = parseFloat(it.point && it.point.x), y = parseFloat(it.point && it.point.y);
+        if (!isFinite(x) || !isFinite(y)) return null;
+        const addr = it.address || {};
+        return {
+          name: it.title || '',
+          ctx: addr.road || addr.parcel || it.category || '',
+          center: [x, y],
+          poi: type === 'place',
+          src: 'VWorld',
+        };
+      }).filter(Boolean);
+      if (out.length) return out;
+    }
+    return [];
+  }
+
+  /* Google Places API (New) Text Search.
+     좌표(location)와 이름(displayName)은 Pro SKU 라 월 5,000건까지 무료다.
+     그래서 VWorld 가 0건일 때만 부른다 — 필드마스크에 Enterprise 필드를 넣지 말 것. */
+  async function searchGoogle(q) {
+    if (!keys.google) return [];
+    const c = map.getCenter();
+    try {
+      const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': keys.google,
+          'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.viewport',
+        },
+        body: JSON.stringify({
+          textQuery: q,
+          languageCode: 'ko',
+          maxResultCount: 8,
+          // 현재 화면 근처를 우선 (강제는 아님 — 멀리 있는 정답도 나와야 한다)
+          locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: 50000 } },
+        }),
+      });
+      if (!r.ok) return [];
+      const d = await r.json();
+      return (d.places || []).map((p) => {
+        const loc = p.location || {};
+        if (!isFinite(loc.longitude) || !isFinite(loc.latitude)) return null;
+        const v = p.viewport;
+        return {
+          name: (p.displayName && p.displayName.text) || p.formattedAddress || '',
+          ctx: p.formattedAddress || '',
+          center: [loc.longitude, loc.latitude],
+          bbox: (v && v.low && v.high) ? [v.low.longitude, v.low.latitude, v.high.longitude, v.high.latitude] : undefined,
+          poi: true,
+          src: 'Google',
+        };
+      }).filter(Boolean);
+    } catch (_) { return []; }
+  }
+
+  // Mapbox: Search Box(약칭·POI 매칭 우수) 우선, 0건/실패 시 Geocoding v5. 현재 화면 중심으로 근접 가중.
+  async function searchMapbox(q, token) {
+    if (!token) return [];
     const c = map.getCenter();
     const prox = `${c.lng.toFixed(4)},${c.lat.toFixed(4)}`;
     try {   // 1) Search Box forward
@@ -845,20 +782,39 @@ function initRecorder(map) {
         if (d.features && d.features.length) return d.features.map(f => {
           const pr = f.properties || {};
           return { name: pr.name || pr.name_preferred || (f.text || ''), ctx: pr.place_formatted || pr.full_address || '',
-                   center: f.geometry && f.geometry.coordinates, bbox: pr.bbox, poi: pr.feature_type === 'poi' || pr.feature_type === 'address' };
+                   center: f.geometry && f.geometry.coordinates, bbox: pr.bbox,
+                   poi: pr.feature_type === 'poi' || pr.feature_type === 'address', src: 'Mapbox' };
         });
       }
     } catch (_) {}
     try {   // 2) Geocoding v5 폴백
       const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${token}&language=ko,en&limit=6&autocomplete=true&fuzzyMatch=true&proximity=${prox}&types=country,region,district,place,locality,neighborhood,address,poi`);
-      if (!r.ok) return null;
+      if (!r.ok) return [];
       const d = await r.json();
       return (d.features || []).map(f => {
         const name = f.text || f.place_name;
         return { name, ctx: (f.place_name && f.place_name !== name) ? f.place_name : '', center: f.center, bbox: f.bbox,
-                 poi: (f.place_type || []).some(t => ['address','poi','neighborhood'].includes(t)) };
+                 poi: (f.place_type || []).some(t => ['address','poi','neighborhood'].includes(t)), src: 'Mapbox' };
       });
-    } catch (_) { return null; }
+    } catch (_) { return []; }
+  }
+
+  /* 제공자를 순서대로 훑어 처음으로 결과가 나온 곳을 쓴다.
+     한글이 섞였으면 국내 API 를 앞에 둔다 — Mapbox 는 한국 POI 가 거의 없어서
+     앞에 두면 '결과 없음' 만 돌려주고 뒤 제공자까지 가지도 못한다.
+     Google 은 유료 구간이 있으므로 항상 마지막 국내 후보로만 둔다. */
+  async function fetchPlaces(q, token) {
+    const chain = hasKo(q)
+      ? [searchVWorld, searchGoogle, (s) => searchMapbox(s, token)]
+      : [(s) => searchMapbox(s, token), searchGoogle];
+    let failed = 0;
+    for (const provider of chain) {
+      try {
+        const out = await provider(q);
+        if (out && out.length) return out;
+      } catch (_) { failed++; }
+    }
+    return failed === chain.length ? null : [];   // 전부 예외면 '검색 실패', 아니면 '결과 없음'
   }
   geoInput.addEventListener('input', () => {
     const q = geoInput.value.trim();
@@ -905,11 +861,9 @@ function initRecorder(map) {
   // 초기 + 스타일 전환 시마다 레이어 재생성
   // (뒤의 즉시 호출은 initRecorder 가 style.load 이후에 불린 경우를 위한 대비다.
   //  판단은 styleReady 로 한다 — isStyleLoaded() 를 쓰면 안 되는 이유는 위쪽 주석 참고)
-  map.on('style.load', addCountryLayer);
-  map.on('style.load', addSidoLayer);
-  map.on('style.load', addAdmin1Layer);
-  map.on('style.load', addSigunguLayer);   // 데이터 로드 전이면 내부에서 알아서 건너뜀
-  if (styleReady) { addCountryLayer(); addSidoLayer(); addAdmin1Layer(); addSigunguLayer(); }
+  const addRegionLayers = () => PAINTERS.forEach(p => p.addLayer());   // 데이터 로드 전이면 내부에서 알아서 건너뜀
+  map.on('style.load', addRegionLayers);
+  if (styleReady) addRegionLayers();
 
   /* ── 육지색 / 바다색 (직접 변경 + 스타일 색 자동 읽기) / 강 표시 ── */
   // 스타일별 육지 레이어 (색 값으로 확인한 정확한 매핑)
@@ -1209,9 +1163,25 @@ function initRecorder(map) {
     }
     return out;
   }
+  /* 날짜변경선(±180°) 넘어가기.
+     경도를 그대로 보간하면 서울(127) → LA(-118) 이 태평양이 아니라 유라시아·대서양을
+     가로질러 지구를 반대로 돈다. 앞 점 기준으로 ±180 을 넘긴 좌표(예: 242)로 이어
+     붙이면 실제로 짧은 쪽을 지나고, mapbox 는 180 을 넘는 경도를 알아서 감아 그린다. */
+  function unwrapLng(fromLng, toLng) {
+    let d = (toLng - fromLng) % 360;
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return fromLng + d;
+  }
+  // 거점 목록을 '감기지 않은' 연속 좌표계로 펴서 돌려준다 (첫 점은 그대로)
+  function unwrapSeq(pts) {
+    const out = pts.length ? [pts[0].slice()] : [];
+    for (let i = 1; i < pts.length; i++) out.push([unwrapLng(out[i-1][0], pts[i][0]), pts[i][1]]);
+    return out;
+  }
   // 거점들을 아크로 이어 하나의 조밀한 경로로
   function arcPathCoords() {
-    const pts = routeWaypointCoords();
+    const pts = unwrapSeq(routeWaypointCoords());
     if (pts.length < 2) return pts;
     const out = [pts[0]];
     for (let i = 1; i < pts.length; i++) {
@@ -1304,6 +1274,14 @@ function initRecorder(map) {
   const _EMPTY_LINE = { type:'Feature', geometry:{ type:'LineString', coordinates: [] } };
   // lng/lat 거리 (위도 보정한 등거리 근사)
   function geoDist(a, b) { const ml = (a[1]+b[1])*0.5*Math.PI/180; return Math.hypot((b[0]-a[0])*Math.cos(ml), b[1]-a[1]); }
+  /* 같은 거리인데 경도 표기만 다른 경우(-118 과 242)까지 같게 보는 거리.
+     아크 경로는 날짜변경선을 넘으면 180 을 넘긴 경도로 이어지므로, 원래 좌표(-118)와
+     경로 좌표(242)를 맞대볼 때는 이걸 써야 한다. */
+  function wrapDist(a, b) {
+    let dl = Math.abs(a[0] - b[0]) % 360; if (dl > 180) dl = 360 - dl;
+    const ml = (a[1]+b[1])*0.5*Math.PI/180;
+    return Math.hypot(dl*Math.cos(ml), b[1]-a[1]);
+  }
   // 시작점 기준 _routeDotStep 간격으로 점 배치 → 자라나도 이미 찍힌 점은 고정 위치(깜빡임 없음)
   function routeDotsFC(coords) {
     const step = _routeDotStep, feats = [];
@@ -1373,7 +1351,11 @@ function initRecorder(map) {
   // 두 점 사이 선형 보간 (t: 0~1)
   const lerpPt = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
 
-  // 좌표 배열에서 진행률 t(0~1)에 해당하는 부분 경로 반환 (도로 경로용)
+  /* 좌표 배열에서 진행률 t(0~1)에 해당하는 부분 경로 반환.
+     거리는 반드시 geoDist(위도 보정)로 잰다. 경도 1도는 적도에서 111km 지만
+     서울에서 90km, 모스크바에서 62km 다. 도(度)를 그대로 재면 높은 위도의 동서 구간이
+     실제보다 길게 잡혀, 같은 경로를 geoDist 로 재는 pathWpFracs(경유지 위치)·
+     routeDotsFC(점 간격)와 잣대가 어긋난다 = 선이 경유지·카메라보다 앞서거나 뒤처진다. */
   function partialPath(coords, t) {
     if (!coords || coords.length < 2) return coords || [];
     if (t <= 0) return [coords[0]];
@@ -1381,14 +1363,14 @@ function initRecorder(map) {
     // 누적 거리 기반
     let total = 0; const segLen = [];
     for (let i = 1; i < coords.length; i++) {
-      const d = Math.hypot(coords[i][0]-coords[i-1][0], coords[i][1]-coords[i-1][1]);
+      const d = geoDist(coords[i-1], coords[i]);
       segLen.push(d); total += d;
     }
     const target = total * t;
     let acc = 0; const out = [coords[0]];
     for (let i = 1; i < coords.length; i++) {
       if (acc + segLen[i-1] >= target) {
-        const r = (target - acc) / segLen[i-1];
+        const r = segLen[i-1] ? (target - acc) / segLen[i-1] : 0;   // 겹친 점(길이 0)에서 NaN 방지
         out.push(lerpPt(coords[i-1], coords[i], r));
         break;
       }
@@ -1409,8 +1391,9 @@ function initRecorder(map) {
     return pts.map((pt, k) => {
       if (k === 0) return 0;
       if (k === pts.length - 1) return 1;
+      // 경로 좌표는 날짜변경선을 넘으면 180 을 넘긴 경도라 wrapDist 로 맞대봐야 한다
       let best = 0, bd = Infinity;
-      for (let i = 0; i < coords.length; i++) { const d = geoDist(pt, coords[i]); if (d < bd) { bd = d; best = i; } }
+      for (let i = 0; i < coords.length; i++) { const d = wrapDist(pt, coords[i]); if (d < bd) { bd = d; best = i; } }
       let f = Math.min(0.999, cum[best] / total);
       if (f < prev) f = prev;            // 단조 증가 보장
       prev = f; return f;
@@ -2141,7 +2124,6 @@ function initRecorder(map) {
   /* ── 위치 표시 핀 (영상용, 카메라 경로와 무관) ── */
   const locPins = [];               // [{ lngLat:[lng,lat], color, text, marker }]
   let _locMoveHooked = false;
-  const escAttr = (s) => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   function ensureLocMoveHook() { if (_locMoveHooked) return; _locMoveHooked = true; map.on('move', updateLocLabelSides); }
 
@@ -2239,7 +2221,7 @@ function initRecorder(map) {
       await _locFontFace.load();
       document.fonts.add(_locFontFace);
       LOC_FONT_FAMILY = 'UserPinFont';
-      $('locpin-font-name').textContent = '라벨 폰트: ' + (EMBEDDED_LABEL_FONT.name || '내장') + ' (내장)';
+      // 어떤 폰트인지 패널에 적어두던 줄은 뺐다 — 고를 수 있는 게 아니라 늘 같은 값이었다.
       refreshAllLocLabels();
     } catch (_) {}
   }
@@ -2876,13 +2858,11 @@ function initRecorder(map) {
 
   /* 색칠 영역은 fill-color 가 match 표현식이라, 한 곳만 남기고 나머지를 투명으로 두면
      그 지역만 그려진다. 지역별로 레이어를 나눌 때 이 방식을 쓴다.
-     (모드별로 레이어 id 와 키 속성이 달라 여기서 한 번에 정리해둔다) */
-  const COLOR_SOURCES = [
-    { layer: 'country-color-fill', prop: 'iso_3166_1_alpha_3', list: () => colored,        keyOf: e => e.iso,  labelOf: e => e.name || e.iso },
-    { layer: 'admin1-color-fill',  prop: 'name',              list: () => admin1Colored,  keyOf: e => e.name, labelOf: e => (admin1Meta[e.name] && admin1Meta[e.name].s) || e.name },
-    { layer: 'sido-color-fill',    prop: 'name',              list: () => sidoColored,    keyOf: e => e.name, labelOf: e => e.name },
-    { layer: 'sigungu-color-fill', prop: 'name',              list: () => sigunguColored, keyOf: e => e.name, labelOf: e => (sigunguMeta[e.name] && sigunguMeta[e.name].s) || e.name },
-  ];
+     레이어 id·키 속성·표시 이름은 모드 정의(PAINTERS)에 이미 있으므로 그대로 빌려 쓴다
+     — 여기서 따로 적어두면 모드를 늘릴 때 또 한 군데가 뒤처진다. */
+  const COLOR_SOURCES = PAINTERS.map(p => ({
+    layer: p.layer, prop: p.prop, list: p.entries, keyOf: e => e.key, labelOf: e => p.label(e.key),
+  }));
   // 파일명·레이어명에 쓸 안전한 이름 (빈 값이면 대체어)
   const layerName = (s, fallback) => (String(s || '').trim() || fallback).replace(/[\\/:*?"<>|]/g, '');
 
@@ -3144,10 +3124,7 @@ function initRecorder(map) {
           }
           for (const k in byKey) acc.push(byKey[k]);
         };
-        collect('country-color-fill', 'iso_3166_1_alpha_3', (iso) => colored.find(x => x.iso === iso));
-        collect('sido-color-fill', 'name', (nm) => sidoColored.find(x => x.name === nm));
-        collect('admin1-color-fill', 'name', (nm) => admin1Colored.find(x => x.name === nm));
-        collect('sigungu-color-fill', 'name', (nm) => sigunguColored.find(x => x.name === nm));
+        PAINTERS.forEach(p => collect(p.layer, p.prop, (key) => p.entries().find(x => x.key === key)));
 
         if (!acc.length) { setStatus('화면에 보이는 색칠 영역이 없습니다.', ''); return; }
 
@@ -3191,10 +3168,9 @@ function initRecorder(map) {
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){
       $('go-start').disabled = !startCam; $('go-end').disabled = !endCam;
-      // 시군구 검색창은 경계 데이터를 받기 전까지는 계속 잠겨 있어야 한다.
+      // 시군구·해외 행정구역 검색창은 경계 데이터를 받기 전까지 계속 잠겨 있어야 한다.
       // 위 목록이 일괄로 풀어버리므로 여기서 되돌린다.
-      $('sigungu-input').disabled = !SIGUNGU_GEO;
-      $('admin1-input').disabled = !ADMIN1_GEO;
+      PAINTERS.forEach(p => { if (!p.ready()) $(`${p.id}-input`).disabled = true; });
     }
   }
 }

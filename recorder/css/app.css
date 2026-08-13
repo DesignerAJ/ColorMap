@@ -41,12 +41,32 @@
   input,
   select {
     width: 100%;
-    background: var(--panel-2);
+    /* background 축약형을 쓰면 안 된다 — 축약형은 background-image 도 함께 none 으로
+       되돌리므로, 아래 select 의 화살표 이미지가 통째로 지워진다.
+       (실제로 그래서 3.0 의 드롭다운에는 화살표가 하나도 없었다. appearance:none 은
+        data/style.css 에서 계속 걸려 있어 OS 기본 화살표마저 사라진 상태였다) */
+    background-color: var(--panel-2);
     color: var(--txt);
     border: 1px solid var(--line);
     border-radius: 7px;
     padding: 8px 9px;
     font-size: 12px;
+  }
+  /* 드롭다운 화살표 — 2.0 이 쓰던 채워진 역삼각형(Material arrow_drop_down)을 그대로.
+     appearance:none 때문에 OS 기본 화살표가 없으므로 이 배경 이미지가 유일한 표시다. */
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 26px;                /* 화살표 자리 — 긴 항목이 그 밑으로 파고들지 않게 */
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%2364748b" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px top 50%;
+    background-size: 13px auto;
+    cursor: pointer;
+  }
+  select:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
   }
   input:focus,
   select:focus {
@@ -470,10 +490,13 @@
     border-color: #2f62af;
   }
   /* '직접 선 그리기'를 켜기만 하고 그리기 모드를 안 켜면 아무 일도 안 일어난다.
-     그 상태에서만 버튼을 깜빡여 다음 동작을 유도한다 (모드를 켜거나 선을 그리면 멈춤) */
+     그 상태에서만 버튼을 깜빡여 다음 동작을 유도한다 (모드를 켜거나 선을 그리면 멈춤).
+     글자색은 반드시 accent 여야 한다 — 여기가 #fff 였던 탓에 버튼 바탕(--panel-2, 흰색)
+     위에 흰 글씨가 얹혀 '✏️ 그리기 모드' 가 통째로 안 보였다. 한 번 눌렀다 나오면
+     nudge 가 풀려 글씨가 돌아오니, 처음 켰을 때만 사라지는 것처럼 보였던 것. */
   #draw-mode.nudge {
     border-color: var(--accent);
-    color: #fff;
+    color: var(--accent);
     animation: draw-nudge 1.6s ease-in-out infinite;
   }
   @keyframes draw-nudge {
@@ -496,6 +519,20 @@
     flex-direction: column;
     gap: 4px;
     padding-bottom: 12px !important;
+  }
+  /* ── 지도 디자인 패널 타이포 ──
+     data/style.css 에 2.0 시절 규칙 `#country-selector-container label { font-size:16px }`
+     이 남아 있다. ID 를 끼고 있어서(1,0,1) 이 카드 안의 클래스 규칙들(0,2,0)을 전부
+     이겨버렸고, 결과적으로 라벨이란 라벨은 죄다 16px 로 그려졌다. 바로 옆 '점선' 은
+     <span> 이라 그 규칙에 안 걸려 10px 인 탓에, 한 줄 안에서 크기가 따로 놀았다.
+     여기서도 ID 를 같이 끼워 되찾아온다. 위계는 2.0 을 따른다 — 굵은 주 라벨과
+     한 단계 작고 흐린 보조 라벨 (2.0 은 16 : 13, 좁아진 3.0 패널에서는 12 : 10). */
+  #country-selector-container .design-card label {
+    font-size: 12px;
+  }
+  #country-selector-container .design-card .bd-cell {
+    font-size: 10px;
+    color: var(--muted);   /* 보조 라벨은 흐리게 — 옆의 '점선' 과 톤을 맞춘다 */
   }
   .design-card {
     border: 1px solid rgba(15, 38, 70, 0.08);
@@ -564,15 +601,24 @@
   .seg-toggle .seg-btn:active {
     transform: translateY(1px);
   }
-  /* 라벨 사이 중점(·). 모노스페이스라 한 글자 폭을 그대로 먹어서 '시 · 군 · 구' 처럼
-     벌어져 보인다. 자간(letter-spacing)만으로는 59px → 57.5px 로 거의 안 줄어들어
-     중점 자체를 양옆으로 당긴다.
-     처음엔 -0.22em 이었는데, 그 뒤 UI 전체에 자간 -0.02em 이 들어가면서 겹쳐 붙어
-     너무 좁아졌다. 중점 몫만 절반 정도로 되돌린다. */
+  /* 라벨 사이 중점(·). 모노스페이스라 중점에도 한 글자 폭을 통째로 줘서
+     '시 · 군 · 구' 처럼 벌어져 보인다. 그래서 중점만 음수 마진으로 당겨왔다.
+
+     당기는 양을 -0.22em → -0.12em 으로 줄여도 여전히 뭉개져 보였는데, 셈을 해보면
+     이유가 분명하다. 12px 기준 한 칸은 0.6em = 7.2px 인데 중점의 실제 잉크는 2px 남짓이다.
+       -0.12em × 양옆 = -2.88px,  전역 자간 -0.02em × 좌우 2군데 = -0.48px
+       → 칸이 7.2 - 3.36 = 3.84px 로 줄어 중점 양옆에 각각 0.9px 밖에 안 남는다.
+     사실상 앞뒤 글자에 붙어버려 점이 아니라 얼룩으로 읽혔다. 거기에 55% 투명도까지
+     겹쳐 더 안 보였다.
+
+     탭은 flex:1 로 폭을 똑같이 나눠 갖고 가장 긴 '시·군·구' 도 40px 언저리라
+     78px 칸에 한참 여유가 있다. 좁게 당길 이유가 애초에 없어서 당김을 아예 뺐다 —
+     지금은 고정폭 서체가 주는 자연스러운 간격 그대로다 (이보다 더 벌리려면
+     margin 을 양수로 주면 된다). 투명도도 0.8 로 올려 점이 점으로 보이게 한다. */
   .seg-btn .mid {
     font-style: normal;
-    margin: 0 -0.12em;
-    opacity: 0.55;
+    margin: 0;
+    opacity: 0.8;
   }
   .hint-sm {
     font-size: 10px;
@@ -663,6 +709,16 @@
   .bd-head .bd-color {
     margin: 0;
   }
+  /* ── 점선 예시 그림 ↔ 아래 체크박스 열 맞추기 ──
+     둘은 짝이다. A 그림 바로 밑에 A 체크박스가 와야 어느 칸이 뭘 켜는지 알 수 있다.
+     어긋나 있던 이유는 두 줄의 칸 크기·간격이 서로 달랐기 때문이다.
+       그림   18px 칸 + 6px 간격 = 피치 24px
+       체크박스 14px 칸 + 3px 간격 = 피치 17px
+     게다가 원본 PNG 가 정사각형(128×128)이라 18×14 칸에 contain 으로 넣으면
+     실제 그림은 14px 로 그려지고 좌우에 2px 씩 빈 여백까지 생겼다.
+     둘 다 14px 칸 + 6px 간격으로 통일한다. 두 줄 모두 카드 오른쪽 끝에 붙으므로
+     (.dash-reference 는 margin-left:auto, .bd-dash-options 는 grid 의 auto 칸)
+     칸 크기만 같으면 오른쪽부터 차례로 정확히 겹친다. */
   .dash-reference {
     display: flex;
     align-items: center;
@@ -670,7 +726,7 @@
     margin-left: auto;
   }
   .dash-reference img {
-    width: 18px;
+    width: 14px;
     height: 14px;
     object-fit: contain;
     opacity: 0.4;
@@ -700,7 +756,7 @@
   .bd-dash-options {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 6px;   /* 위 .dash-reference 와 같은 간격 — 그림과 체크박스 열을 맞춘다 */
     font-size: 10px;
     color: var(--muted);
     white-space: nowrap;
@@ -708,7 +764,7 @@
   .bd-dash-options input[type="checkbox"] {
     width: 14px;
     height: 14px;
-    flex: 0 0 14px;
+    flex: 0 0 14px;   /* 위 .dash-reference img 와 같은 칸 크기 */
     margin: 0;
     padding: 0;
     cursor: pointer;

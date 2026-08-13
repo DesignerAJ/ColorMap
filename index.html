@@ -17,19 +17,24 @@
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
 
-    <link href="./data/style.css?v=2.3.3" rel="stylesheet">
-    <link href="./recorder/css/app.css?v=2.3.3" rel="stylesheet">
+    <link href="./data/style.css?v=3.1.1" rel="stylesheet">
+    <link href="./recorder/css/app.css?v=3.1.1" rel="stylesheet">
 </head>
 
 <body>
     <div id="colormap-ui"></div>
     <div id="map"></div>
 
-    <script src="./recorder/js/vendor/mp4-muxer.js?v=2.2.0"></script>
-    <script src="./recorder/js/config.js?v=2.2.0"></script>
-    <script src="./recorder/js/data/regions.js?v=2.2.0"></script>
-    <script src="./recorder/js/recorder.js?v=2.2.9"></script>
-    <script type="module" src="./data/script.js?v=2.2.9"></script>
+    <!-- ?v= 는 브라우저 캐시를 끊는 용도다. 파일마다 값이 제각각이면
+         (CSS 는 2.3.3, JS 는 2.2.0/2.2.9 처럼) 하나만 깜빡했을 때
+         "CSS 는 새것, JS 는 옛것"이 캐시에 남아 원인 못 찾는 버그가 된다.
+         고칠 때마다 아래 다섯 줄과 위 CSS 두 줄, script.js 의 PANEL_URL 을
+         같은 값으로 함께 올린다. -->
+    <script src="./recorder/js/vendor/mp4-muxer.js?v=3.1.1"></script>
+    <script src="./recorder/js/config.js?v=3.1.1"></script>
+    <script src="./recorder/js/data/regions.js?v=3.1.1"></script>
+    <script src="./recorder/js/recorder.js?v=3.1.1"></script>
+    <script type="module" src="./data/script.js?v=3.1.1"></script>
 </body>
 
 </html>
