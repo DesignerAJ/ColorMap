@@ -131,6 +131,50 @@ test('그리기 모드 버튼의 강조 상태 글자가 배경과 다른 색이
   assert.notEqual(nudge.decls.color, (base?.decls['background-color'] ?? '').trim());
 });
 
+/* 패널 글자가 바탕에 묻히지 않는지.
+   '지정됨' 표시가 밝은 초록(#34c759)이라 대비 1.84:1 로 거의 안 읽히던 적이 있다.
+   10px 짜리 작은 글씨라 WCAG AA 기준 4.5:1 이 필요하다. */
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const lum = (rgb) => {
+  const a = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+};
+const contrast = (a, b) => {
+  const l1 = lum(hex(a)), l2 = lum(hex(b));
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+};
+const cssVar = (name) => {
+  const root = rules.filter((r) => r.sel === '#country-selector-container' && name in r.decls).at(-1);
+  assert.ok(root, `${name} 변수를 못 찾았다`);
+  return root.decls[name].trim();
+};
+
+test("'지정됨' 같은 완료 표시가 카드 위에서 읽힌다", () => {
+  // 카드 바탕은 흰색 70% 가 남색 패널 위에 얹힌 것 ≈ #e8eaef
+  const CARD = '#e8eaef';
+  const ok = cssVar('--ok');
+  const r = contrast(ok, CARD);
+  assert.ok(r >= 4.5, `--ok(${ok}) 대비가 ${r.toFixed(2)}:1 — 10px 글씨는 4.5:1 이상이어야 한다`);
+  // 버튼 플래시에서는 이 색이 배경이 되고 글자가 흰색이다
+  const w = contrast(ok, '#ffffff');
+  assert.ok(w >= 4.5, `흰 글씨 대비가 ${w.toFixed(2)}:1 — 플래시 순간 글자가 안 보인다`);
+});
+
+test('팔레트에 바탕과 구분이 안 되는 색이 없다', () => {
+  /* 카드 바탕은 흰색 70% 가 반투명 패널을 거쳐 지도 위에 얹힌 것이라 실제 값이 지도에 따라
+     달라진다. 그래서 여기 숫자는 근사치다 — 정확한 AA 판정이 아니라 '확실히 안 보이는 값'을
+     걸러내는 용도로 3:1 을 쓴다. (--ok 는 앞 테스트에서 4.5:1 로 따로 본다)
+     참고: --muted 는 3.95:1 로 작은 글씨 기준(4.5:1)에는 못 미친다. 보조 라벨 색이라
+     지금은 그대로 두었고, 더 진하게 갈지는 디자인 판단이 필요하다. */
+  const CARD = '#e8eaef';
+  for (const name of ['--txt', '--muted', '--accent-dim']) {
+    const c = cssVar(name);
+    if (!/^#[0-9a-f]{6}$/i.test(c)) continue;   // rgba 는 건너뛴다
+    const r = contrast(c, CARD);
+    assert.ok(r >= 3, `${name}(${c}) 대비 ${r.toFixed(2)}:1 — 바탕에 묻힌다`);
+  }
+});
+
 test('점선 예시와 체크박스가 같은 칸·간격을 쓴다 (열 맞춤)', () => {
   const img = rules.filter((r) => r.sel === '.dash-reference img').at(-1);
   const ref = rules.filter((r) => r.sel === '.dash-reference').at(-1);
