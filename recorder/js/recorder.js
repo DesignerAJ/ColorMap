@@ -1037,8 +1037,11 @@ function initRecorder(map) {
     findRiverLayers().forEach(id => { try { map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); } catch (_) {} });
   }
 
-  // 스타일별 강 표시 기본값 (단색은 강 꺼진 상태로 시작)
-  const RIVER_DEFAULT_OFF = ['mono'];
+  /* 강 표시를 꺼둔 채 시작할 스타일.
+     '단색'이 여기 있었는데, 강·호수 색이 바다와 같아진 뒤로는 꺼둘 이유가 없어졌다
+     (예전엔 반투명이라 육지 위에 옅게 떠서 지저분해 보였다 — matchWaterToSea 주석 참고).
+     지금은 비어 있다. 나중에 특정 스타일만 꺼두고 싶으면 스타일 키를 넣으면 된다. */
+  const RIVER_DEFAULT_OFF = [];
   let _riverInitStyle = null;
 
   // 스타일 로드: 피커를 현재 스타일의 실제 색으로 채우고, 강 표시 상태 반영

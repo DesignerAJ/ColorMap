@@ -26,6 +26,19 @@ test('바다색을 바꾸면 강·호수도 같이 따라온다', () => {
   assert.equal(paintOf(e, 'background', 'fill-color') ?? paintOf(e, 'background', 'background-color'), '#123456');
 });
 
+test('강·호수 체크박스가 기본으로 켜져 있다 (단색 포함)', async () => {
+  for (const style of ['mono_terrain', 'mono', 'detail']) {
+    const e = boot();
+    e.$('style-select').value = style;
+    e.styleLoad();
+    await e.tick(120);
+    assert.equal(e.$('river-on').checked, true, `${style} 에서 강·호수가 꺼진 채 시작한다`);
+    // 체크 상태가 실제 레이어 표시로도 이어져야 한다
+    assert.ok(e.layout.some((l) => l.id === 'water' && l.p === 'visibility' && l.v === 'visible'),
+      `${style} 에서 water 레이어가 안 켜졌다`);
+  }
+});
+
 test('위성 스타일에서는 water 를 건드리지 않는다 (사진 위에 얹으면 바다가 뿌옇다)', () => {
   const e = boot();
   e.$('style-select').value = 'satellite';
