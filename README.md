@@ -22,10 +22,13 @@ MP4는 별도 보조 버튼 없이 프레임 단위 경로 렌더링 방식으�
 로컬에서는 `file://`로 열지 말고 서버를 실행합니다.
 
 ```bash
-python -m http.server 5500
+node tools/serve.mjs          # 또는  python -m http.server 5500
 ```
 
 브라우저에서 `http://127.0.0.1:5500/`으로 접속합니다.
+`tools/serve.mjs`는 캐시를 끄고 서빙하므로 파일을 고치면 새로고침만으로 반영됩니다.
+
+작업 맥락과 이어서 할 일은 [CLAUDE.md](CLAUDE.md), 테스트는 [test/README.md](test/README.md)를 참고하세요.
 
 `recorder/js/data/admin1.json`과 `sigungu.json`은 해당 탭을 처음 열 때만 불러옵니다.
 위치 핀 라벨은 기본 폰트를 사용합니다. 팀 폰트를 연결하려면 사용권을 먼저 확인한 뒤
