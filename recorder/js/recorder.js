@@ -920,6 +920,21 @@ function initRecorder(map) {
     });
   }
 
+  /* 강·호수를 바다와 같은 톤으로 맞춘다.
+     단색·단색지형에서 바다는 배경(baseColor)이고, 강·호수는 그 위에 얹히는 water 레이어다.
+     색은 이미 사실상 같은데(#172c4d ↔ #172d4f) water 가 fill-opacity 0.5 라
+     회색 육지 위에서 옅은 청회색으로 떠 보였다. 색만 맞추고 불투명도를 안 맞추면
+     그대로라서 둘 다 바다 값으로 덮는다.
+     water 자체가 바다인 스타일(배경형 레이어가 없는 경우)은 건드리지 않는다. */
+  function matchWaterToSea(color) {
+    if (!color || !map.getLayer('water')) return;
+    if (!map.getLayer('baseColor') && !map.getLayer('background')) return;
+    try {
+      map.setPaintProperty('water', 'fill-color', color);
+      map.setPaintProperty('water', 'fill-opacity', 1);
+    } catch (_) {}
+  }
+
   // 현재 스타일에서 실제 육지 레이어 하나 찾기 (우선순위 순)
   function findLandLayer() {
     for (const id of LAND_CANDIDATES) { if (map.getLayer(id)) return id; }
@@ -1048,7 +1063,7 @@ function initRecorder(map) {
     const land = landId ? readGroupColor([landId]) : null;
     const sea  = readGroupColor(findSeaLayers());
     if (land) $('land-color').value = land;
-    if (sea)  $('sea-color').value  = sea;
+    if (sea) { $('sea-color').value = sea; matchWaterToSea(sea); }   // 강·호수도 같은 톤으로
     // 강 표시: 강 레이어 없는 스타일에선 체크박스 비활성 (줄은 유지)
     const hasRiver = findRiverLayers().length > 0;
     $('river-on').disabled = !hasRiver;
@@ -1068,7 +1083,11 @@ function initRecorder(map) {
   }
 
   $('land-color').addEventListener('input', () => paintLandColor($('land-color').value));
-  $('sea-color').addEventListener('input',  () => paintGroup(seaPaintLayers(),  $('sea-color').value));
+  $('sea-color').addEventListener('input',  () => {
+    const c = $('sea-color').value;
+    paintGroup(seaPaintLayers(), c);
+    matchWaterToSea(c);          // 색을 바꿔도 강·호수가 반투명으로 떠 보이지 않게
+  });
   $('river-on').addEventListener('change',  () => setRiverVisible($('river-on').checked));
 
   /* ── 북쪽 육상 국경선을 우리 데이터로 그리기 ──

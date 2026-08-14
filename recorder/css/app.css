@@ -565,8 +565,10 @@
     gap: 4px;
     margin-bottom: 10px;
     padding: 3px;
-    background: var(--bg);
-    border: 1px solid var(--line);
+    /* 지도 디자인의 접이식 카드(.design-card)와 같은 바탕·테두리를 쓴다.
+       패널 안에서 '무언가를 담는 상자'는 한 가지 모양으로 보이는 게 낫다. */
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(15, 38, 70, 0.08);
     border-radius: 10px;
   }
   .seg-btn {
