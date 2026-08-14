@@ -46,7 +46,7 @@ const KO_LABEL_STYLES = new Set(['placenames']);
    비워두면 그 제공자는 조용히 건너뛴다 — 키가 하나도 없으면 예전처럼 Mapbox 만 쓴다. */
 const SEARCH_KEYS = {
   vworld: '4A95A9B9-1922-31EC-B503-3B54973F0458',
-  google: '',
+  google: 'AIzaSyCF7w78TOloInjVtjO0A5Jl1aBbukmsv5g',
 };
 
 // 토큰과 지도 인스턴스는 루트 ColorMap 앱이 생성하고 관리합니다.
