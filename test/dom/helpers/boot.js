@@ -59,7 +59,23 @@ export function boot({
     : () => {} });
   window.HTMLCanvasElement.prototype.getContext = () => ctx2d;
 
-  const layers = new Map(STYLE_LAYERS.map((l) => [l.id, l]));
+  /* 레이어는 '순서'가 곧 그리는 순서다 — 색칠이 국경선 위로 올라가는지 같은 문제가
+     여기서 갈리므로, addLayer(def, beforeId) / moveLayer(id, beforeId) 를 배열로
+     제대로 흉내낸다. 기존 테스트가 쓰던 .get/.delete/.keys 는 그대로 쓸 수 있게 둔다. */
+  const layerList = STYLE_LAYERS.map((l) => ({ ...l }));
+  const at = (id) => layerList.findIndex((l) => l.id === id);
+  const put = (l, before) => {
+    const i = before ? at(before) : -1;
+    if (i >= 0) layerList.splice(i, 0, l); else layerList.push(l);
+  };
+  const layers = {
+    get: (id) => layerList.find((l) => l.id === id),
+    has: (id) => at(id) >= 0,
+    delete: (id) => { const i = at(id); if (i >= 0) layerList.splice(i, 1); return i >= 0; },
+    keys: () => layerList.map((l) => l.id),
+    order: () => layerList.map((l) => l.id),
+    indexOf: at,
+  };
   const sources = new Map();
   const filters = {
     'country-border-dot': ['all', ['==', ['get', 'admin_level'], 0]],
@@ -86,14 +102,20 @@ export function boot({
       return c;
     },
     getContainer: () => ({ clientWidth: 1280, clientHeight: 720 }),
-    getStyle: () => ({ layers: [...layers.values()] }),
+    getStyle: () => ({ layers: layerList }),
     addSource: (id, s) => sources.set(id, { ...s, setData: (d) => { sources.get(id).data = d; } }),
     getSource: (id) => sources.get(id),
     removeSource: (id) => sources.delete(id),
-    addLayer: (d) => { layers.set(d.id, d); calls.push({ api: 'addLayer', id: d.id }); },
+    addLayer: (d, before) => { put(d, before); calls.push({ api: 'addLayer', id: d.id, before }); },
     getLayer: (id) => layers.get(id),
     removeLayer: (id) => layers.delete(id),
-    moveLayer: (id) => calls.push({ api: 'moveLayer', id }),
+    moveLayer: (id, before) => {
+      const i = at(id);
+      if (i < 0) return;
+      const [l] = layerList.splice(i, 1);
+      put(l, before);
+      calls.push({ api: 'moveLayer', id, before });
+    },
     setPaintProperty: (id, p, v) => paint.push({ id, p, v }),
     getPaintProperty: () => '#334455',
     setLayoutProperty: (id, p, v) => layout.push({ id, p, v }),

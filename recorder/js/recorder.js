@@ -1138,14 +1138,31 @@ function initRecorder(map) {
     return BOUNDARY_LAYERS[kind].filter(id => map.getLayer(id));
   }
 
-  /* 색칠 레이어는 라벨 바로 아래에 깔리는데, 스타일의 경계선 레이어는 그보다 더 아래에 있다.
-     확인해보면 네 스타일 모두 그렇다 (단색지형 admin-boundaries #8 < 첫 symbol #13).
-     그래서 불투명도 0.6 짜리 색칠이 국경선·행정구역선 위를 덮어 선 색이 탁해졌다.
-     색칠을 올린 뒤 경계선만 그 위로 끌어올린다 — 스타일 원래의 상하 순서는 그대로 둔다. */
+  /* ── 색칠 위로 끌어올릴 경계선 찾기 ──
+     색칠 레이어는 라벨 바로 아래에 깔리는데, 스타일의 경계선 레이어는 그보다 더 아래에 있다.
+     그대로 두면 불투명도 0.6 짜리 색칠이 선 위를 덮어 선 색이 탁해지거나 아예 사라진다.
+     색칠을 올린 뒤 경계선만 그 위로 끌어올린다 — 스타일 원래의 상하 순서는 그대로 둔다.
+
+     끌어올릴 대상을 id 목록(BOUNDARY_LAYERS)으로 고르면 반드시 빠뜨린다.
+     실제로 단색지형·단색에서 경계선 8개 중 5개가 목록에 없어 색칠에 덮이고 있었다:
+       country_border · country-border            국경선 (이름만 다른 변형)
+       admin-2-boundaries-bg · -dispute           시군구 경계선  ← 시군구를 칠하면 이게 사라졌다
+       admin-boundaries-dot                       행정구역선 점선
+     그래서 이름 대신 '어느 소스에서 나온 선인가'로 판단한다. 스타일이 바뀌거나
+     레이어 이름이 달라져도 따라온다. (BOUNDARY_LAYERS 는 색·두께를 입히는 대상이라
+     별개로 두되, 우리가 직접 만든 국경선은 소스가 달라 여기에 합쳐 준다) */
+  const BOUNDARY_SOURCE_LAYERS = new Set(['admin', 'country_boundaries']);
+  function boundaryLayerIds(layers) {
+    const named = new Set(Object.values(BOUNDARY_LAYERS).flat());
+    return layers
+      .filter(l => named.has(l.id) ||
+                   (l.type === 'line' && BOUNDARY_SOURCE_LAYERS.has(l['source-layer'])))
+      .map(l => l.id);
+  }
   function raiseBoundaries() {
     const layers = map.getStyle()?.layers || [];
     const firstSymbol = layers.find(l => l.type === 'symbol')?.id;
-    const wanted = new Set(Object.values(BOUNDARY_LAYERS).flat());
+    const wanted = new Set(boundaryLayerIds(layers));
     // layers 는 그리는 순서대로다. 그 순서 그대로 옮겨야 -bg 외곽선이 본선 아래에 남는다.
     layers.filter(l => wanted.has(l.id)).forEach((l) => {
       try { map.moveLayer(l.id, firstSymbol); } catch (_) {}
