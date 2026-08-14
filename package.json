@@ -1,0 +1,14 @@
+{
+  "name": "colormap",
+  "private": true,
+  "description": "테스트 전용 설정. 앱 자체는 빌드 없이 파일을 그대로 서빙한다.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:dom": "node --test test/dom/*.test.js",
+    "test:all": "node --test test/*.test.js test/dom/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

@@ -1102,6 +1102,9 @@ function initRecorder(map) {
      iso_3166_1 이 'KP-KR' 인 것을 빼는 조건을 덧붙인다 ('KP-KR-dispute' 도 함께).
      다른 나라 국경선은 그대로 둔다. */
   function hideMapboxKoreanBorder() {
+    /* 우리 선이 준비되기 전에는 절대 가리면 안 된다.
+       가려놓고 우리 선을 못 그리면 국경선이 통째로 사라진다 (파일 404·네트워크 실패). */
+    if (!KR_BORDER) return;
     if (!styleReady) return;   // 스타일 로드 전엔 getStyle() 이 던진다 — style.load 에서 다시 부른다
     for (const l of map.getStyle().layers || []) {
       if (l['source-layer'] !== 'admin') continue;
