@@ -14,7 +14,7 @@ const STYLES = {
   mono:         'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf', // 단색
   satellite:    'mapbox://styles/designeraj/cmcxy4dm5009501sqh385hdu5', // 위성사진
   detail:       'mapbox://styles/designeraj/cmmcpegvn00fn01sugpfi79x7', // 지형도
-  monotone:     'mapbox://styles/designeraj/cmcvnojkj005p01sq5jax8qhf', // 단색 대체
+  monotone:     'mapbox://styles/designeraj/cmsswn1sr006u01rf9agr824g', // 모노톤
   // 지명 참고용 — Mapbox 기본 제공 스타일. 지명·도로명이 전부 나와서 위치 확인에 씀.
   // 방송용이 아니라 "여기가 어디인지" 확인하는 용도. 이 스타일에서만 라벨을 한국어로 바꾼다.
   placenames:   'mapbox://styles/mapbox/streets-v12',                // 지명 참고용
