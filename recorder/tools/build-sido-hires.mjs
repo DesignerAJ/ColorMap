@@ -27,6 +27,7 @@
 */
 
 import fs from 'node:fs';
+import { nudgeTouchingHoles } from './lib/rings.mjs';
 import path from 'node:path';
 
 const SRC = 'recorder/js/data/sigungu.json';
@@ -295,10 +296,10 @@ for (const [sido, feats] of groups) {
 
   // 5) GeoJSON 규약대로 방향을 맞춘다 (바깥 반시계 / 구멍 시계)
   const wind = (ring, ccw) => (signedArea(ring) < 0) === ccw ? ring.slice().reverse() : ring;
-  const polys = outers.map((oi) => [
+  const polys = outers.map((oi) => nudgeTouchingHoles([
     wind(info[oi].ring, true),
     ...holesOf.get(oi).map((hi) => wind(info[hi].ring, false)),
-  ]);
+  ]));
 
   const pts = polys.reduce((s, p) => s + p.reduce((t, r) => t + r.length, 0), 0);
   totalPts += pts;
@@ -322,7 +323,8 @@ for (const p of PATCHES) {
   const target = features.find((f) => f.properties.name === patch.appendTo);
   if (!target) { console.warn(`${patch.appendTo} 를 못 찾음 — ${p} 건너뜀`); continue; }
   const polys = target.geometry.type === 'Polygon' ? [target.geometry.coordinates] : target.geometry.coordinates;
-  polys.push(...patch.geometry.coordinates);
+  // 보충 폴리곤도 같은 정리를 거쳐야 한다 — 새만금 안의 56m 짜리 구멍이 바깥 링과 맞닿아 있었다
+  polys.push(...patch.geometry.coordinates.map((poly) => nudgeTouchingHoles(poly)));
   target.geometry = { type: 'MultiPolygon', coordinates: polys };
   const pts = patch.geometry.coordinates.reduce((s, poly) => s + poly.reduce((t, r) => t + r.length, 0), 0);
   totalPts += pts;

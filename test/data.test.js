@@ -488,3 +488,24 @@ test('경계 폴리곤에 자기교차가 없다 (핀치가 아닌 가로지름)
   }
   assert.deepEqual(bad.slice(0, 3), [], `자기교차 ${bad.length}곳`);
 });
+
+test('구멍이 바깥 링과 꼭짓점을 공유하지 않는다', () => {
+  /* 구멍이 바깥 링과 한 점에서 맞닿으면 mapbox-gl 이 구멍을 바깥 링에 잇는 다리를 놓다가
+     폭 0 인 삼각형을 만들고, 화면에는 폴리곤을 가로지르는 큰 삼각형으로 나온다.
+     안산·시흥 해안(경기 126.655, 37.216)에서 실제로 났고 시도 17개에 26곳 있었다.
+     핀치·자기교차와 증상이 같지만 원인이 또 다르다 — 셋을 다 막아야 한다. */
+  const bad = [];
+  const scan = (feats, label) => {
+    for (const f of feats) for (const poly of ringsOf(f.geometry)) {
+      if (poly.length < 2) continue;
+      const outer = new Set(poly[0].map((p) => p[0] + ',' + p[1]));
+      for (const hole of poly.slice(1)) for (const p of hole) {
+        if (outer.has(p[0] + ',' + p[1])) bad.push(`${label} ${f.properties.name || f.properties.short} @ ${p}`);
+      }
+    }
+  };
+  scan(hires.features, '시도');
+  scan(countries.features, '국가');
+  scan(admin1.features.filter((f) => ['대한민국', '북한'].includes(f.properties.country)), '행정구역');
+  assert.deepEqual(bad.slice(0, 3), [], `구멍이 바깥 링과 맞닿은 곳 ${bad.length}개`);
+});

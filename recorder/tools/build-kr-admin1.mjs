@@ -19,6 +19,7 @@
    실행: node recorder/tools/build-kr-admin1.mjs
 */
 import fs from 'node:fs';
+import { nudgeTouchingHoles } from './lib/rings.mjs';
 
 const R = 'recorder/js/data/';
 const PREC = 5;
@@ -63,7 +64,7 @@ for (const f of hires.features) {
   const polys = [];
   for (const poly of polysOf(f.geometry)) {
     const rings = poly.map(r => dedupeRing(trim(r))).filter(Boolean);
-    if (rings.length) polys.push(rings);
+    if (rings.length) polys.push(nudgeTouchingHoles(rings, round));
   }
   built.push({
     type: 'Feature',

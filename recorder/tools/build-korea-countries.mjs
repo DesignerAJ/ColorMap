@@ -24,6 +24,7 @@
    실행: node recorder/tools/build-korea-countries.mjs
 */
 import fs from 'node:fs';
+import { nudgeTouchingHoles } from './lib/rings.mjs';
 
 const R = 'recorder/js/data/';
 const PREC = 5;
@@ -96,7 +97,7 @@ function collect(features, iso, label) {
       if (parts.length > 1) pinched++;
       // 구멍은 가장 큰 조각에 붙인다 (구멍이 있는 폴리곤에서 핀치가 난 적은 없다)
       const sorted = parts.map((p) => p).sort((a, b) => ringArea(b) - ringArea(a));
-      sorted.forEach((p, i) => groups.push(i === 0 ? [p, ...holes] : [p]));
+      sorted.forEach((p, i) => groups.push(nudgeTouchingHoles(i === 0 ? [p, ...holes] : [p], round)));
     }
     if (!groups.length) continue;
     polys += groups.length;
