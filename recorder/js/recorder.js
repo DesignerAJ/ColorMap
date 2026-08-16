@@ -512,6 +512,14 @@ function initRecorder(map) {
      그래서 시군구를 시도 단위로 합친 고해상도본(384,303점)을 따로 두고, 시도 탭을 열 때
      받아서 소스만 갈아끼운다. 받기 전에도 색칠은 그대로 되고 도착하면 형태만 정교해진다.
      만드는 법: node recorder/tools/build-sido-hires.mjs */
+  /* 데이터 파일에도 ?v= 를 붙인다. index.html 의 값을 그대로 따온다 —
+     JSON 에는 캐시 버스터가 없어서, 데이터를 다시 만들어도 브라우저가 옛 파일을 계속
+     쓰는지 아닌지 확인할 길이 없었다. 서버가 no-store 를 주면 상관없지만
+     GitHub Pages 는 캐시를 준다. */
+  const DATA_V = (([...document.scripts].map(s => s.src || '').join(' ')
+    .match(/recorder\.js\?v=([\d.]+)/) || [])[1]) || '';
+  const dataURL = (u) => (DATA_V ? `${u}?v=${DATA_V}` : u);
+
   const SIDO_HIRES_URL = './recorder/js/data/sido-hires.json';
   let SIDO_HIRES = null;
   const sidoMeta = {};
@@ -558,7 +566,7 @@ function initRecorder(map) {
       label:     (n) => (admin1Meta[n] && admin1Meta[n].s) || n,
       qualifier: (n) => (admin1Meta[n] && admin1Meta[n].q) || '',
       target:    (n) => admin1Meta[n] && { center: admin1Meta[n].c, zoom: admin1Meta[n].z },
-      load: lazyGeoLoad('./recorder/js/data/admin1.json', 'js/data/admin1.json',
+      load: lazyGeoLoad(dataURL('./recorder/js/data/admin1.json'), 'js/data/admin1.json',
         (geo) => { ADMIN1_GEO = geo; Object.assign(admin1Meta, buildMeta(geo, 'country', 6)); }),
     }),
     createRegionPainter({
@@ -575,7 +583,7 @@ function initRecorder(map) {
       // 색칠은 SIDO_GEO 로 이미 되는 상태라 '불러오는 중'이 아니라 '정밀해지는 중'이라고 알린다
       load: (setText) => {
         setText('경계를 정밀하게 불러오는 중…');
-        return fetchGeo(SIDO_HIRES_URL)
+        return fetchGeo(dataURL(SIDO_HIRES_URL))
           .then((geo) => {
             SIDO_HIRES = geo;
             const src = map.getSource('sido-boundaries');
@@ -600,7 +608,7 @@ function initRecorder(map) {
       label:     (n) => (sigunguMeta[n] && sigunguMeta[n].s) || n,
       qualifier: (n) => sidoShort((sigunguMeta[n] && sigunguMeta[n].q) || ''),   // '경남 중구' 처럼 두 글자로
       target:    (n) => sigunguMeta[n] && { center: sigunguMeta[n].c, zoom: sigunguMeta[n].z },
-      load: lazyGeoLoad('./recorder/js/data/sigungu.json', 'js/data/sigungu.json',
+      load: lazyGeoLoad(dataURL('./recorder/js/data/sigungu.json'), 'js/data/sigungu.json',
         (geo) => { SIGUNGU_GEO = geo; Object.assign(sigunguMeta, buildMeta(geo, 'sido', 10)); }),
     }),
   ];
@@ -1173,7 +1181,7 @@ function initRecorder(map) {
      서쪽 가장자리 — 염하(김포와 강화 사이 물길)를 따라 꺾여 내려간다. 2.0 은 강화·교동
      위로 이어졌다. 하구에는 실제로 군사분계선이 없고(정전협정상 중립수역), 물 위라
      어느 쪽 색칠도 닿지 않으므로 그 구간만 따로 이어 붙여야 한다. */
-  fetch(KR_BORDER_URL)
+  fetch(dataURL(KR_BORDER_URL))
     .then((r) => (r.ok ? r.json() : null))
     .then((geo) => { if (!geo) return; KR_BORDER = geo; hideMapboxKoreanBorder(); addKoreaBorderLayer(); })
     .catch(() => {});   // 못 받으면 Mapbox 국경선이 그대로 쓰인다
@@ -1244,7 +1252,7 @@ function initRecorder(map) {
     } catch (_) {}
   }
 
-  fetch('./recorder/js/data/korea-countries.json')
+  fetch(dataURL('./recorder/js/data/korea-countries.json'))
     .then((r) => (r.ok ? r.json() : null))
     .then((geo) => { if (!geo) return; KC_GEO = geo; addKoreaCountryLayer(); })
     .catch(() => {});   // 못 받으면 Mapbox 그대로 — 섬 넷이 우리 색이 되지만 칠하기는 된다
@@ -1293,7 +1301,7 @@ function initRecorder(map) {
     }
   }
 
-  fetch('./recorder/js/data/korea-admin1-lines.json')
+  fetch(dataURL('./recorder/js/data/korea-admin1-lines.json'))
     .then((r) => (r.ok ? r.json() : null))
     .then((geo) => { if (!geo) return; KA_GEO = geo; addKoreaAdmin1Lines(); })
     .catch(() => {});   // 못 받으면 스타일의 행정구역선이 그대로 쓰인다
