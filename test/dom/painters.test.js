@@ -81,14 +81,27 @@ test('데이터 없는 모드는 레이어를 안 만들고 입력창을 잠가 
   assert.match(e.$('admin1-status').textContent, /불러오지 못했습니다/);
 });
 
-test('모드를 바꾸면 이전 색칠이 초기화된다', () => {
+test('모드를 바꿔도 이전 색칠이 남는다', () => {
+  /* 국가와 행정구역을 같이 쓰고 싶을 때가 있다 (중국을 칠하고 우리 시도를 칠하는 식).
+     예전에는 전환할 때마다 전부 초기화라, 다른 탭을 잠깐 열어봤다가 돌아오면 작업이 날아갔다.
+     지우고 싶으면 각 탭의 '전체 삭제'가 있다. */
   const e = boot(); e.styleLoad();
   e.type('country-input', '독일');
   e.click('seg-sido');
-  assert.deepEqual(e.chips('country'), []);
+  assert.deepEqual(e.chips('country'), ['독일'], '탭을 바꿨다고 색칠이 지워졌다');
   assert.equal(e.$('country-block').style.display, 'none');
   assert.equal(e.$('sido-block').style.display, '');
   assert.ok(e.$('seg-sido').classList.contains('active'));
+});
+
+test('전체 삭제는 그 모드의 색칠만 지운다', () => {
+  const e = boot(); e.styleLoad();
+  e.type('country-input', '독일');
+  e.click('seg-sido');
+  e.type('sido-input', '경기');
+  e.click('sido-clear');
+  assert.deepEqual(e.chips('sido'), [], '시도가 안 지워졌다');
+  assert.deepEqual(e.chips('country'), ['독일'], '다른 모드까지 지웠다');
 });
 
 test('스타일을 바꿔도 색칠 레이어가 다시 붙는다', () => {
