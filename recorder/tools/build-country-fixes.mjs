@@ -40,6 +40,31 @@ async function overpass(query) {
 
 const close = (r) => (r[0][0] === r.at(-1)[0] && r[0][1] === r.at(-1)[1] ? r : r.concat([r[0].slice()]));
 
+/* 덮는 폴리곤을 바깥으로 넓힌다.
+
+   OSM 섬 모양과 Mapbox 섬 모양이 조금씩 달라서, OSM 모양 그대로 덮으면 가장자리에
+   Mapbox 색이 얇게 남는다. Tilequery 로 우리 경계 바깥을 30·80·150·250m 지점에서
+   찍어보니 Mapbox 가 최대 150m 까지 더 나가 있었다 (무도가 가장 크고, 250m 에서는
+   네 섬 모두 바다). 그래서 200m 를 넓혀 확실히 덮는다.
+
+   섬이 실제보다 조금 커 보이지만, 넷 다 지름 1km 아래라 방송 줌에서는 점 하나다.
+   가장자리에 다른 나라 색이 남는 것보다 이쪽이 낫다. */
+const BUFFER_M = 200;
+
+function grow(ring) {
+  const lo = ring.map(p => p[0]), la = ring.map(p => p[1]);
+  const cx = (Math.min(...lo) + Math.max(...lo)) / 2;
+  const cy = (Math.min(...la) + Math.max(...la)) / 2;
+  const mPerLon = 111000 * Math.cos(cy * Math.PI / 180);
+  const out = ring.map(([x, y]) => {
+    const dx = (x - cx) * mPerLon, dy = (y - cy) * 111000;
+    const L = Math.hypot(dx, dy) || 1;
+    return [x + (dx / L) * BUFFER_M / mPerLon, y + (dy / L) * BUFFER_M / 111000];
+  });
+  out[out.length - 1] = out[0].slice();
+  return out;
+}
+
 const data = await overpass(`[out:json][timeout:180];
 (
   way["place"~"^(island|islet)$"]["name"~"^(${NAMES.join('|')})$"](37.60,125.40,37.95,126.35);
@@ -51,10 +76,10 @@ const features = [];
 for (const e of data.elements) {
   const name = (e.tags || {}).name;
   if (!NAMES.includes(name)) continue;
-  const rings = e.type === 'way'
+  const rings = (e.type === 'way'
     ? [close(e.geometry.map(g => [g.lon, g.lat]))]
     : (e.members || []).filter(m => m.geometry && m.geometry.length >= 3)
-        .map(m => close(m.geometry.map(g => [g.lon, g.lat])));
+        .map(m => close(m.geometry.map(g => [g.lon, g.lat])))).map(grow);
   if (!rings.length) continue;
   features.push({
     type: 'Feature',
