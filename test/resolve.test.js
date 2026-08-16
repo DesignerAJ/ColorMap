@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { extract, readSrc, readJSON } from './helpers/extract.js';
 
-const R = extract('recorder/js/recorder.js', ['SIDO_SUFFIX', 'stripSido', 'resolveByMeta', 'suggestByMeta', 'buildMeta']);
+const R = extract('recorder/js/recorder.js', ['SIDO_SUFFIX', 'stripSido', 'sidoAbbr',
+  'resolveByMeta', 'suggestByMeta', 'buildMeta', 'ADMIN1_RENAME', 'tuneKoreanAdmin1']);
 
 const regions = readSrc('recorder/js/data/regions.js');
 const SIDO_META = new Function(`${regions.match(/const SIDO_META = \[[\s\S]*?\];/)[0]}\nreturn SIDO_META;`)();
@@ -78,6 +79,66 @@ test('후보 목록은 지역명이 먼저, 시도로 훑는 검색은 뒤로', 
   const firstBySido = out.findIndex((s) => !s.s.includes('강') && s.n.includes('강'));
   const lastByName = out.map((s) => s.s.includes('강')).lastIndexOf(true);
   if (firstBySido >= 0) assert.ok(lastByName < firstBySido, '이름 일치가 시도 일치보다 앞서야 한다');
+});
+
+/* ── 행정구역 탭의 남북 시·도 ──
+   4,589개 파일을 읽지 않고, 실제 admin1.json 이 주는 모양 그대로의 작은 표를 만들어 본다.
+   ('도' 로 끝나는 외국 이름이 141개 섞여 있다는 것까지 재현해야 의미가 있다) */
+const admin1Sample = () => R.tuneKoreanAdmin1({
+  '대한민국 충청북도':     { n: '대한민국 충청북도',     s: '충청북도',     q: '대한민국' },
+  '대한민국 경상남도':     { n: '대한민국 경상남도',     s: '경상남도',     q: '대한민국' },
+  '대한민국 전북특별자치도': { n: '대한민국 전북특별자치도', s: '전북특별자치도', q: '대한민국' },
+  '대한민국 강원특별자치도': { n: '대한민국 강원특별자치도', s: '강원특별자치도', q: '대한민국' },
+  '북한 평안남도':        { n: '북한 평안남도',        s: '평안남도',     q: '북한' },
+  '북한 황해북도':        { n: '북한 황해북도',        s: '황해북도',     q: '북한' },
+  '북한 평양직할시':       { n: '북한 평양직할시',       s: '평양직할시',    q: '북한' },
+  '북한 량강도':          { n: '북한 량강도',          s: '량강도',       q: '북한' },
+  '북한 강원도':          { n: '북한 강원도',          s: '강원도',       q: '북한' },
+  '일본 홋카이도':        { n: '일본 홋카이도',        s: '홋카이도',     q: '일본' },
+  '이탈리아 코모도':       { n: '이탈리아 코모도',       s: '코모도',       q: '이탈리아' },
+});
+const a1 = (q) => R.resolveByMeta(admin1Sample(), q, (s) => s.a);
+
+test('행정구역: 남북 시·도를 약칭과 정식명 둘 다로 찾는다', () => {
+  for (const [q, want] of [
+    ['충북', '대한민국 충청북도'], ['충청북도', '대한민국 충청북도'],
+    ['경남', '대한민국 경상남도'], ['경상남도', '대한민국 경상남도'],
+    ['전북', '대한민국 전북특별자치도'],
+    ['평남', '북한 평안남도'], ['평안남도', '북한 평안남도'],
+    ['황북', '북한 황해북도'], ['평양', '북한 평양직할시'], ['량강', '북한 량강도'],
+  ]) assert.equal(a1(q), want, `'${q}' → ${want}`);
+});
+
+test('행정구역: 북한 강원도는 이름에 소속을 붙여 우리 강원과 구분한다', () => {
+  const meta = admin1Sample();
+  assert.equal(meta['북한 강원도'].s, '강원도(북한)');
+  assert.equal(meta['북한 강원도'].n, '북한 강원도', '정식명은 그대로여야 한다 (데이터와 같은 키)');
+  assert.equal(R.resolveByMeta(meta, '강원도(북한)', (s) => s.a), '북한 강원도');
+  // 목록에도 구분된 이름으로 오른다
+  assert.ok(R.suggestByMeta(meta, '강원').some((s) => s.s === '강원도(북한)'));
+});
+
+test("행정구역: 남북에 다 있는 '강원' 약칭으로는 아무것도 고르지 않는다", () => {
+  const meta = admin1Sample();
+  assert.equal(meta['북한 강원도'].a, '', '겹치는 약칭은 비워둬야 한다');
+  assert.equal(meta['대한민국 강원특별자치도'].a, '');
+  assert.equal(a1('강원'), null, '둘 중 하나를 조용히 집어내면 안 된다');
+  assert.equal(R.suggestByMeta(meta, '강원', (s) => s.a).length, 2, '대신 후보 목록에 둘 다 올라야 한다');
+});
+
+test("행정구역: '도'로 끝나는 외국 이름에는 약칭 규칙을 쓰지 않는다", () => {
+  const meta = admin1Sample();
+  assert.equal(meta['일본 홋카이도'].a, undefined, '홋카이도 → 홋이 같은 말이 나오면 안 된다');
+  assert.equal(meta['이탈리아 코모도'].a, undefined);
+  assert.equal(a1('홋카이도'), '일본 홋카이도', '정식 이름으로는 그대로 찾혀야 한다');
+});
+
+test('sidoAbbr 은 접미사를 뗀 세 글자에서 1·3번째를 딴다', () => {
+  for (const [n, want] of [
+    ['충청북도', '충북'], ['경상남도', '경남'], ['함경북도', '함북'], ['황해남도', '황남'],
+    ['강원도', '강원'], ['량강도', '량강'], ['평양직할시', '평양'],
+    ['강원특별자치도', '강원'], ['서울특별시', '서울'],
+  ]) assert.equal(R.sidoAbbr(n), want, `${n} → ${want}`);
 });
 
 test('buildMeta 가 중복 약칭을 dup 으로 표시한다', () => {

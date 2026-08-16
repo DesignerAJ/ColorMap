@@ -261,8 +261,14 @@ function initRecorder(map) {
      설정으로 받고, 나머지 로직은 createRegionPainter 한 곳에만 있다. */
 
   const DEFAULT_COLORS = ['#5A8EDB', '#F17D38'];   // 1번/2번 기본색 (이후 순환)
-  const SIDO_SUFFIX = /(특별자치도|특별자치시|특별시|광역시|도)$/;
+  const SIDO_SUFFIX = /(특별자치도|특별자치시|특별시|광역시|직할시|도)$/;
   const stripSido = (n) => n.replace(SIDO_SUFFIX, '');
+  /* 도 이름의 두 글자 약칭: 충청북도 → 충북, 함경남도 → 함남, 황해북도 → 황북.
+     접미사를 뗀 세 글자에서 첫 글자와 셋째 글자를 딴다 — 남북 도 이름이 모두 이 규칙을 따른다.
+     ('직할시' 를 SIDO_SUFFIX 에 넣은 것도 북한 평양 때문이다. 남한에는 없는 접미사다.)
+     '도' 로 끝나는 외국 이름이 141개(홋카이도·코모도·비엔티안 도…) 있어서 아무 데나 쓰면
+     '홋이' 같은 말이 나온다. 남북 것에만 쓸 것 — tuneKoreanAdmin1 이 그 경계를 지킨다. */
+  const sidoAbbr = (n) => { const b = stripSido(n); return b.length === 3 ? b[0] + b[2] : b; };
   const cleanName = (n) => n.replace(/#[^#]*#/g, '').trim();
   const SUGGEST_MAX = 12;                          // datalist 후보 최대 개수
 
@@ -313,10 +319,11 @@ function initRecorder(map) {
   /* 후보 순위: 약칭 앞글자 → 약칭 부분 → 정식명 부분.
      정식명에는 국가·시도가 붙어 있어서('강원특별자치도 춘천시') 같이 취급하면
      '강' 을 쳤을 때 강원도 시·군이 강남구보다 앞에 끼어든다. 이름 자체가 맞는 것을 먼저. */
-  function suggestByMeta(meta, q) {
+  function suggestByMeta(meta, q, alias) {
+    const alt = alias ? ((s) => alias(s) || '') : (() => '');
     const byName = [], byPart = [], byFull = [];
     for (const s of Object.values(meta)) {
-      if (s.s.startsWith(q)) byName.push(s);
+      if (s.s.startsWith(q) || (alt(s) && alt(s).startsWith(q))) byName.push(s);
       else if (s.s.includes(q)) byPart.push(s);
       else if (s.n.includes(q)) byFull.push(s);
     }
@@ -529,9 +536,14 @@ function initRecorder(map) {
      평소 쓰는 말과 다르다. 실제로 쓰는 두 글자(충북·경남)는 SIDO_META 에 이미 들어 있다.
      stripSido 는 검색어 별칭('충청북'으로 쳐도 찾히게)으로만 남긴다. */
   const sidoShort = (n) => (sidoMeta[n] && sidoMeta[n].s) || stripSido(n) || n;
-  (function fillSidoList() {                          // 짧은 별칭(경기·서울)으로도 검색되게 약칭을 올린다
+  /* 약칭(충북)과 정식명(충청북도)을 둘 다 올린다. 해석은 예전부터 양쪽 다 됐지만
+     목록에는 약칭만 있어서, '충청' 까지 친 사람에게는 아무것도 안 뜨고 다 친 뒤에야
+     Enter 로 들어갔다. 행정구역 탭도 이제 양쪽으로 찾히므로 두 탭이 같게 동작한다. */
+  (function fillSidoList() {
     const dl = $('sido-list');
-    SIDO_META.forEach(s => { const opt = document.createElement('option'); opt.value = s.s; dl.appendChild(opt); });
+    SIDO_META.forEach(s => {
+      [s.s, s.n].forEach(v => { const opt = document.createElement('option'); opt.value = v; dl.appendChild(opt); });
+    });
   })();
 
   /* ── 해외 행정구역(주·도) ──
@@ -540,6 +552,28 @@ function initRecorder(map) {
      Natural Earth 4,589개를 파일로 두고 탭을 열 때만 받아온다. */
   const admin1Meta = {}, sigunguMeta = {};
   let ADMIN1_GEO = null, SIGUNGU_GEO = null;
+
+  /* 이 탭에는 남북 시·도가 함께 들어 있다 (대한민국 17 + 북한 13). 그래서 두 가지를 손본다.
+
+     1) 북한 강원도는 짧은 이름이 그냥 '강원도' 라, 우리 강원(강원특별자치도) 옆에 놓이면
+        어느 쪽인지 알 수 없다. 보이는 이름에만 소속을 붙인다 — 데이터의 short 를 고치면
+        정식명이 `북한 ${short}` 로 조립돼 있어서(build-nk-admin1.mjs) '북한 강원도(북한)'
+        이 된다. 정식명은 그대로 두고 화면에 쓰는 이름만 바꾼다.
+
+     2) 남북 도를 두 글자 약칭으로도 찾게 한다 (충북·경남·평남·황북). 정식명으로만 찾히던
+        탓에 시도 탭에서는 되던 '충북' 이 이 탭에서는 아무것도 안 나왔다.
+        약칭이 겹치는 강원(남 강원특별자치도 · 북 강원도)은 아예 빼둔다 — 둘 중 하나를
+        조용히 집어내느니 후보 목록에서 직접 고르게 하는 편이 낫다. 이 파일이 '구' 한 글자로
+        종로구를 칠하던 사고 이후 지켜온 규칙이다. */
+  const ADMIN1_RENAME = { '북한 강원도': '강원도(북한)' };
+  function tuneKoreanAdmin1(meta) {
+    const ko = Object.values(meta).filter(m => m.q === '대한민국' || m.q === '북한');
+    const n = {};
+    ko.forEach(m => { m.a = sidoAbbr(m.s); n[m.a] = (n[m.a] || 0) + 1; });   // 약칭은 이름을 바꾸기 전에 딴다
+    ko.forEach(m => { if (n[m.a] > 1) m.a = ''; });
+    Object.entries(ADMIN1_RENAME).forEach(([full, s]) => { if (meta[full]) meta[full].s = s; });
+    return meta;
+  }
 
   const PAINTERS = [
     createRegionPainter({
@@ -560,14 +594,14 @@ function initRecorder(map) {
       id: 'admin1', source: 'admin1-boundaries', layer: 'admin1-color-fill', prop: 'name',
       sourceSpec: () => ADMIN1_GEO && { type: 'geojson', tolerance: 0, data: ADMIN1_GEO },   // tolerance 0 이유는 sido 주석 참고
       lazyInput: true,
-      resolve:   (q) => resolveByMeta(admin1Meta, q),
-      suggest:   (q) => suggestByMeta(admin1Meta, q),
+      resolve:   (q) => resolveByMeta(admin1Meta, q, (s) => s.a),
+      suggest:   (q) => suggestByMeta(admin1Meta, q, (s) => s.a),
       fullName:  (n) => n,
       label:     (n) => (admin1Meta[n] && admin1Meta[n].s) || n,
       qualifier: (n) => (admin1Meta[n] && admin1Meta[n].q) || '',
       target:    (n) => admin1Meta[n] && { center: admin1Meta[n].c, zoom: admin1Meta[n].z },
       load: lazyGeoLoad(dataURL('./recorder/js/data/admin1.json'), 'js/data/admin1.json',
-        (geo) => { ADMIN1_GEO = geo; Object.assign(admin1Meta, buildMeta(geo, 'country', 6)); }),
+        (geo) => { ADMIN1_GEO = geo; Object.assign(admin1Meta, tuneKoreanAdmin1(buildMeta(geo, 'country', 6))); }),
     }),
     createRegionPainter({
       id: 'sido', source: 'sido-boundaries', layer: 'sido-color-fill', prop: 'name',
