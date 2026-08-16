@@ -453,3 +453,38 @@ test('국가 폴리곤이 시도마다 나뉘어 있다', () => {
     .filter((f) => ringsOf(f.geometry).flat().reduce((s, r) => s + r.length, 0) > 200000);
   assert.deepEqual(big.map((f) => f.properties.name), [], '한 feature 에 점이 20만개를 넘는다 — 다시 뭉쳤다');
 });
+
+test('경계 폴리곤에 자기교차가 없다 (핀치가 아닌 가로지름)', () => {
+  /* 1m 안팎으로 되돌아오는 슬리버는 꼭짓점을 공유하지 않아 핀치 검사에 안 걸리는데,
+     mapbox-gl 의 삼각분할은 여기서도 폴리곤을 가로지르는 거대한 삼각형을 그린다.
+     충남 해안에서 실제로 났고, 시도 17개에 85곳이 있었다. */
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  const o = (a, b, c) => { const v = (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]); return v > 0 ? 1 : v < 0 ? -1 : 0; };
+  const crosses = (p1, p2, p3, p4) => {
+    if (same(p1,p3) || same(p1,p4) || same(p2,p3) || same(p2,p4)) return false;
+    const d1 = o(p3,p4,p1), d2 = o(p3,p4,p2), d3 = o(p1,p2,p3), d4 = o(p1,p2,p4);
+    return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
+  };
+  const bad = [];
+  for (const [feats, label] of [[hires.features, '시도'], [NK, '북한']]) {
+    for (const f of feats) for (const poly of ringsOf(f.geometry)) for (const r of poly) {
+      if (r.length < 5) continue;
+      const C = 0.01, grid = new Map();                   // 전수 비교는 느리다 — 격자로 후보만
+      for (let i = 0; i < r.length - 1; i++) {
+        for (let x = Math.floor(Math.min(r[i][0],r[i+1][0])/C); x <= Math.floor(Math.max(r[i][0],r[i+1][0])/C); x++)
+          for (let y = Math.floor(Math.min(r[i][1],r[i+1][1])/C); y <= Math.floor(Math.max(r[i][1],r[i+1][1])/C); y++) {
+            const k = x + ':' + y;
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push(i);
+          }
+      }
+      for (const arr of grid.values()) for (let a = 0; a < arr.length; a++) for (let b = a+1; b < arr.length; b++) {
+        const i = Math.min(arr[a],arr[b]), j = Math.max(arr[a],arr[b]);
+        if (j - i < 2) continue;
+        if (crosses(r[i], r[i+1], r[j], r[j+1]))
+          bad.push(`${label} ${f.properties.name || f.properties.short} @ ${r[i]}`);
+      }
+    }
+  }
+  assert.deepEqual(bad.slice(0, 3), [], `자기교차 ${bad.length}곳`);
+});
