@@ -101,6 +101,16 @@ function initRecorder(map) {
   }
   map.on('style.load', applyStyleLanguage);
 
+  /* 투영은 스타일에도 저장돼 있고, setStyle 은 그 값을 그대로 따라간다.
+     '모노톤'만 globe 로 저장돼 있어서, 그 스타일로 바꾸면 지도는 3D 로 튀는데
+     투영 드롭다운은 2D 인 채로 남아 둘이 어긋났다. 스타일이 바뀔 때마다 드롭다운
+     값을 다시 걸어 화면과 UI 를 맞춘다 — 앞으로 추가할 스타일이 어떻게 저장돼
+     있든 안전하다. 사용자가 고른 투영이 늘 이긴다. */
+  function applyStyleProjection() {
+    try { map.setProjection($('proj-select').value); } catch (_) {}
+  }
+  map.on('style.load', applyStyleProjection);
+
   /* 색칠 소스·레이어를 지금 붙여도 되는지 추적한다.
      map.isStyleLoaded() 로 판단하면 안 된다 — 그건 '스타일 + 모든 소스의 타일'이 다 와야
      true 라서 지도를 쓰는 동안에는 사실상 늘 false 다. style.load 안에서 그걸로 판단하면
