@@ -85,6 +85,13 @@ OSM 행정경계는 **영해까지 포함합니다** — 그대로 쓰면 황해
 > 북한 경계는 OpenStreetMap 데이터로 만들었습니다 (`admin_level=4`, `ISO3166-2=KP-*`).
 > © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright)
 
+국가 단위 색칠은 **남·북한만 우리 데이터로** 그립니다(`korea-countries.json`,
+`node recorder/tools/build-korea-countries.mjs`). Mapbox의 country-boundaries-v1이
+연평도 북쪽 북한 섬 넷(갈도·장재도·무도·료도)을 KOR로 분류해 대한민국을 칠하면 함께
+칠해졌고, 시도·시군구 색칠과 국경선은 국토부인데 국가 색칠만 Mapbox라 같은 자리에서
+최대 3.1km 어긋났기 때문입니다. 2.0은 시도 색칠이 OSM이었고 Mapbox 행정경계도 결국
+OSM이라 우연히 맞아떨어졌던 것입니다. 나머지 나라는 Mapbox 그대로입니다.
+
 장소 검색은 VWorld(국토교통부)와 Google Places를 씁니다 — 인증키는
 `recorder/js/config.js`의 `SEARCH_KEYS`에 넣습니다. 두 키 모두 브라우저에 노출되는
 값이라 발급처에서 사용 도메인·HTTP 리퍼러 제한을 걸어야 합니다.

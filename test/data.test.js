@@ -242,3 +242,68 @@ test('북한 색칠이 우리 섬을 침범하지 않는다', () => {
     assert.deepEqual(by, [], `${name} 을 북한이 칠한다`);
   }
 });
+
+/* ── 국가 단위 색칠용 남·북한 폴리곤 (build-korea-countries.mjs) ──
+   Mapbox 의 country-boundaries-v1 은 연평도 북쪽 북한 섬 넷을 KOR 로 분류하고,
+   시도·시군구 색칠(국토부)과 같은 자리에서 최대 3.1km 어긋났다. 남·북한만 우리
+   데이터로 그려 둘 다 없앤다. */
+
+const countries = readJSON('recorder/js/data/korea-countries.json');
+const country = (iso) => countries.features.find((f) => f.properties.iso_3166_1_alpha_3 === iso);
+const inCountry = (pt, iso) => ringsOf(country(iso).geometry)
+  .some((p) => inRing(pt, p[0]) && !p.slice(1).some((h) => inRing(pt, h)));
+
+test('국가 폴리곤은 KOR·PRK 둘이다', () => {
+  assert.equal(countries.features.length, 2);
+  for (const iso of ['KOR', 'PRK']) assert.ok(country(iso), `${iso} 없음`);
+});
+
+test('연평도 북쪽 북한 섬 넷이 북한이다', () => {
+  /* Mapbox 는 이 넷을 KOR 로 준다 — 대한민국을 칠하면 북한 섬이 함께 칠해졌다.
+     황해남도 해역 섬 62개를 Tilequery 로 전부 확인했고 틀린 건 이 넷뿐이었다. */
+  for (const [name, pt] of Object.entries({
+    '갈도': [125.6530, 37.7156], '장재도': [125.6492, 37.7364],
+    '무도': [125.5769, 37.7419], '료도': [126.1948, 37.8170],
+  })) {
+    assert.ok(inCountry(pt, 'PRK'), `${name} 이 북한이 아니다`);
+    assert.ok(!inCountry(pt, 'KOR'), `${name} 이 대한민국으로 칠해진다 — 방송 사고`);
+  }
+});
+
+test('우리 섬과 내륙은 대한민국이다', () => {
+  for (const [name, pt] of Object.entries({
+    '대연평도': [125.6967, 37.6653], '소연평도': [125.7130, 37.6094],
+    '백령도': [124.7100, 37.9650], '강화도': [126.48, 37.72], '교동도': [126.28, 37.79],
+    '서울시청': [126.978, 37.566], '제주': [126.531, 33.499],
+  })) {
+    assert.ok(inCountry(pt, 'KOR'), `${name} 이 대한민국이 아니다`);
+    assert.ok(!inCountry(pt, 'PRK'), `${name} 이 북한으로 칠해진다 — 방송 사고`);
+  }
+});
+
+test('북한 주요 도시는 북한이다', () => {
+  for (const [name, pt] of Object.entries({
+    '평양': [125.75, 39.03], '개성': [126.55, 37.97], '해주': [125.715, 38.040],
+  })) assert.ok(inCountry(pt, 'PRK'), `${name} 이 북한이 아니다`);
+});
+
+test('국가 폴리곤이 바다를 칠하지 않는다', () => {
+  for (const [name, pt] of Object.entries({
+    '연평도 북쪽': [125.60, 37.70], '동해 청진 앞': [130.10, 41.80], '서한만': [124.60, 39.40],
+  })) for (const iso of ['KOR', 'PRK']) {
+    assert.ok(!inCountry(pt, iso), `${name} 이 ${iso} 로 칠해진다`);
+  }
+});
+
+test('국가 폴리곤이 시도 색칠과 꼭짓점까지 같다', () => {
+  /* 좌표 정밀도만 5자리로 줄였을 뿐 같은 데이터다. 어긋나면 국가 탭과 시도 탭을
+     같이 썼을 때 경계가 이중으로 보인다. */
+  const r5 = (v) => Number(v.toFixed(5));
+  const korPts = new Set();
+  for (const poly of ringsOf(country('KOR').geometry)) for (const r of poly)
+    for (const p of r) korPts.add(p[0] + ',' + p[1]);
+  let missing = 0, total = 0;
+  for (const f of hires.features) for (const poly of ringsOf(f.geometry)) for (const r of poly)
+    for (const p of r) { total++; if (!korPts.has(r5(p[0]) + ',' + r5(p[1]))) missing++; }
+  assert.ok(missing / total < 0.001, `시도 꼭짓점 ${missing}/${total} 이 국가 폴리곤에 없다`);
+});
