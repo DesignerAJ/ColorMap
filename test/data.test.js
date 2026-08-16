@@ -9,6 +9,14 @@ const hires = readJSON('recorder/js/data/sido-hires.json');
 const border = readJSON('recorder/js/data/korea-border.json');
 const admin1 = readJSON('recorder/js/data/admin1.json');
 
+/* 국경선은 두 종류가 한 파일에 있다.
+   land   — 우리 시도 데이터에서 뽑은 육상 군사분계선. 색칠과 꼭짓점 단위로 붙어야 한다.
+   estuary — 한강 하구부터 서쪽. 정전협정상 중립수역이라 군사분계선이 없고, 우리 데이터로는
+            만들 수 없어 OSM 의 KP-KR 경계를 쓴다. 물 위라 어느 색칠과도 맞물리지 않는다.
+   아래 검사들은 반드시 land 만 본다 — estuary 를 섞으면 전부 실패한다. */
+const landBorder = border.features.filter((f) => (f.properties || {}).kind !== 'estuary');
+const estuary = border.features.filter((f) => (f.properties || {}).kind === 'estuary');
+
 const ringsOf = (g) => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
 const feat = (name) => hires.features.find((f) => f.properties.name.startsWith(name));
 const polysOf = (name) => ringsOf(feat(name).geometry);
@@ -87,7 +95,7 @@ test('국경선이 색칠 경계와 꼭짓점 단위로 붙는다', () => {
     for (let i = 1; i < r.length; i++) if (r[i][1] > 37.6) segs.push([r[i-1], r[i]]);
   const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
   let worst = 0;
-  for (const f of border.features) for (const pt of f.geometry.coordinates) {
+  for (const f of landBorder) for (const pt of f.geometry.coordinates) {
     let best = Infinity;
     for (const [a, b] of segs) {
       const dx = b[0]-a[0], dy = b[1]-a[1], L = dx*dx + dy*dy;
@@ -109,7 +117,7 @@ test('국경선에 도 경계가 섞이지 않았다 (연천–철원 구간)', 
   for (const n of ['경기도', '강원특별자치도']) for (const poly of polysOf(n)) for (const r of poly)
     for (let i = 1; i < r.length; i++) if (r[i][1] > 37.6) cnt.set(und(r[i-1], r[i]), (cnt.get(und(r[i-1], r[i])) || 0) + 1);
   let shared = 0;
-  for (const f of border.features) { const c = f.geometry.coordinates;
+  for (const f of landBorder) { const c = f.geometry.coordinates;
     for (let i = 1; i < c.length; i++) if ((cnt.get(und(c[i-1], c[i])) || 0) >= 2) shared++; }
   assert.equal(shared, 0, `도 경계 ${shared}개가 국경선으로 그려진다`);
 });
@@ -175,14 +183,14 @@ test('군사분계선이 북한 경계와 꼭짓점 단위로 붙는다', () => 
   /* 선의 양 끝(해안에 닿는 두 점). 조각이 여러 개라 '한 번만 나오는 끝점'이 바다 쪽 끝이다 —
      조각끼리 맞물리는 가운데 이음매를 끝으로 잘못 보면 멀쩡한 10km 를 그냥 건너뛰게 된다. */
   const ends = new Map();
-  for (const f of border.features) for (const p of [f.geometry.coordinates[0], f.geometry.coordinates.at(-1)]) {
+  for (const f of landBorder) for (const p of [f.geometry.coordinates[0], f.geometry.coordinates.at(-1)]) {
     const k = p[0].toFixed(6) + ',' + p[1].toFixed(6);
     ends.set(k, (ends.get(k) || 0) + 1);
   }
   const tips = [...ends].filter(([, n]) => n === 1).map(([k]) => k.split(',').map(Number));
   assert.equal(tips.length, 2, `국경선의 끝이 ${tips.length}개 — 조각이 끊겼다`);
 
-  for (const f of border.features) {
+  for (const f of landBorder) {
     const c = f.geometry.coordinates;
     for (let i = 0; i < c.length; i++) {
       if (tips.some((t) => KM(c[i][0]-t[0], c[i][1]-t[1], c[i][1]) < 6)) continue;
@@ -306,4 +314,52 @@ test('국가 폴리곤이 시도 색칠과 꼭짓점까지 같다', () => {
   for (const f of hires.features) for (const poly of ringsOf(f.geometry)) for (const r of poly)
     for (const p of r) { total++; if (!korPts.has(r5(p[0]) + ',' + r5(p[1]))) missing++; }
   assert.ok(missing / total < 0.001, `시도 꼭짓점 ${missing}/${total} 이 국가 폴리곤에 없다`);
+});
+
+test('한강 하구 구간이 있고, 육상 국경선과 이어진다', () => {
+  /* 우리 데이터로 뽑은 선은 경기도·강원도만 보므로 하구가 통째로 빠진다 —
+     강화도·교동도·석모도는 인천광역시라 재료에 없다. 그 자리를 OSM 의 KP-KR 경계로 잇는다. */
+  assert.equal(estuary.length, 1, `하구 조각이 ${estuary.length}개`);
+  const e = estuary[0].geometry.coordinates;
+  assert.ok(e.length >= 10, `하구 구간이 ${e.length}점뿐`);
+
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+  const ends = landBorder.flatMap((f) => [f.geometry.coordinates[0], f.geometry.coordinates.at(-1)]);
+  const gap = Math.min(...[e[0], e.at(-1)].flatMap((p) => ends.map((q) => KM(p[0]-q[0], p[1]-q[1], p[1]))));
+  assert.ok(gap < 0.2, `하구 구간이 육상 국경선에서 ${gap.toFixed(2)}km 떨어져 있다 — 선이 끊겨 보인다`);
+});
+
+test('국경선이 염하(김포–강화 사이)로 꺾여 들어가지 않는다', () => {
+  /* 한때 육상선이 126.53°E 에서 끊기고 김포 서쪽 가장자리를 따라 남쪽으로 내려갔다
+     (꼬리의 최고 위도 37.754). 2.0 은 강화·교동 위로 이어졌고 그게 맞는 모양이다.
+     방송에 그대로 나가면 사고다.
+
+     경계값이 빠듯하다 — 정상적인 하구 선도 이 경도대에서 위도 37.762 까지 내려온다.
+     둘 사이가 900m 라 37.758 로 가른다. 하구 선을 다시 만들 때 이 값을 확인할 것. */
+  const inChannel = (p) => p[0] > 126.48 && p[0] < 126.60 && p[1] > 37.60 && p[1] < 37.758;
+  for (const f of border.features) {
+    const bad = f.geometry.coordinates.filter(inChannel);
+    assert.equal(bad.length, 0,
+      `${(f.properties || {}).kind || '?'} 구간의 ${bad.length}점이 염하 안에 있다 (예: ${JSON.stringify(bad[0])})`);
+  }
+});
+
+test('하구 구간이 강화도·교동도 북쪽으로 지난다', () => {
+  /* 2.0 이 그리던 모양. 섬 남쪽으로 지나면 강화·교동이 북한 쪽에 놓인 것처럼 보인다. */
+  const e = estuary[0].geometry.coordinates;
+  const at = (lon) => {
+    let best = null;
+    for (let i = 1; i < e.length; i++) {
+      const [a, b] = [e[i-1], e[i]];
+      if ((a[0] - lon) * (b[0] - lon) > 0) continue;
+      const t = (lon - a[0]) / ((b[0] - a[0]) || 1);
+      best = Math.max(best ?? -90, a[1] + (b[1] - a[1]) * t);
+    }
+    return best;
+  };
+  for (const [name, lon, north] of [['강화도', 126.48, 37.80], ['교동도', 126.28, 37.82]]) {
+    const lat = at(lon);
+    assert.ok(lat !== null, `${name} 경도(${lon})에서 하구 구간을 못 찾았다`);
+    assert.ok(lat > north, `하구 구간이 ${name} 북쪽(${north})이 아니라 ${lat.toFixed(3)} 을 지난다`);
+  }
 });

@@ -84,10 +84,14 @@ const ringArea = (r) => {
 };
 
 // ── 국경선 ──────────────────────────────────────────────────────────
-/* korea-border.json 은 LineString 두 개로 나뉘어 있고 끝점이 맞물린다. 하나로 잇는다. */
+/* korea-border.json 은 LineString 여러 개로 나뉘어 있고 끝점이 맞물린다. 하나로 잇는다.
+
+   `kind: 'estuary'` 조각은 뺀다 — 한강 하구부터 서쪽은 물 위를 지나는 표기선(OSM)이라
+   북한의 육지 경계가 아니다. 넣으면 북한 도를 엉뚱한 곳에 맞물리려 든다. */
 function loadBorder() {
   const b = JSON.parse(fs.readFileSync(R + 'korea-border.json'));
-  const lines = b.features.map(f => f.geometry.coordinates);
+  const lines = b.features.filter(f => (f.properties || {}).kind !== 'estuary')
+    .map(f => f.geometry.coordinates);
   let line = lines.shift();
   while (lines.length) {
     const i = lines.findIndex(l => KEY(l[0]) === KEY(line.at(-1)) || KEY(l.at(-1)) === KEY(line.at(-1))
