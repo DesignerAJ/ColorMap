@@ -170,6 +170,137 @@ function snapToBorder(ring, line, TOL = 2, GAP = 80) {
   return { ring: out, replaced: bestLen, added: sub.length };
 }
 
+// ── 바다 잘라내기 ───────────────────────────────────────────────────
+/* OSM 행정경계는 **영해까지** 포함한다. 황해남도 멤버 way 72개 중 25개가 `maritime=yes` 다.
+   그대로 쓰면 도를 칠했을 때 서해가 통째로 칠해진다.
+
+   그런데 태그로 거르면 안 된다 — 태그 없는 way 도 바다를 지나서, 태그만 믿고 자르면
+   '육지' 쪽 끝점이 해안에서 22km 떨어진 곳에 찍힌다. 그래서 태그 대신 **꼭짓점이
+   해안선 안쪽인지 직접 판정**한다.
+
+   판정은 동쪽으로 광선을 쏴 해안선과 만나는 횟수를 센다. 해안선을 닫힌 고리로 이어
+   쓰는 방법도 있지만, 받아온 해안선은 bbox 에서 잘려 있어 억지로 닫으면 고리 안쪽이
+   바다가 되어 버린다(내륙 4개 도가 통째로 '바다'로 나왔다). 북한 동쪽은 이 범위 안에서
+   전부 바다라 동쪽 광선은 그 문제를 겪지 않는다. */
+async function loadCoast() {
+  const d = await overpass(`[out:json][timeout:600];
+way["natural"="coastline"](37.40,123.80,43.30,131.40);
+out geom;`);
+  const segs = [], byLat = new Map();
+  const CELL = 0.05;
+  for (const w of d.elements) {
+    const g = w.geometry;
+    for (let i = 0; i < g.length - 1; i++) {
+      const k = segs.push([[g[i].lon, g[i].lat], [g[i+1].lon, g[i+1].lat]]) - 1;
+      const [a, b] = segs[k];
+      for (let c = Math.floor(Math.min(a[1],b[1])/CELL); c <= Math.floor(Math.max(a[1],b[1])/CELL); c++) {
+        if (!byLat.has(c)) byLat.set(c, []);
+        byLat.get(c).push(k);
+      }
+    }
+  }
+  const lines = stitch(d.elements.map(w => ({ type: 'way', geometry: w.geometry })));
+  return { segs, byLat, CELL, lines, ways: d.elements.length };
+}
+
+const inLand = (p, C) => {
+  let n = 0;
+  for (const k of C.byLat.get(Math.floor(p[1] / C.CELL)) || []) {
+    const [a, b] = C.segs[k];
+    if ((a[1] > p[1]) !== (b[1] > p[1])) {
+      if (p[0] < (b[0]-a[0]) * (p[1]-a[1]) / (b[1]-a[1]) + a[0]) n++;
+    }
+  }
+  return n % 2 === 1;
+};
+
+// 선분이 해안선을 처음 만나는 지점 (P0 쪽에서 가까운 순) — 어느 해안선 줄의 몇 번째 변인지까지
+function crossing(P0, P1, C) {
+  let best = null;
+  for (let L = 0; L < C.lines.length; L++) {
+    const ln = C.lines[L];
+    for (let i = 0; i < ln.length - 1; i++) {
+      const a = ln[i], b = ln[i+1];
+      if (Math.min(a[1],b[1]) > Math.max(P0[1],P1[1]) || Math.max(a[1],b[1]) < Math.min(P0[1],P1[1])) continue;
+      if (Math.min(a[0],b[0]) > Math.max(P0[0],P1[0]) || Math.max(a[0],b[0]) < Math.min(P0[0],P1[0])) continue;
+      const d1x = P1[0]-P0[0], d1y = P1[1]-P0[1], d2x = b[0]-a[0], d2y = b[1]-a[1];
+      const den = d1x*d2y - d1y*d2x;
+      if (!den) continue;
+      const t = ((a[0]-P0[0])*d2y - (a[1]-P0[1])*d2x) / den;
+      const u = ((a[0]-P0[0])*d1y - (a[1]-P0[1])*d1x) / den;
+      if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+      if (!best || t < best.t) best = { t, L, i, pt: [P0[0]+d1x*t, P0[1]+d1y*t] };
+    }
+  }
+  return best;
+}
+
+/* 해안선 한 줄 위의 두 지점 사이 — 두 방향 중 짧은 쪽.
+   만(灣) 하나를 도는 길과 대륙을 한 바퀴 도는 길 중 고르는 문제라 짧은 쪽이 늘 맞다. */
+function coastSlice(from, to, C) {
+  const ln = C.lines[from.L], n = ln.length - 1;
+  const walk = (dir) => {
+    const out = [];
+    let i = dir > 0 ? (from.i + 1) % n : from.i;
+    for (let g = 0; g < n; g++) {
+      if (dir > 0 ? i === (to.i + 1) % n : i === to.i) break;
+      out.push(ln[i].slice());
+      i = (i + dir + n) % n;
+    }
+    return out;
+  };
+  const f = walk(1), b = walk(-1);
+  return [from.pt.slice(), ...(f.length <= b.length ? f : b), to.pt.slice()];
+}
+
+function clipToLand(ring, C) {
+  const open = ring.slice(0, -1);
+  const n = open.length;
+  const land = open.map((p) => inLand(p, C));
+  const sea = land.filter((x) => !x).length;
+  if (!sea) return { ring, sea: 0 };
+  if (!land.some(Boolean)) return { ring, sea, failed: '전부 바다로 판정' };
+
+  const start = land.findIndex(Boolean);
+  const out = [];
+  let bridged = 0, straight = 0;
+  for (let c = 0; c < n; c++) {
+    const k = (start + c) % n;
+    if (land[k]) { out.push(open[k].slice()); continue; }
+    let len = 0;
+    while (len < n && !land[(start + c + len) % n]) len++;
+    const prev = (start + c - 1 + n) % n, next = (start + c + len) % n;
+    const ex = crossing(open[prev], open[k], C);
+    const en = crossing(open[next], open[(next - 1 + n) % n], C);
+    if (ex && en && ex.L === en.L) { out.push(...coastSlice(ex, en, C)); bridged++; }
+    else { out.push(...(ex ? [ex.pt.slice()] : []), ...(en ? [en.pt.slice()] : [])); straight++; }
+    c += len - 1;
+  }
+  out.push(out[0].slice());
+  return { ring: out, sea, bridged, straight };
+}
+
+// 원래(영해 포함) 폴리곤 안에 통째로 들어가는 섬은 따로 붙인다 — 안 그러면 갈도·무도 같은 섬이 사라진다
+function islandsInside(origRing, C) {
+  const inRing = (pt, r) => {
+    let c = false;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const [xi, yi] = r[i], [xj, yj] = r[j];
+      if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < ((xj-xi) * (pt[1]-yi)) / (yj-yi) + xi) c = !c;
+    }
+    return c;
+  };
+  const out = [];
+  for (const ln of C.lines) {
+    if (ln.length < 4 || KEY(ln[0]) !== KEY(ln.at(-1))) continue;
+    if (ln.length > 5000) continue;                       // 본토 해안선은 섬이 아니다
+    const mid = ln[Math.floor(ln.length / 2)];
+    if (!inRing(mid, origRing) || !inRing(ln[0], origRing)) continue;
+    out.push(ln.map((p) => p.slice()));
+  }
+  return out;
+}
+
 // ── 실행 ────────────────────────────────────────────────────────────
 const admin1 = JSON.parse(fs.readFileSync(R + 'admin1.json'));
 const keep = admin1.features.filter(f => f.properties.country !== '북한');
@@ -184,19 +315,37 @@ out geom;`);
 if (data.elements.length < 13) throw new Error(`행정구역이 ${data.elements.length}개뿐 — OSM 응답을 확인하세요`);
 
 const border = loadBorder();
-console.log(`국경선 ${border.length}점을 하나로 이었다\n`);
+console.log(`국경선 ${border.length}점을 하나로 이었다`);
+
+console.log('해안선을 받는 중… (영해를 잘라내는 데 쓴다)');
+const coast = await loadCoast();
+console.log(`해안선 ${coast.ways}조각 · ${coast.segs.length}변 → ${coast.lines.length}줄\n`);
 
 const built = [];
 for (const e of data.elements) {
   const osmName = e.tags['name:ko'] || e.tags.name;
   const short = NAME[osmName] || osmName;
   let rings = stitch(e.members).sort((a, b) => ringArea(b) - ringArea(a));
+  const orig = rings[0];
 
-  let note = '';
+  // 1) 영해를 잘라낸다 (내륙 도는 바다쪽 점이 0개라 그대로 지나간다)
+  const clipped = clipToLand(orig, coast);
+  if (clipped.failed) throw new Error(`${short}: ${clipped.failed}`);
+  rings[0] = clipped.ring;
+  let note = clipped.sea ? ` · 바다쪽 ${clipped.sea}점 잘라냄` : '';
+  if (clipped.straight) note += ` (해안선 잇기 실패 ${clipped.straight}곳은 직선 처리)`;
+
+  // 2) 잘라내면서 사라진 섬을 되붙인다 (갈도·무도·장재도 같은 것)
+  if (clipped.sea) {
+    const isl = islandsInside(orig, coast);
+    if (isl.length) { rings = rings.concat(isl); note += ` · 섬 ${isl.length}개 되붙임`; }
+  }
+
+  // 3) 군사분계선 구간을 우리 국경선으로 치환
   const snapped = snapToBorder(rings[0], border);
   if (snapped) {
     rings[0] = snapped.ring;
-    note = ` · 국경 구간 ${snapped.replaced}점 → 우리 국경선 ${snapped.added}점으로 치환`;
+    note += ` · 국경 ${snapped.replaced}점 → 우리 선 ${snapped.added}점`;
   }
 
   const pts = rings.flat();

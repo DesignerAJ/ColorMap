@@ -200,3 +200,45 @@ test('군사분계선이 북한 경계와 꼭짓점 단위로 붙는다', () => 
     }
   }
 });
+
+test('북한 도가 바다를 칠하지 않는다', () => {
+  /* OSM 행정경계는 영해까지 포함한다 — 그대로 쓰면 황해남도를 칠했을 때 서해가 통째로
+     칠해졌다. build-nk-admin1.mjs 가 해안선으로 잘라낸다. 그게 풀리면 여기서 걸린다.
+
+     좌표는 실제로 바다인 곳만 골랐다. '남포 앞바다'처럼 바다처럼 보여도 0.3km 옆에
+     섬이 있는 지점이 있어서, 넣기 전에 OSM 에서 섬이 없는지 확인해야 한다. */
+  const SEA = {
+    '연평도 북쪽': [125.60, 37.70],
+    '백령도 동쪽': [124.95, 37.95],
+    '서한만': [124.60, 39.40],
+    '동해 청진 앞': [130.10, 41.80],
+    '동해 원산 앞': [128.00, 39.20],
+  };
+  const painted = [];
+  for (const [name, pt] of Object.entries(SEA)) {
+    const by = NK.filter((f) => nkRings(f).some((r) => inRing(pt, r))).map((f) => f.properties.short);
+    if (by.length) painted.push(`${name} → ${by.join(',')}`);
+  }
+  assert.deepEqual(painted, [], '바다가 칠해진다');
+});
+
+test('바다를 잘라내도 북한 섬이 남아 있다', () => {
+  /* 해안선으로 자르면 본토만 남고 섬이 사라진다 — 되붙이는 단계가 빠지면 여기서 걸린다.
+     갈도·장재도·무도는 연평도 북쪽의 북한 섬이다 (OSM 에 북한 군부대가 함께 태그돼 있다). */
+  for (const [name, pt] of Object.entries({
+    '갈도': [125.6530, 37.7156], '장재도': [125.6492, 37.7364], '무도': [125.5769, 37.7419],
+  })) {
+    const by = NK.filter((f) => nkRings(f).some((r) => inRing(pt, r))).map((f) => f.properties.short);
+    assert.deepEqual(by, ['황해남도'], `${name} 이 황해남도로 안 칠해진다 (${by.join(',') || '아무데도 없음'})`);
+  }
+});
+
+test('북한 색칠이 우리 섬을 침범하지 않는다', () => {
+  for (const [name, pt] of Object.entries({
+    '대연평도': [125.6967, 37.6653], '소연평도': [125.7130, 37.6094],
+    '백령도': [124.7100, 37.9650], '강화도': [126.45, 37.72],
+  })) {
+    const by = NK.filter((f) => nkRings(f).some((r) => inRing(pt, r))).map((f) => f.properties.short);
+    assert.deepEqual(by, [], `${name} 을 북한이 칠한다`);
+  }
+});
