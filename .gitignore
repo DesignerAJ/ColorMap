@@ -12,3 +12,7 @@ Temp/
 # .env files contain sensitive credentials
 .env*
 !/.env.example
+
+# macOS Finder 가 폴더마다 만드는 파일. 폴더를 열기만 해도 내용이 바뀌어
+# 의미 없는 변경으로 잡히고, 맥마다 값이 달라 병합할 수도 없다.
+.DS_Store
