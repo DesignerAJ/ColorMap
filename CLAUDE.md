@@ -30,16 +30,22 @@ data/style.css + recorder/css/app.css   순서대로 겹친다 (아래 '캐스�
 sigungu.json  ──(build-sido-hires.mjs)──>  sido-hires.json
                         + saemangeum.json (보충 폴리곤)
 sido-hires.json ──(build-korea-border.mjs)──>  korea-border.json (북쪽 국경선)
+OSM + korea-border.json ──(build-nk-admin1.mjs)──>  admin1.json 의 '북한' 13개
 ```
 
 - 생성물을 손으로 고치지 말 것. 도구를 고치고 다시 생성한다.
 - `build-korea-border.mjs` 는 `MAPBOX_TOKEN` 과 `npm i @mapbox/vector-tile pbf` 가 필요하다.
+- `build-nk-admin1.mjs` 는 의존성이 없다. `admin1.json` 의 **'북한'만** 갈아끼고 나머지 4,579개는
+  그대로 둔다 — 통째로 다시 만드는 도구가 아니다.
 - 재생성하면 `node --test test/data.test.js` 로 반드시 검증한다.
 
 ## 환경 제약
 
 - **사내 npm 이 인증서에 막혀 설치가 안 된다.** 그래서 테스트를 두 층으로 나눴다 —
   `test/` 는 의존성 0, `test/dom/` 은 jsdom 필요(CI에서 설치). 새 의존성을 함부로 늘리지 말 것.
+- 같은 인증서 때문에 **node 의 `fetch` 도 막힌다**(`SELF_SIGNED_CERT_IN_CHAIN`). `curl` 은
+  시스템 키체인을 써서 통과하므로, 외부를 부르는 도구는 `fetch` 실패 시 `curl` 로 넘어가게
+  써 두었다(`build-nk-admin1.mjs`). 인증서 검증을 끄는 선택은 하지 않았다.
 - 이 맥을 만든 환경에선 `python3` 이 깨져 있었다(Command Line Tools). `node tools/serve.mjs` 를 쓴다.
 - **검색 인증키는 브라우저에 노출되는 값이다.** 도메인·리퍼러 제한이 유일한 방어선.
   - VWorld: 사용 도메인에 `127.0.0.1` 과 `designeraj.github.io` 둘 다 등록해야 한다.
@@ -84,6 +90,12 @@ Enter 의 **기본 동작이 끝난 뒤에야** 입력창에 들어온다 — �
   행정경계와 최대 3.1km 어긋나고 줌을 올려도 안 줄어든다(= 단순화가 아니라 데이터가 다름).
   국토부 경계와는 중앙값 6m 로 일치하며, 어긋나는 20곳은 전부 VWorld 가 DMZ 를 빼서 생긴 차이였다.
   Mapbox 쪽 KP-KR 구간은 `iso_3166_1 != 'KP-KR'` 로 가린다.
+- **북한 행정구역**은 OSM 에서 다시 받아 `admin1.json` 에 갈아끼웠다(11 → 13개, 개성·남포 추가).
+  원래 것은 도당 100~220점이라 우리 시도(1.6만점) 옆에서 각졌고, 군사분계선이 경기·강원과
+  중앙값 1.75~6.6km 어긋났다. **군사분계선 구간은 `korea-border.json` 으로 치환한다** —
+  같은 선을 두 데이터가 각자 그리면 아무리 정밀해도 또 어긋나기 때문이다.
+  양 끝 해안 6km 는 예외다(해안선은 국토부 ↔ OSM 이라 원래 다르다). 되돌리기 전에
+  `test/data.test.js` 의 '군사분계선이 북한 경계와 꼭짓점 단위로 붙는다' 를 볼 것.
 - **위성 스타일**에서는 `landColor`·`water` 를 건드리지 않는다. 디자이너가 `visibility:none` 으로
   꺼둔 반투명 오버레이라, 켜면 사진 위에 얹혀 바다가 뿌예진다.
 - **강·호수**는 바다와 색·불투명도를 맞춘다(`matchWaterToSea`). 스타일의 `water` 는 색은 같은데
@@ -111,11 +123,15 @@ npm install && node --test test/dom/*.test.js   # 35개, jsdom 필요
 2. **Google Places 키 마무리** — 키와 리퍼러 제한은 걸었다. 남은 것 둘:
    콘솔에서 **API 제한을 `Places API (New)` 하나로** 좁히기(2차 방어), 그리고 브라우저에서
    `경포대해수욕장` 으로 폴백이 실제로 도는지 확인. VWorld 만으로는 12개 표본 중 이것 하나가 비었다.
-3. **스크린샷 회귀(Playwright)** — 지금 테스트는 jsdom 이라 **WebGL 렌더 결과를 못 본다.**
+3. **`admin1.json` 안의 대한민국 17개도 저해상도다** — 경기도 231점, 강원도 159점.
+   북한을 고치면서 발견했다. '행정구역' 탭에서 우리 시도를 칠하면 '시도' 탭(1.6만점)과
+   전혀 다른 모양이 나온다. 이름도 낡았다(전라북도·강원도 → 전북특별자치도·강원특별자치도).
+   `sido-hires.json` 이 이미 있으니 그걸로 갈아끼우면 된다.
+4. **스크린샷 회귀(Playwright)** — 지금 테스트는 jsdom 이라 **WebGL 렌더 결과를 못 본다.**
    위성 바다 뿌옇던 것, 색칠 삼각형 스파이크 둘 다 눈으로만 잡혔다. 유일하게 비어 있는 층.
-4. **`main` 머지·배포** — 공개 사이트가 바로 바뀌므로 1번을 마친 뒤에.
-5. **`--muted` 를 진하게 갈지 결정** — 지금 `#64748b` 은 카드 위 대비 3.95:1 로 작은 글씨
+5. **`main` 머지·배포** — 공개 사이트가 바로 바뀌므로 1번을 마친 뒤에.
+6. **`--muted` 를 진하게 갈지 결정** — 지금 `#64748b` 은 카드 위 대비 3.95:1 로 작은 글씨
    기준(4.5:1)에 살짝 못 미친다. 보조 라벨(투명도·두께·점선·힌트) 전반에 쓰이는 색이라
    임의로 안 바꿨다. 진하게 가려면 `#5a6577` 정도면 넘긴다.
-6. (선택) `recorder.js` 를 ES 모듈로 쪼개기. 그러면 `test/helpers/extract.js` 를 버리고
+7. (선택) `recorder.js` 를 ES 모듈로 쪼개기. 그러면 `test/helpers/extract.js` 를 버리고
    `import` 로 바꿀 수 있다.

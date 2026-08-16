@@ -1,5 +1,5 @@
 /* 경계 데이터 무결성.
-   이 파일들은 손으로 만들지 않고 build-sido-hires.mjs 가 생성한다.
+   이 파일들은 손으로 만들지 않고 build-sido-hires.mjs · build-nk-admin1.mjs 가 생성한다.
    생성기를 고칠 때마다 여기서 걸리게 해 둔다 — 눈으로는 안 보이는 문제들이다. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,6 +7,7 @@ import { readJSON } from './helpers/extract.js';
 
 const hires = readJSON('recorder/js/data/sido-hires.json');
 const border = readJSON('recorder/js/data/korea-border.json');
+const admin1 = readJSON('recorder/js/data/admin1.json');
 
 const ringsOf = (g) => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
 const feat = (name) => hires.features.find((f) => f.properties.name.startsWith(name));
@@ -123,4 +124,79 @@ test('국경선이 서해에서 동해까지 끊김 없이 이어진다', () => 
   const holes = [];
   for (let x = Math.floor(126.52 * 100); x <= Math.floor(128.39 * 100); x++) if (!covered.has(x)) holes.push(x / 100);
   assert.deepEqual(holes.slice(0, 5), [], `선이 지나지 않는 경도 ${holes.length}칸`);
+});
+
+/* ── 북한 1급 행정구역 (build-nk-admin1.mjs) ──
+   원래 admin1.json 의 북한 경계는 도당 100~220점짜리라 우리 시도 옆에서 눈에 띄게 각졌고,
+   군사분계선이 우리 경기·강원과 중앙값 1.75~6.6km 어긋나 같이 칠하면 선이 겹치거나 벌어졌다. */
+
+const NK = admin1.features.filter((f) => f.properties.country === '북한');
+const nkRings = (f) => ringsOf(f.geometry).flat();
+
+test('북한 1급 행정구역이 13개다 (개성·남포가 빠져 있었다)', () => {
+  assert.equal(NK.length, 13, `북한이 ${NK.length}개`);
+  for (const n of ['개성특별시', '남포특별시', '평양직할시', '라선특별시'])
+    assert.ok(NK.some((f) => f.properties.short === n), `${n} 없음`);
+});
+
+test('북한 경계가 우리 시도급으로 촘촘하다', () => {
+  /* 저해상도로 되돌아가면 여기서 걸린다. 예전 값은 도당 100~220점이었다. */
+  const thin = NK.filter((f) => nkRings(f).reduce((s, r) => s + r.length, 0) < 500)
+    .map((f) => f.properties.short);
+  assert.deepEqual(thin, [], '이 도들이 저해상도로 돌아갔다');
+});
+
+test('북한 링이 닫혀 있고 점이 3개 이상이다', () => {
+  for (const f of NK) for (const r of nkRings(f)) {
+    assert.ok(r.length >= 4, `${f.properties.short}: 링 점 ${r.length}개`);
+    assert.deepEqual(r[0], r.at(-1), `${f.properties.short}: 링이 닫히지 않음`);
+  }
+});
+
+test('군사분계선이 북한 경계와 꼭짓점 단위로 붙는다', () => {
+  /* 우리 국경선(= 경기·강원의 북쪽 변)을 북한 쪽 폴리곤에 그대로 치환해 넣었으므로,
+     선 위의 점은 전부 북한 경계 위에 있어야 한다. 어긋나면 두 색칠 사이가 벌어진다.
+
+     양 끝 6km 는 뺀다 — 거기서는 국경선이 해안에 닿고, 우리 해안선(국토부)과
+     북한 해안선(OSM)이 원래 다른 데이터라 최대 5km 차이가 난다. 군사분계선 문제가 아니다. */
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+
+  const segs = [];                       // 북한 변 — 경도 0.1° 칸으로 나눠 담는다 (5,806 × 전수 비교는 느리다)
+  const bucket = new Map();
+  for (const f of NK) for (const r of nkRings(f)) for (let i = 1; i < r.length; i++) {
+    if (Math.max(r[i][1], r[i-1][1]) < 37.4 || Math.min(r[i][1], r[i-1][1]) > 39) continue;
+    const k = segs.push([r[i-1], r[i]]) - 1;
+    for (let b = Math.floor(Math.min(r[i][0], r[i-1][0]) * 10); b <= Math.floor(Math.max(r[i][0], r[i-1][0]) * 10); b++)
+      (bucket.get(b) || bucket.set(b, []).get(b)).push(k);
+  }
+  const near = (pt) => [Math.floor(pt[0]*10) - 1, Math.floor(pt[0]*10), Math.floor(pt[0]*10) + 1]
+    .flatMap((b) => bucket.get(b) || []);
+
+  /* 선의 양 끝(해안에 닿는 두 점). 조각이 여러 개라 '한 번만 나오는 끝점'이 바다 쪽 끝이다 —
+     조각끼리 맞물리는 가운데 이음매를 끝으로 잘못 보면 멀쩡한 10km 를 그냥 건너뛰게 된다. */
+  const ends = new Map();
+  for (const f of border.features) for (const p of [f.geometry.coordinates[0], f.geometry.coordinates.at(-1)]) {
+    const k = p[0].toFixed(6) + ',' + p[1].toFixed(6);
+    ends.set(k, (ends.get(k) || 0) + 1);
+  }
+  const tips = [...ends].filter(([, n]) => n === 1).map(([k]) => k.split(',').map(Number));
+  assert.equal(tips.length, 2, `국경선의 끝이 ${tips.length}개 — 조각이 끊겼다`);
+
+  for (const f of border.features) {
+    const c = f.geometry.coordinates;
+    for (let i = 0; i < c.length; i++) {
+      if (tips.some((t) => KM(c[i][0]-t[0], c[i][1]-t[1], c[i][1]) < 6)) continue;
+      let best = Infinity;
+      for (const k of near(c[i])) {
+        const [a, b] = segs[k];
+        const dx = b[0]-a[0], dy = b[1]-a[1], L = dx*dx + dy*dy;
+        let t = L ? ((c[i][0]-a[0])*dx + (c[i][1]-a[1])*dy) / L : 0;
+        t = Math.max(0, Math.min(1, t));
+        const d = KM(c[i][0]-(a[0]+dx*t), c[i][1]-(a[1]+dy*t), c[i][1]);
+        if (d < best) best = d;
+        if (best === 0) break;
+      }
+      assert.ok(best < 0.001, `국경선 ${c[i]} 이 북한 경계에서 ${best.toFixed(3)}km 떨어져 있다`);
+    }
+  }
 });

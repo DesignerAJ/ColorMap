@@ -61,6 +61,21 @@ node tools/serve.mjs          # 또는  python -m http.server 5500
 다시 만들려면 `MAPBOX_TOKEN=... node recorder/tools/build-korea-border.mjs`
 (`npm i @mapbox/vector-tile pbf` 필요).
 
+북한 1급 행정구역(`admin1.json` 안의 '북한' 13개)은 OpenStreetMap 에서 받아
+`node recorder/tools/build-nk-admin1.mjs` 로 만듭니다. 원래 들어 있던 경계는 도당
+100~220점짜리라 도당 1.6만점인 우리 시도 옆에서 눈에 띄게 각졌고, 군사분계선 구간이
+우리 경기·강원과 중앙값 1.75~6.6km 어긋나 같이 칠하면 선이 겹치거나 벌어졌습니다.
+
+군사분계선에 닿는 도(강원도·개성특별시)는 그 구간을 **`korea-border.json` 으로 치환**합니다.
+같은 선을 두 데이터가 각자 그리면 아무리 정밀해도 또 어긋나기 때문입니다. 치환하면 우리
+색칠과 꼭짓점 단위로 붙습니다. 양 끝 해안 6km 는 예외로 두었습니다 — 거기서는 우리
+해안선(국토부)과 북한 해안선(OSM)이 원래 다른 데이터라 최대 5km 차이가 납니다.
+
+원본에 아예 빠져 있던 개성특별시·남포특별시가 이때 들어와 11개 → 13개가 됩니다.
+
+> 북한 경계는 OpenStreetMap 데이터로 만들었습니다 (`admin_level=4`, `ISO3166-2=KP-*`).
+> © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright)
+
 장소 검색은 VWorld(국토교통부)와 Google Places를 씁니다 — 인증키는
 `recorder/js/config.js`의 `SEARCH_KEYS`에 넣습니다. 두 키 모두 브라우저에 노출되는
 값이라 발급처에서 사용 도메인·HTTP 리퍼러 제한을 걸어야 합니다.
