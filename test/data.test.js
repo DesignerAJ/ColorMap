@@ -257,13 +257,15 @@ test('북한 색칠이 우리 섬을 침범하지 않는다', () => {
    데이터로 그려 둘 다 없앤다. */
 
 const countries = readJSON('recorder/js/data/korea-countries.json');
-const country = (iso) => countries.features.find((f) => f.properties.iso_3166_1_alpha_3 === iso);
-const inCountry = (pt, iso) => ringsOf(country(iso).geometry)
-  .some((p) => inRing(pt, p[0]) && !p.slice(1).some((h) => inRing(pt, h)));
+/* 나라마다 feature 하나가 아니라 시도·도마다 하나다 (거대한 feature 하나는 삼각분할이
+   깨져 화면에 삼각형이 뻗는다). 그래서 iso 로 묶어서 본다. */
+const countryFeats = (iso) => countries.features.filter((f) => f.properties.iso_3166_1_alpha_3 === iso);
+const inCountry = (pt, iso) => countryFeats(iso).some((f) => ringsOf(f.geometry)
+  .some((p) => inRing(pt, p[0]) && !p.slice(1).some((h) => inRing(pt, h))));
 
-test('국가 폴리곤은 KOR·PRK 둘이다', () => {
-  assert.equal(countries.features.length, 2);
-  for (const iso of ['KOR', 'PRK']) assert.ok(country(iso), `${iso} 없음`);
+test('국가 폴리곤에 KOR·PRK 가 모두 있다', () => {
+  assert.equal(countryFeats('KOR').length, 17, '대한민국이 시도 17개로 나뉘어 있어야 한다');
+  assert.equal(countryFeats('PRK').length, 13, '북한이 도 13개로 나뉘어 있어야 한다');
 });
 
 test('연평도 북쪽 북한 섬 넷이 북한이다', () => {
@@ -308,7 +310,7 @@ test('국가 폴리곤이 시도 색칠과 꼭짓점까지 같다', () => {
      같이 썼을 때 경계가 이중으로 보인다. */
   const r5 = (v) => Number(v.toFixed(5));
   const korPts = new Set();
-  for (const poly of ringsOf(country('KOR').geometry)) for (const r of poly)
+  for (const f of countryFeats('KOR')) for (const poly of ringsOf(f.geometry)) for (const r of poly)
     for (const p of r) korPts.add(p[0] + ',' + p[1]);
   let missing = 0, total = 0;
   for (const f of hires.features) for (const poly of ringsOf(f.geometry)) for (const r of poly)
@@ -420,4 +422,34 @@ test('행정구역선에 해안선이 섞이지 않았다', () => {
     if (d < near) near = d;
   }
   assert.ok(near > 30, `제주에서 ${near.toFixed(1)}km 떨어진 곳에 행정구역선이 있다 — 해안선이 섞였다`);
+});
+
+test('국가 폴리곤과 행정구역 폴리곤에 핀치가 없다', () => {
+  /* 한 링이 같은 점을 두 번 지나면 mapbox-gl 의 삼각분할이 그 점을 가로질러 이어,
+     화면에 얇고 긴 삼각형이 뻗는다 — 충남 해안에서 실제로 그렇게 보였다.
+     정밀도를 줄이거나 해안선으로 자르는 과정에서 새로 생길 수 있어 여기서 막는다. */
+  const check = (feats, label) => {
+    const bad = [];
+    for (const f of feats) for (const poly of ringsOf(f.geometry)) for (const r of poly) {
+      const seen = new Set();
+      for (let i = 0; i < r.length - 1; i++) {
+        const k = r[i][0] + ',' + r[i][1];
+        if (seen.has(k)) bad.push(`${label} @ ${k}`); else seen.add(k);
+      }
+    }
+    assert.deepEqual(bad.slice(0, 3), [], `${label}: 핀치 ${bad.length}곳`);
+  };
+  check(countries.features, 'korea-countries');
+  check(NK, 'admin1 북한');
+  check(admin1.features.filter((f) => f.properties.country === '대한민국'), 'admin1 대한민국');
+});
+
+test('국가 폴리곤이 시도마다 나뉘어 있다', () => {
+  /* 처음에는 나라별로 폴리곤 4,173개를 MultiPolygon 하나에 몰아넣었는데, 그 거대한
+     feature 를 타일마다 삼각분할하면서 충남 해안에 삼각형이 뻗었다. 시도 탭은 시도마다
+     feature 를 나눠 쓰고 멀쩡하므로 같은 구조를 따른다. */
+  assert.equal(countries.features.length, 30, `feature 가 ${countries.features.length}개 — 시도 17 + 북한 13 이어야 한다`);
+  const big = countries.features
+    .filter((f) => ringsOf(f.geometry).flat().reduce((s, r) => s + r.length, 0) > 200000);
+  assert.deepEqual(big.map((f) => f.properties.name), [], '한 feature 에 점이 20만개를 넘는다 — 다시 뭉쳤다');
 });

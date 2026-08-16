@@ -77,6 +77,28 @@ function stitch(members) {
   return rings;
 }
 
+/* 한 링이 같은 점을 두 번 지나면(핀치) mapbox-gl 의 삼각분할이 그 점을 가로질러 이어
+   화면에 얇고 긴 삼각형이 뻗는다. 해안선으로 자르고 국경선을 치환하는 과정에서 생긴다.
+   그 점에서 잘라 나누면 양쪽 다 온전한 링이 되고 면적도 그대로다.
+   (build-sido-hires.mjs 의 splitAtPinches 와 같은 처리) */
+function splitAtPinches(ring) {
+  const out = [], stack = [], pos = new Map();
+  const k = (p) => p[0] + ',' + p[1];
+  for (const p of ring) {
+    if (pos.has(k(p))) {
+      const at = pos.get(k(p));
+      const loop = stack.slice(at).concat([p]);
+      if (loop.length > 3) out.push(loop);
+      for (let t = at + 1; t < stack.length; t++) pos.delete(k(stack[t]));
+      stack.length = at + 1;
+    } else {
+      pos.set(k(p), stack.length);
+      stack.push(p);
+    }
+  }
+  return out.length ? out : [ring];
+}
+
 const ringArea = (r) => {
   let a = 0;
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0]*r[i][1] - r[i][0]*r[j][1];
@@ -351,6 +373,11 @@ for (const e of data.elements) {
     rings[0] = snapped.ring;
     note += ` · 국경 ${snapped.replaced}점 → 우리 선 ${snapped.added}점`;
   }
+
+  // 4) 핀치를 잘라 나눈다 — 안 하면 화면에 얇은 삼각형이 뻗는다
+  const before = rings.length;
+  rings = rings.flatMap(splitAtPinches).filter(r => r.length >= 4);
+  if (rings.length !== before) note += ` · 핀치 ${rings.length - before}개 링으로 나눔`;
 
   const pts = rings.flat();
   const lo = pts.map(p => p[0]), la = pts.map(p => p[1]);

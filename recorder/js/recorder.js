@@ -357,6 +357,10 @@ function initRecorder(map) {
 
     // 색과 투명도를 구역마다 따로 준다 — 둘 다 같은 키로 match 한다
     function applyColors() {
+      /* 남·북한은 우리 폴리곤 레이어에도 같은 색을 먹여야 한다. 색칠이 **비었을 때도**
+         불러야 한다 — 예전에는 아래 빈 목록 분기에서 곧장 return 해 버려서, 전체 삭제나
+         탭 전환으로 목록이 비어도 우리 레이어에는 직전 색이 그대로 남아 있었다. */
+      if (cfg.id === 'country') queueMicrotask(syncKoreaCountries);
       if (!map.getLayer(cfg.layer)) return;
       if (!entries.length) { map.setPaintProperty(cfg.layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
       const col = ['match', ['get', cfg.prop]], op = ['match', ['get', cfg.prop]];
@@ -364,7 +368,6 @@ function initRecorder(map) {
       col.push('rgba(0,0,0,0)'); op.push(0);
       map.setPaintProperty(cfg.layer, 'fill-color', col);
       map.setPaintProperty(cfg.layer, 'fill-opacity', op);
-      if (cfg.id === 'country') syncKoreaCountries();   // 남·북한은 우리 폴리곤 레이어에도 같은 색을 먹인다
     }
 
     /* 소스·레이어는 스타일을 바꿀 때마다 다시 깔아야 한다.
@@ -600,11 +603,14 @@ function initRecorder(map) {
 
   /* 색칠 모드 4종. 여기 PAINTERS 한 곳에 모여 있어야 토글·PSD/SVG 내보내기·녹화 중
      잠금에서 빠뜨리지 않는다. (모드를 늘릴 때마다 한 군데씩 누락돼 버그가 났던 부분) */
+  /* 탭을 바꿔도 색칠은 지우지 않는다. 국가와 행정구역을 같이 쓰고 싶을 때가 있고
+     (예: 중국을 칠하고 우리 시도를 칠하기), 지우고 싶으면 각 탭의 '전체 삭제'가 있다.
+     예전에는 전환할 때마다 전부 초기화했는데, 다른 탭을 잠깐 열어봤다가 돌아오면
+     하던 작업이 날아갔다. */
   function setColorMode(mode) {
     PAINTERS.forEach((p) => {
       $(`seg-${p.id}`).classList.toggle('active', p.id === mode);
       $(`${p.id}-block`).style.display = p.id === mode ? '' : 'none';
-      p.reset();                     // 모드 전환 시 색칠 전부 초기화
     });
     const p = PAINTERS.find(x => x.id === mode);
     if (p) p.load();                 // 처음 열 때만 실제로 받아옴
