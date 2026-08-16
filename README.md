@@ -92,6 +92,11 @@ OSM 행정경계는 **영해까지 포함합니다** — 그대로 쓰면 황해
 최대 3.1km 어긋났기 때문입니다. 2.0은 시도 색칠이 OSM이었고 Mapbox 행정경계도 결국
 OSM이라 우연히 맞아떨어졌던 것입니다. 나머지 나라는 Mapbox 그대로입니다.
 
+행정구역선도 남·북한은 우리 폴리곤에서 뽑습니다(`korea-admin1-lines.json`,
+`node recorder/tools/build-korea-admin1-lines.mjs`). 스타일이 주는 `admin-1-boundary`가
+우리 색칠보다 훨씬 성겨 모양이 안 맞았기 때문입니다. 맞닿은 변만 고릅니다 — 외곽선을
+통째로 그리면 해안선까지 행정구역선이 되어 나라 둘레에 테두리가 생깁니다.
+
 장소 검색은 VWorld(국토교통부)와 Google Places를 씁니다 — 인증키는
 `recorder/js/config.js`의 `SEARCH_KEYS`에 넣습니다. 두 키 모두 브라우저에 노출되는
 값이라 발급처에서 사용 도메인·HTTP 리퍼러 제한을 걸어야 합니다.

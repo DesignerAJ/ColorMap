@@ -376,3 +376,48 @@ test('하구 구간이 말도에서 끝난다 (그 서쪽 NLL 까지 잇지 않�
   assert.ok(d < 6, `하구 구간 서쪽 끝이 말도에서 ${d.toFixed(1)}km 떨어져 있다`);
   assert.ok(westEnd[0] > 126.0, `하구 구간이 ${westEnd[0].toFixed(3)}°E 까지 뻗어 있다 — 말도보다 서쪽`);
 });
+
+/* ── 남·북한 행정구역선 (build-korea-admin1-lines.mjs) ──
+   스타일이 주는 행정구역선은 우리 색칠보다 훨씬 성겨서 모양이 안 맞았다.
+   우리 폴리곤에서 맞닿은 변만 뽑아 그린다. */
+
+const adminLines = readJSON('recorder/js/data/korea-admin1-lines.json');
+
+test('행정구역선이 남·북한 양쪽에 있다', () => {
+  for (const iso of ['KR', 'KP']) {
+    const n = adminLines.features.filter((f) => f.properties.iso === iso)
+      .reduce((s, f) => s + f.geometry.coordinates.length, 0);
+    assert.ok(n > 5000, `${iso} 행정구역선이 ${n}점뿐 — 저해상도로 돌아갔다`);
+  }
+});
+
+test('행정구역선 꼭짓점이 색칠 꼭짓점과 같다', () => {
+  /* 선과 색칠이 같은 출처여야 어느 줌에서도 붙는다. 어긋나면 국경선에서 겪은 것과 같은
+     '선 따로 색 따로' 가 행정구역선에서 반복된다. */
+  const r5 = (v) => Number(v.toFixed(5));
+  const pts = new Set();
+  for (const f of hires.features) for (const poly of ringsOf(f.geometry)) for (const r of poly)
+    for (const p of r) pts.add(r5(p[0]) + ',' + r5(p[1]));
+  for (const f of NK) for (const r of nkRings(f)) for (const p of r) pts.add(r5(p[0]) + ',' + r5(p[1]));
+
+  let missing = 0, total = 0;
+  for (const f of adminLines.features) for (const p of f.geometry.coordinates) {
+    total++;
+    if (!pts.has(p[0] + ',' + p[1])) missing++;
+  }
+  assert.equal(missing, 0, `행정구역선 ${missing}/${total} 점이 색칠에 없는 좌표다`);
+});
+
+test('행정구역선에 해안선이 섞이지 않았다', () => {
+  /* 폴리곤 외곽선을 통째로 그리면 해안선까지 행정구역선이 되어 나라 둘레에 테두리가 생긴다.
+     맞닿은 변(두 번 나오는 변)만 골라야 한다. 제주는 섬이라 맞닿은 이웃이 없다 —
+     제주 해안이 선에 들어 있으면 외곽선을 그리고 있다는 뜻이다. */
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+  const JEJU = [126.5312, 33.3617];
+  let near = Infinity;
+  for (const f of adminLines.features) for (const p of f.geometry.coordinates) {
+    const d = KM(p[0] - JEJU[0], p[1] - JEJU[1], p[1]);
+    if (d < near) near = d;
+  }
+  assert.ok(near > 30, `제주에서 ${near.toFixed(1)}km 떨어진 곳에 행정구역선이 있다 — 해안선이 섞였다`);
+});

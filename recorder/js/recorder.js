@@ -1241,6 +1241,55 @@ function initRecorder(map) {
 
   map.on('style.load', addKoreaCountryLayer);
 
+  /* ── 남·북한 행정구역선도 우리 데이터로 ──
+
+     행정구역선은 스타일의 `admin-1-boundary`·`admin-boundaries` 에서 온다. 그런데 색칠은
+     우리 데이터(시도 1.6만점, 북한 도 4~8천점)라 선이 훨씬 성겨 모양이 안 맞았다.
+     국경선에서 겪은 것과 같은 문제다 — 선과 색칠은 같은 출처여야 한다.
+
+     `korea-admin1-lines.json` 은 우리 폴리곤에서 **맞닿은 변만** 뽑은 것이다(1MB, 전송 0.3MB).
+     폴리곤 외곽선을 통째로 그리면 해안선까지 행정구역선이 되어 나라 둘레에 테두리가 생긴다. */
+  const KA_LAYER = 'korea-admin1-lines';
+  let KA_GEO = null;
+
+  function addKoreaAdmin1Lines() {
+    if (!KA_GEO || !styleReady || map.getLayer(KA_LAYER)) return;
+    if (!map.getSource(KA_LAYER)) map.addSource(KA_LAYER, { type: 'geojson', tolerance: 0, data: KA_GEO });
+    map.addLayer({
+      id: KA_LAYER, type: 'line', source: KA_LAYER,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 1 },
+    });
+    hideMapboxKoreanAdmin1();
+    applyBoundary('admin');     // 행정구역선 컨트롤(색·투명도·두께·점선)을 그대로 받는다
+    raiseBoundaries();
+  }
+
+  /* 스타일의 행정구역선에서 남·북한 구간만 뺀다. 우리 선이 준비되기 전에는 가리지 않는다 —
+     가려놓고 못 그리면 행정구역선이 통째로 사라진다. */
+  function hideMapboxKoreanAdmin1() {
+    if (!KA_GEO || !styleReady) return;
+    for (const l of map.getStyle().layers || []) {
+      if (l['source-layer'] !== 'admin') continue;
+      try {
+        const f = map.getFilter(l.id);
+        if (!f || JSON.stringify(f).includes('__kr-admin1')) continue;   // 이미 처리한 레이어
+        map.setFilter(l.id, ['all', f,
+          ['any',
+            ['!=', ['get', 'admin_level'], 1],
+            ['!', ['in', ['coalesce', ['get', 'iso_3166_1'], '__kr-admin1'], ['literal', ['KR', 'KP']]]]],
+        ]);
+      } catch (_) {}
+    }
+  }
+
+  fetch('./recorder/js/data/korea-admin1-lines.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((geo) => { if (!geo) return; KA_GEO = geo; addKoreaAdmin1Lines(); })
+    .catch(() => {});   // 못 받으면 스타일의 행정구역선이 그대로 쓰인다
+
+  map.on('style.load', addKoreaAdmin1Lines);
+
   /* ── 경계선 (국경선 / 분쟁지역 / 행정구역선) ── */
   // 종류별 레이어 후보 (스타일마다 이름 다름, -bg 외곽선 포함)
   const BOUNDARY_LAYERS = {
@@ -1250,7 +1299,8 @@ function initRecorder(map) {
     disputed: ['admin-0-boundary-disputed',                   // 도로표시/모노톤
                'dispute-boundaries'],                         // 단색/단색지형: 분쟁지역
     admin:    ['admin-1-boundary', 'admin-1-boundary-bg',     // 도로표시/모노톤
-               'admin-boundaries'],                           // 단색/단색지형: 행정구역선
+               'admin-boundaries',                            // 단색/단색지형: 행정구역선
+               KA_LAYER],                                     // 남·북한 — 우리 데이터로 그린다
   };
   function bdExistingLayers(kind) {
     return BOUNDARY_LAYERS[kind].filter(id => map.getLayer(id));
