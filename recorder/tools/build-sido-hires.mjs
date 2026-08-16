@@ -16,12 +16,19 @@
      이어붙이면 시도 외곽선이 된다. 실측으로 확인했다 — 공유 변 112,596개가
      정확히 두 번씩만 쓰여 위상이 깨끗하다.
 
-   핀치(자기교차) 처리:
-     변을 이을 때 한 점에서 셋 이상이 뻗어나가는 분기점을 만나면 다음 변을 임의로
-     고르게 되는데, 그러면 링이 그 점을 두 번 지나며 자기 자신과 만난다. 그대로 두면
-     mapbox-gl 의 삼각분할이 그 지점을 가로질러 이어버려 화면에 얇고 긴 삼각형이
-     뻗어나온다 — 줌에 따라 나타났다 사라지는 '중첩된 삼각형'의 정체다.
-     splitAtPinches 로 그 점에서 링을 나눠 없앤다 (41곳 → 0곳, 면적은 그대로).
+   분기점 처리 (여기가 핵심이다):
+     한 점에서 변이 셋 이상 뻗어나가는 곳이 있다 — 육지가 한 점에서만 맞닿는 지점이다.
+     거기서 다음 변을 **임의로 고르면 링이 엉뚱한 갈래로 이어진다.** 전혀 다른 곳까지
+     갔다가 돌아오고, mapbox-gl 이 그걸 삼각분할하면 폴리곤을 가로지르는 거대한 삼각형이
+     된다 — 줌에 따라 나타났다 사라지는 그 삼각형이다.
+     assembleRings 는 들어온 방향의 반대편에서 각도 순으로 가장 가까운 변을 고른다.
+     평면 그래프의 면을 따라 도는 표준 방법이라 분기점에서도 제 갈래로 이어진다.
+
+   그래도 남는 것들:
+     splitAtPinches   같은 점을 두 번 지나는 링을 그 점에서 나눈다
+     cleanRing        꼭짓점을 공유하지 않고 가로지르는 변(슬리버)을 잘라낸다
+     nudgeTouchingHoles  구멍이 바깥 링과 맞닿은 점을 안쪽으로 약 2m 민다
+     셋 다 같은 삼각형 증상을 낸다. 하나만 고쳐서는 안 없어진다.
 
    사용법: node recorder/tools/build-sido-hires.mjs
 */
@@ -117,33 +124,54 @@ function splitAtPinches(ring) {
 }
 
 /* 남은 방향 변들을 이어 닫힌 링으로 만든다.
-   한 점에서 여러 변이 뻗어나가는 경우(육지가 한 점에서만 맞닿는 곳)가 있어
-   시작점별로 나가는 변을 목록으로 들고 하나씩 꺼내 쓴다. */
-function assembleRings(edges) {
+
+   한 점에서 여러 변이 뻗어나가는 분기점이 있다 — 육지가 한 점에서만 맞닿는 곳이다.
+   거기서 다음 변을 **아무거나 집어 들면 안 된다.** 그렇게 하면 링이 엉뚱한 갈래로 이어져
+   전혀 다른 곳까지 갔다가 돌아오고, mapbox-gl 이 그걸 삼각분할하면 폴리곤을 가로지르는
+   거대한 삼각형이 된다. 안산·시흥 해안의 삼각형이 이것이었다.
+
+   들어온 방향의 반대편에서 각도 순으로 **가장 가까운 변**을 고른다. 평면 그래프의 면을
+   따라 도는 표준 방법이고, 이렇게 하면 분기점에서도 링이 제 갈래로 이어진다.
+   (핀치·자기교차·맞닿은 구멍을 나중에 고치는 것보다, 애초에 제대로 잇는 게 맞다.) */
+function assembleRings(edges, coord) {
   const out = new Map();                                  // 시작점 → [끝점, …]
   for (const [a, b] of edges) {
     if (!out.has(a)) out.set(a, []);
     out.get(a).push(b);
   }
+  const angleOf = (from, to) => {
+    const p = coord.get(from), q = coord.get(to);
+    return Math.atan2(q[1] - p[1], q[0] - p[0]);
+  };
   const rings = [];
-  for (const [start] of edges) {
-    while (out.get(start)?.length) {
-      const ring = [start];
-      let cur = start;
-      while (true) {
+  for (const [s0] of edges) {
+    while (out.get(s0)?.length) {
+      const ring = [s0];
+      let prev = null, cur = s0;
+      for (;;) {
         const nexts = out.get(cur);
         if (!nexts || !nexts.length) break;                // 끊긴 사슬 — 아래에서 버린다
-        const nxt = nexts.pop();
+        let idx = 0;
+        if (prev !== null && nexts.length > 1) {
+          const back = angleOf(cur, prev);
+          let best = Infinity;
+          nexts.forEach((n, i) => {
+            let d = back - angleOf(cur, n);                 // 시계 방향으로 얼마나 돌아야 만나는가
+            while (d <= 1e-12) d += Math.PI * 2;
+            if (d < best) { best = d; idx = i; }
+          });
+        }
+        const nxt = nexts.splice(idx, 1)[0];
         ring.push(nxt);
+        prev = cur;
         cur = nxt;
-        if (cur === start) break;
+        if (cur === s0) break;
       }
       if (ring.length > 3 && ring[0] === ring[ring.length - 1]) rings.push(...splitAtPinches(ring));
     }
   }
   return rings;
 }
-
 
 /* 진짜 자기교차(끝점을 공유하지 않고 가로지르는 두 변) 복구.
 
@@ -275,7 +303,7 @@ for (const [sido, feats] of groups) {
   }
 
   // 3) 남은 변을 링으로 잇는다
-  const rings = assembleRings(kept).map((r) => r.map((k) => coord.get(k))).flatMap(cleanRing);
+  const rings = assembleRings(kept, coord).map((r) => r.map((k) => coord.get(k))).flatMap(cleanRing);
   if (!rings.length) { console.error(`${sido}: 링 조립 실패 — 건너뜀`); continue; }
 
   // 4) 바깥 링 / 구멍 구분 — 다른 링 안에 들어 있으면 구멍이다
