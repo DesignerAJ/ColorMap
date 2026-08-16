@@ -364,6 +364,7 @@ function initRecorder(map) {
       col.push('rgba(0,0,0,0)'); op.push(0);
       map.setPaintProperty(cfg.layer, 'fill-color', col);
       map.setPaintProperty(cfg.layer, 'fill-opacity', op);
+      if (cfg.id === 'country') syncCountryFixes();   // Mapbox 가 KOR 로 잘못 준 북한 섬을 덮는다
     }
 
     /* 소스·레이어는 스타일을 바꿀 때마다 다시 깔아야 한다.
@@ -1095,7 +1096,10 @@ function initRecorder(map) {
     applyToneLayers(color);   // 공원·토지이용 등은 톤만 맞춤 (종류별 명도 차이 유지)
   }
 
-  $('land-color').addEventListener('input', () => paintLandColor($('land-color').value));
+  $('land-color').addEventListener('input', () => {
+    paintLandColor($('land-color').value);
+    syncCountryFixes();          // 섬 보정이 육지색으로 덮고 있을 수 있다 — 같이 따라가야 한다
+  });
   $('sea-color').addEventListener('input',  () => {
     const c = $('sea-color').value;
     paintGroup(seaPaintLayers(), c);
@@ -1148,12 +1152,82 @@ function initRecorder(map) {
     }
   }
 
-  fetch(KR_BORDER_URL)
-    .then((r) => (r.ok ? r.json() : null))
-    .then((geo) => { if (!geo) return; KR_BORDER = geo; hideMapboxKoreanBorder(); addKoreaBorderLayer(); })
-    .catch(() => {});   // 못 받으면 Mapbox 국경선이 그대로 쓰인다
+  /* ── 지금은 우리 선을 그리지 않는다 (2.0 과 같이 Mapbox 국경선을 쓴다) ──
 
-  map.on('style.load', () => { hideMapboxKoreanBorder(); addKoreaBorderLayer(); });
+     우리 선에는 두 가지 문제가 있었다.
+
+     하나, 한강 하구가 통째로 빠진다. `build-korea-border.mjs` 가 경기도·강원도에서만
+     선을 뽑는데 강화도·교동도·석모도는 **인천광역시**라, 선이 126.517°E 에서 끊기고
+     그 앞은 김포 서쪽 가장자리 — 염하(김포와 강화 사이 물길)를 따라 꺾여 내려갔다.
+     2.0 은 강화·교동 **위로** 이어졌다.
+
+     둘, 국가 단위 색칠과 어긋난다. 국가 색칠은 Mapbox 데이터인데 우리 선은 국토부라
+     최대 3.1km 벌어진다. 선과 색칠이 맞아야 하는 쪽은 지금 국가 단위다.
+
+     그래서 Mapbox 국경선을 가리지 않고 그대로 쓴다. 한강 하구에는 실제로 군사분계선이
+     없다(정전협정상 중립수역, 파주 만우리~강화 말도 약 70km). 하구를 가로지르는 선은
+     제공자마다 다른 표기 관례이며, 지금은 2.0 과 같은 모양을 유지하기로 했다.
+
+     `korea-border.json` 과 생성 도구는 지웠지 않다 — `build-nk-admin1.mjs` 가 북한 경계를
+     우리 시도와 맞물리게 하는 데 그대로 쓴다. 화면에 선으로 그리지만 않는다.
+     되살리려면 아래 두 줄의 주석을 풀되, 인천광역시를 넣어 하구부터 다시 만들어야 한다. */
+  // fetch(KR_BORDER_URL)
+  //   .then((r) => (r.ok ? r.json() : null))
+  //   .then((geo) => { if (!geo) return; KR_BORDER = geo; hideMapboxKoreanBorder(); addKoreaBorderLayer(); })
+  //   .catch(() => {});
+  // map.on('style.load', () => { hideMapboxKoreanBorder(); addKoreaBorderLayer(); });
+  void KR_BORDER_URL; void addKoreaBorderLayer; void hideMapboxKoreanBorder;
+
+  /* ── Mapbox 국가 경계 보정: 연평도 북쪽 북한 섬 4개 ──
+
+     Mapbox 의 country-boundaries-v1 이 갈도·장재도·무도·료도를 KOR 로 분류한다.
+     그래서 국가 단위로 '대한민국'을 칠하면 북한 섬이 함께 칠해졌다. 한국 방송에서
+     그대로 나가면 사고가 되는 오류다. Tilequery 로 황해남도 해역 섬 62개를 전부
+     확인했고 이 넷만 틀렸다 — 나머지 58개와 강령반도 본토는 PRK 로 맞게 나온다.
+
+     색칠 위에 이 네 섬만 덮어 그린다.
+       북한을 칠했으면  → 북한 색으로 (제 나라 색을 찾아준다)
+       대한민국만 칠했으면 → 육지색으로 (잘못 칠해진 것을 지운다)
+       둘 다 아니면    → 투명
+
+     행정구역(admin1) 단위는 이미 북한 황해남도로 제대로 칠해지므로 손대지 않는다. */
+  const CFIX_LAYER = 'country-fix-fill';
+  let CFIX = null;
+
+  function addCountryFixLayer() {
+    if (!CFIX || !styleReady || map.getLayer(CFIX_LAYER)) return;
+    if (!map.getSource(CFIX_LAYER)) map.addSource(CFIX_LAYER, { type: 'geojson', tolerance: 0, data: CFIX });
+    map.addLayer({
+      id: CFIX_LAYER, type: 'fill', source: CFIX_LAYER,
+      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0 },
+    }, (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id);
+    syncCountryFixes();
+    raiseBoundaries();
+  }
+
+  function syncCountryFixes() {
+    if (!CFIX || !map.getLayer(CFIX_LAYER)) return;
+    const painter = PAINTERS.find(p => p.id === 'country');
+    const es = painter ? painter.entries() : [];
+    const prk = es.find(e => e.key === 'PRK');
+    const kor = es.find(e => e.key === 'KOR');
+    let color = 'rgba(0,0,0,0)', opacity = 0;
+    if (prk) { color = prk.color; opacity = prk.opacity; }
+    /* 위성사진에서는 육지색이 그 스타일의 값이 아니다(색 섹션을 숨기느라 갱신하지 않는다).
+       그래도 덮는 쪽을 택한다 — 사진 위 작은 얼룩이, 북한 섬이 우리 색으로 칠해지는 것보다 낫다. */
+    else if (kor) { color = $('land-color').value; opacity = 1; }
+    try {
+      map.setPaintProperty(CFIX_LAYER, 'fill-color', color);
+      map.setPaintProperty(CFIX_LAYER, 'fill-opacity', opacity);
+    } catch (_) {}
+  }
+
+  fetch('./recorder/js/data/country-fixes.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((geo) => { if (!geo) return; CFIX = geo; addCountryFixLayer(); })
+    .catch(() => {});   // 못 받으면 보정 없이 Mapbox 그대로 (그 경우 섬 4개가 우리 색이 된다)
+
+  map.on('style.load', addCountryFixLayer);
 
   /* ── 경계선 (국경선 / 분쟁지역 / 행정구역선) ── */
   // 종류별 레이어 후보 (스타일마다 이름 다름, -bg 외곽선 포함)
