@@ -363,3 +363,16 @@ test('하구 구간이 강화도·교동도 북쪽으로 지난다', () => {
     assert.ok(lat > north, `하구 구간이 ${name} 북쪽(${north})이 아니라 ${lat.toFixed(3)} 을 지난다`);
   }
 });
+
+test('하구 구간이 말도에서 끝난다 (그 서쪽 NLL 까지 잇지 않는다)', () => {
+  /* OSM 의 KP-KR 경계는 서해 124.98°E 까지 이어지지만, 정전협정상 중립수역이 끝나는 곳은
+     강화군 서도면 말도다. 그 서쪽은 NLL 이라 성격이 다른 선인데, 같은 굵기·같은 색으로
+     이어 그리면 하나의 확정된 국경처럼 읽힌다. 2.0 도 이 언저리까지만 그렸다. */
+  const MALDO = [126.1331, 37.6871];
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+  const e = estuary[0].geometry.coordinates;
+  const westEnd = e.reduce((a, p) => (p[0] < a[0] ? p : a), e[0]);
+  const d = KM(westEnd[0] - MALDO[0], westEnd[1] - MALDO[1], westEnd[1]);
+  assert.ok(d < 6, `하구 구간 서쪽 끝이 말도에서 ${d.toFixed(1)}km 떨어져 있다`);
+  assert.ok(westEnd[0] > 126.0, `하구 구간이 ${westEnd[0].toFixed(3)}°E 까지 뻗어 있다 — 말도보다 서쪽`);
+});

@@ -103,11 +103,22 @@ const dropped = cut.f.geometry.coordinates.length - 1 - cut.i;
 cut.f.geometry.coordinates = cut.f.geometry.coordinates.slice(0, cut.i + 1);
 console.log(`  염하 꼬리 ${dropped}점 잘라냄`);
 
-// OSM 쪽에서 이음매보다 서쪽만 남긴다
+/* 서쪽 끝은 **말도**(강화군 서도면)에서 끊는다.
+
+   OSM 의 KP-KR 경계는 서해 멀리 124.98°E 까지 이어지지만, 정전협정상 중립수역이
+   끝나는 곳이 말도다(파주 만우리 ~ 강화 말도, 약 70km). 그 서쪽은 NLL 로, 성격이
+   다른 선이라 같은 굵기·같은 색으로 이어 그리면 하나의 확정된 국경처럼 읽힌다.
+   2.0 도 이 언저리까지만 그렸다. */
+const MALDO = [126.1331, 37.6871];
+
 let ji = 0, jd = Infinity;
 west.forEach((p, i) => { const d = KM(p[0]-joint[0], p[1]-joint[1], p[1]); if (d < jd) { jd = d; ji = i; } });
-const estuary = west.slice(0, ji + 1);
+let wi = 0, wd = Infinity;
+west.forEach((p, i) => { const d = KM(p[0]-MALDO[0], p[1]-MALDO[1], p[1]); if (d < wd) { wd = d; wi = i; } });
+if (wi >= ji) throw new Error('말도가 이음매보다 동쪽이다 — 좌표를 확인하세요');
+const estuary = west.slice(wi, ji + 1);
 if (estuary.length < 2) throw new Error('하구 구간이 비었다');
+console.log(`  서쪽 끝: 말도에서 ${wd.toFixed(1)}km (${west[wi][0].toFixed(4)}, ${west[wi][1].toFixed(4)}) · 그 서쪽 ${wi}점 버림`);
 console.log(`  하구 구간 ${estuary.length}점 (경도 ${estuary[0][0].toFixed(3)} ~ ${estuary.at(-1)[0].toFixed(3)})`);
 
 land.forEach(f => { f.properties = { ...(f.properties || {}), kind: 'land' }; });
