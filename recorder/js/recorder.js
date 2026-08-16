@@ -362,9 +362,13 @@ function initRecorder(map) {
          탭 전환으로 목록이 비어도 우리 레이어에는 직전 색이 그대로 남아 있었다. */
       if (cfg.id === 'country') queueMicrotask(syncKoreaCountries);
       if (!map.getLayer(cfg.layer)) return;
-      if (!entries.length) { map.setPaintProperty(cfg.layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
+      /* 남·북한은 우리 레이어가 그린다. Mapbox 레이어에서도 빼야 두 번 칠해지지 않는데,
+         필터로만 막으면 스타일을 갈아끼울 때 필터가 원래대로 돌아가는 순간이 있다.
+         색 자체를 안 주면 그 틈에도 안 칠해진다 — 필터는 그대로 두고 이중으로 막는다. */
+      const list = (cfg.id === 'country' && KC_GEO) ? entries.filter(e => !KC_KEYS.includes(e.key)) : entries;
+      if (!list.length) { map.setPaintProperty(cfg.layer, 'fill-color', 'rgba(0,0,0,0)'); return; }
       const col = ['match', ['get', cfg.prop]], op = ['match', ['get', cfg.prop]];
-      entries.forEach(e => { col.push(e.key, e.color); op.push(e.key, e.opacity); });
+      list.forEach(e => { col.push(e.key, e.color); op.push(e.key, e.opacity); });
       col.push('rgba(0,0,0,0)'); op.push(0);
       map.setPaintProperty(cfg.layer, 'fill-color', col);
       map.setPaintProperty(cfg.layer, 'fill-opacity', op);
