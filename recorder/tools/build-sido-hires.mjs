@@ -306,20 +306,33 @@ for (const [sido, feats] of groups) {
   const rings = assembleRings(kept, coord).map((r) => r.map((k) => coord.get(k))).flatMap(cleanRing);
   if (!rings.length) { console.error(`${sido}: 링 조립 실패 — 건너뜀`); continue; }
 
-  // 4) 바깥 링 / 구멍 구분 — 다른 링 안에 들어 있으면 구멍이다
-  //    (광주가 전남 안에, 대구가 경북 안에 있는 식으로 실제로 구멍이 생긴다)
+  /* 4) 바깥 링 / 구멍 구분 — **중첩 깊이**로 정한다.
+
+     "어떤 바깥 링 안에 있으면 구멍"으로 처리하면 안 된다. 구멍 안에 또 링이 있는 경우가
+     있는데(호수 속의 섬), 그걸 다시 구멍으로 넣으면 구멍 둘이 겹쳐 놓이고 mapbox-gl 이
+     구멍을 바깥 링에 잇다가 엉뚱한 삼각형을 그린다 — 충남 부사호(126.560, 36.470)와
+     경기(126.691, 37.111)에서 실제로 났다.
+
+     깊이 0 = 바깥, 1 = 구멍, 2 = 그 구멍 안의 섬(다시 바깥), … 짝수면 육지, 홀수면 구멍.
+     부모는 자기를 감싸는 링 중 **가장 작은 것**이라야 한다. 큰 것부터 훑으며 마지막으로
+     자기를 감싼 링이 곧 가장 작은 부모다. */
   const info = rings.map((r) => ({ ring: r, bbox: bboxOf(r), area: Math.abs(signedArea(r)) }));
-  info.sort((a, b) => b.area - a.area);                    // 큰 것부터 — 포함 판정을 빨리 끝낸다
+  info.sort((a, b) => b.area - a.area);                    // 큰 것부터 — 부모는 늘 앞에 있다
+  const depth = new Array(info.length).fill(0);
+  const parentOf = new Array(info.length).fill(-1);
+  for (let i = 0; i < info.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (!bboxInside(info[i].bbox, info[j].bbox)) continue;
+      if (!ringInside(info[i].ring, info[j].ring)) continue;
+      parentOf[i] = j;                                     // 계속 덮어써서 가장 작은(마지막) 부모가 남는다
+    }
+    depth[i] = parentOf[i] === -1 ? 0 : depth[parentOf[i]] + 1;
+  }
   const holesOf = new Map();
   const outers = [];
   for (let i = 0; i < info.length; i++) {
-    let parent = -1;
-    for (let j = 0; j < outers.length; j++) {
-      const o = info[outers[j]];
-      if (bboxInside(info[i].bbox, o.bbox) && ringInside(info[i].ring, o.ring)) { parent = outers[j]; break; }
-    }
-    if (parent === -1) { outers.push(i); holesOf.set(i, []); }
-    else holesOf.get(parent).push(i);
+    if (depth[i] % 2 === 0) { outers.push(i); holesOf.set(i, []); }
+    else holesOf.get(parentOf[i]).push(i);
   }
 
   // 5) GeoJSON 규약대로 방향을 맞춘다 (바깥 반시계 / 구멍 시계)

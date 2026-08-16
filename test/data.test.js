@@ -509,3 +509,38 @@ test('구멍이 바깥 링과 꼭짓점을 공유하지 않는다', () => {
   scan(admin1.features.filter((f) => ['대한민국', '북한'].includes(f.properties.country)), '행정구역');
   assert.deepEqual(bad.slice(0, 3), [], `구멍이 바깥 링과 맞닿은 곳 ${bad.length}개`);
 });
+
+test('구멍 안에 또 구멍이 없고, 구멍끼리 맞닿지 않는다', () => {
+  /* 구멍 안의 링은 사실 육지다 — 호수 속의 섬. 그걸 다시 구멍으로 넣으면 구멍 둘이
+     겹쳐 놓이고 mapbox-gl 이 구멍을 바깥 링에 잇다가 폴리곤을 가로지르는 삼각형을
+     그린다. 충남 부사호(126.560, 36.470)와 경기(126.691, 37.111)에서 실제로 났다.
+     링을 중첩 깊이로 분류해 짝수는 육지, 홀수만 구멍으로 둔다. */
+  const mid = (r) => {
+    for (let i = 0; i + 2 < r.length; i++) {
+      const p = [(r[i][0]+r[i+1][0]+r[i+2][0])/3, (r[i][1]+r[i+1][1]+r[i+2][1])/3];
+      if (inRing(p, r)) return p;
+    }
+    return r[0];
+  };
+  const bad = [];
+  const scan = (feats, label) => {
+    for (const f of feats) for (const poly of ringsOf(f.geometry)) {
+      const holes = poly.slice(1);
+      for (let i = 0; i < holes.length; i++) {
+        for (let j = 0; j < holes.length; j++) {
+          if (i !== j && inRing(mid(holes[i]), holes[j]))
+            bad.push(`${label} ${f.properties.name || f.properties.short}: 구멍 안의 구멍 @ ${holes[i][0]}`);
+        }
+        for (let j = i + 1; j < holes.length; j++) {
+          const s = new Set(holes[i].map((p) => p[0] + ',' + p[1]));
+          for (const q of holes[j]) if (s.has(q[0] + ',' + q[1]))
+            bad.push(`${label} ${f.properties.name || f.properties.short}: 구멍끼리 맞닿음 @ ${q}`);
+        }
+      }
+    }
+  };
+  scan(hires.features, '시도');
+  scan(countries.features, '국가');
+  scan(admin1.features.filter((f) => ['대한민국', '북한'].includes(f.properties.country)), '행정구역');
+  assert.deepEqual(bad.slice(0, 3), [], `${bad.length}곳`);
+});

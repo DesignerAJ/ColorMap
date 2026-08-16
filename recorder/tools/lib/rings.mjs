@@ -21,17 +21,24 @@ export function nudgeTouchingHoles(poly, round = (v) => v) {
   if (poly.length < 2) return poly;
   let out = poly;
   for (let attempt = 0; attempt < 6; attempt++) {
+    /* 바깥 링뿐 아니라 **다른 구멍과 맞닿아도** 같은 문제가 난다 — 충남 부사호 주변에서
+       구멍끼리 꼭짓점 10개를 공유하고 있었다. 자기보다 앞선 링 전체를 본다. */
     const outer = new Set(out[0].map(key));
-    if (!out.slice(1).some((h) => h.some((p) => outer.has(key(p))))) return out;
+    const seen = out.slice(1).map((h, i) => {
+      const s = new Set(outer);
+      for (let j = 0; j < i; j++) for (const p of out[j + 1]) s.add(key(p));
+      return s;
+    });
+    if (!out.slice(1).some((h, i) => h.some((p) => seen[i].has(key(p))))) return out;
     const step = 2e-5 * Math.pow(2, attempt);             // 약 2m 에서 시작해 배로 키운다
-    out = [out[0], ...out.slice(1).map((hole) => {
+    out = [out[0], ...out.slice(1).map((hole, hi) => {
       const xs = hole.map((p) => p[0]), ys = hole.map((p) => p[1]);
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
       const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
       const d = Math.min(step, span / 8);
       let hit = false;
       const moved = hole.map((p) => {
-        if (!outer.has(key(p))) return p;
+        if (!seen[hi].has(key(p))) return p;
         hit = true;
         const dx = cx - p[0], dy = cy - p[1], L = Math.hypot(dx, dy) || 1;
         return [round(p[0] + (dx / L) * d), round(p[1] + (dy / L) * d)];
