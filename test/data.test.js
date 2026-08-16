@@ -11,10 +11,12 @@ const admin1 = readJSON('recorder/js/data/admin1.json');
 
 /* 국경선은 두 종류가 한 파일에 있다.
    land   — 우리 시도 데이터에서 뽑은 육상 군사분계선. 색칠과 꼭짓점 단위로 붙어야 한다.
+   shore   — 고성 종점에서 해안선까지 227m. 우리 시도 경계는 VWorld 가 DMZ 를 빼서
+             해안선보다 안쪽에서 끝나므로, 그대로 두면 선이 바다에 못 닿는다.
    estuary — 한강 하구부터 서쪽. 정전협정상 중립수역이라 군사분계선이 없고, 우리 데이터로는
             만들 수 없어 OSM 의 KP-KR 경계를 쓴다. 물 위라 어느 색칠과도 맞물리지 않는다.
    아래 검사들은 반드시 land 만 본다 — estuary 를 섞으면 전부 실패한다. */
-const landBorder = border.features.filter((f) => (f.properties || {}).kind !== 'estuary');
+const landBorder = border.features.filter((f) => (f.properties || {}).kind === 'land');
 const estuary = border.features.filter((f) => (f.properties || {}).kind === 'estuary');
 
 const ringsOf = (g) => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
@@ -122,7 +124,12 @@ test('국경선에 도 경계가 섞이지 않았다 (연천–철원 구간)', 
   assert.equal(shared, 0, `도 경계 ${shared}개가 국경선으로 그려진다`);
 });
 
-test('국경선이 서해에서 동해까지 끊김 없이 이어진다', () => {
+test('국경선이 하구부터 동해까지 끊김 없이 이어진다', () => {
+  /* 양 끝은 일부러 거기서 끝난다 —
+       서쪽 126.136  말도(강화군 서도면). 그 서쪽은 NLL 이라 성격이 다른 선이다.
+       동쪽 128.357  군사분계선이 동해에 닿는 강원도 최북단. 예전에는 여기서 멈추지 않고
+                     해안을 따라 5.8km 더 남쪽으로 내려가, 그만큼의 해안이 북한 쪽에
+                     놓인 것처럼 보였다. */
   const covered = new Set();
   for (const f of border.features) { const c = f.geometry.coordinates;
     for (let i = 1; i < c.length; i++) {
@@ -130,7 +137,7 @@ test('국경선이 서해에서 동해까지 끊김 없이 이어진다', () => 
       for (let x = Math.floor(lo * 100); x <= Math.floor(hi * 100); x++) covered.add(x);
     } }
   const holes = [];
-  for (let x = Math.floor(126.52 * 100); x <= Math.floor(128.39 * 100); x++) if (!covered.has(x)) holes.push(x / 100);
+  for (let x = Math.floor(126.14 * 100); x <= Math.floor(128.35 * 100); x++) if (!covered.has(x)) holes.push(x / 100);
   assert.deepEqual(holes.slice(0, 5), [], `선이 지나지 않는 경도 ${holes.length}칸`);
 });
 
@@ -543,4 +550,32 @@ test('구멍 안에 또 구멍이 없고, 구멍끼리 맞닿지 않는다', () 
   scan(countries.features, '국가');
   scan(admin1.features.filter((f) => ['대한민국', '북한'].includes(f.properties.country)), '행정구역');
   assert.deepEqual(bad.slice(0, 3), [], `${bad.length}곳`);
+});
+
+
+test('국경선 동쪽 끝이 고성에서 바다에 닿고 해안을 따라 내려가지 않는다', () => {
+  /* 군사분계선은 고성에서 동해에 닿으며 끝난다. 예전에는 거기서 멈추지 않고 해안선을 따라
+     5.83km 남쪽으로 더 그려져, 그만큼의 해안이 선 북쪽에 놓여 북한 땅처럼 보였다.
+     서쪽 염하 꼬리와 같은 원인 — Mapbox 국경선 5km 안쪽의 변을 모으다 해안선까지 걸린다.
+
+     우리 시도 경계는 VWorld 가 DMZ 를 빼서 해안선보다 227m 안쪽에서 끝난다. 그대로 두면
+     선이 바다에 못 닿고 끊겨 보이므로 방위 60°(2시 방향)로 해안선까지 잇는다 — kind: "shore". */
+  const f = landBorder.reduce((a, b) =>
+    Math.max(...b.geometry.coordinates.map((p) => p[0])) > Math.max(...a.geometry.coordinates.map((p) => p[0])) ? b : a);
+  const c = f.geometry.coordinates;
+  let top = 0;
+  c.forEach((p, i) => { if (p[1] > c[top][1]) top = i; });
+  assert.ok(top === 0 || top === c.length - 1,
+    `최북단이 ${top}/${c.length - 1} 번째 — 끝이 아니라 중간이다. 지나쳐 간 만큼 해안이 북쪽에 놓인다`);
+  const tip = c[top];
+  assert.ok(tip[1] > 38.61 && tip[1] < 38.62, `동쪽 종점 위도 ${tip[1].toFixed(4)} — 고성(38.614) 언저리가 아니다`);
+
+  const shore = border.features.filter((x) => (x.properties || {}).kind === 'shore');
+  assert.equal(shore.length, 1, '해안선까지 잇는 조각이 없다 — 선이 바다에 못 닿는다');
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+  const s = shore[0].geometry.coordinates;
+  const gap = Math.min(...s.map((p) => KM(p[0]-tip[0], p[1]-tip[1], p[1])));
+  assert.ok(gap < 0.001, `해안 조각이 종점에서 ${(gap*1000).toFixed(0)}m 떨어져 있다`);
+  const len = KM(s[0][0]-s.at(-1)[0], s[0][1]-s.at(-1)[1], s[0][1]);
+  assert.ok(len > 0.05 && len < 1, `해안까지 ${(len*1000).toFixed(0)}m — 너무 짧거나 길다`);
 });

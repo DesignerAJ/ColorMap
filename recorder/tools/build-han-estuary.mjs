@@ -32,17 +32,32 @@ const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180),
 const KEY = (p) => p[0].toFixed(7) + ',' + p[1].toFixed(7);
 
 // 사내 인증서 때문에 node fetch 가 막힌다 — build-nk-admin1.mjs 와 같은 이유로 curl 로 넘어간다
-async function overpass(query) {
+/* Overpass 는 부하가 걸리면 JSON 대신 HTML 안내문을 준다. 그대로 파싱하면 터지므로
+   기다렸다 다시 부른다 — 하루에 여러 번 돌리면 실제로 자주 걸린다. */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function overpassOnce(query) {
   try {
     const r = await fetch(OVERPASS, { method: 'POST', body: query });
     if (!r.ok) throw new Error(`Overpass ${r.status}`);
     return await r.json();
   } catch (e) {
     if (!/certificate|fetch failed/i.test(String(e.message || e))) throw e;
-    console.log('  (node fetch 가 인증서에 막혀 curl 로 받는다)');
     const { execFileSync } = await import('node:child_process');
-    return JSON.parse(execFileSync('curl', ['-s', '-m', '300', '-X', 'POST', '--data-binary', '@-', OVERPASS],
-      { input: query, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' }));
+    const out = execFileSync('curl', ['-s', '-m', '300', '-X', 'POST', '--data-binary', '@-', OVERPASS],
+      { input: query, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' });
+    if (!out.trim().startsWith('{')) throw new Error('Overpass 가 JSON 을 주지 않았다 (혼잡)');
+    return JSON.parse(out);
+  }
+}
+
+async function overpass(query) {
+  const waits = [0, 15, 45, 90];
+  for (let i = 0; i < waits.length; i++) {
+    if (waits[i]) { console.log(`  Overpass 혼잡 — ${waits[i]}초 뒤 다시 시도`); await sleep(waits[i] * 1000); }
+    try { return await overpassOnce(query); } catch (e) {
+      if (i === waits.length - 1) throw e;
+    }
   }
 }
 
@@ -103,6 +118,97 @@ const dropped = cut.f.geometry.coordinates.length - 1 - cut.i;
 cut.f.geometry.coordinates = cut.f.geometry.coordinates.slice(0, cut.i + 1);
 console.log(`  염하 꼬리 ${dropped}점 잘라냄`);
 
+/* 동쪽 끝도 같은 문제가 있다. 군사분계선은 고성에서 동해에 닿으며 끝나는데,
+   선이 거기서 멈추지 않고 **해안을 따라 5.8km 더 남쪽으로** 내려가 있었다.
+   그만큼의 해안이 선 북쪽에 놓여 북한 땅처럼 보인다.
+
+   원인은 서쪽 꼬리와 같다 — `build-korea-border.mjs` 가 Mapbox 국경선에서 5km 안쪽에
+   있는 우리 시도 변을 모으는데, 해안에서는 해안선도 그 안에 들어온다.
+
+   군사분계선이 바다에 닿는 지점은 강원도 경계의 **최북단**이다. 거기서 자른다. */
+/* 조각이 서로 맞물리는 이음매는 건드리면 안 된다 — 거기서 자르면 선이 끊긴다.
+   한 번만 나오는 끝점(= 자유로운 끝)에서만 자른다. */
+const endCount = new Map();
+for (const f of land) for (const p of [f.geometry.coordinates[0], f.geometry.coordinates.at(-1)]) {
+  const kk = KEY(p);
+  endCount.set(kk, (endCount.get(kk) || 0) + 1);
+}
+for (const f of land) {
+  const c = f.geometry.coordinates;
+  if (endCount.get(KEY(c[0])) !== 1) continue;            // 시작점이 이음매다
+  let top = 0;
+  c.forEach((p, i) => { if (p[1] > c[top][1]) top = i; });
+  if (!top) continue;                                     // 이미 최북단에서 시작한다
+  let len = 0;
+  for (let i = 1; i <= top; i++) len += KM(c[i][0]-c[i-1][0], c[i][1]-c[i-1][1], c[i][1]);
+  if (len > 15) throw new Error(`동쪽 꼬리가 ${len.toFixed(1)}km — 너무 길다. 최북단이 종점이 맞는지 확인하세요`);
+  f.geometry.coordinates = c.slice(top);
+  console.log(`  동해안 꼬리 ${top}점 (${len.toFixed(2)}km) 잘라냄 — 종점 ${c[top][0].toFixed(4)}, ${c[top][1].toFixed(4)}`);
+}
+
+/* 잘라낸 종점은 우리 시도 경계의 끝인데, 화면에 그려지는 해안선은 OSM(=Mapbox) 것이라
+   265m 쯤 더 동쪽에 있다. VWorld 가 DMZ 를 빼면서 생긴 차이다. 그대로 두면 국경선이
+   바다에 닿지 못하고 살짝 못 미친 채 끊겨 보인다.
+
+   종점에서 가장 가까운 해안선까지 이어 붙인다. 실측으로 방위 59°(2시 방향) · 265m 다. */
+let shore = null;
+const tip = land.map(f => f.geometry.coordinates)
+  .sort((a, b) => Math.max(...b.map(p => p[0])) - Math.max(...a.map(p => p[0])))[0];
+{
+  const P = tip[0];
+  const box = [P[1]-0.03, P[0]-0.03, P[1]+0.03, P[0]+0.03].map(v => v.toFixed(4));
+  const cd = await overpass(`[out:json][timeout:120];
+way["natural"="coastline"](${box[0]},${box[1]},${box[2]},${box[3]});
+out geom;`);
+  /* 방위 60°(2시 방향)로 쏜 반직선이 해안선과 처음 만나는 곳까지 잇는다.
+     최단 수선(79°)보다 이쪽이 실제 군사분계선이 바다로 나가는 각에 가깝다.
+     그 방향에서 못 만나면 최단 수선으로 물러선다. */
+  const BRG = 60;
+  const rad = BRG * Math.PI / 180;
+  const step = 3 / 111;                                   // 3km 짜리 반직선이면 충분하다
+  const Q = [P[0] + step * Math.sin(rad) / Math.cos(P[1]*Math.PI/180), P[1] + step * Math.cos(rad)];
+  let best = null, ray = null;
+  for (const w of cd.elements || []) {
+    const g = (w.geometry || []).map(q => [q.lon, q.lat]);
+    for (let i = 1; i < g.length; i++) {
+      const a = g[i-1], b = g[i];
+      // (1) 반직선과의 교차
+      const d1x = Q[0]-P[0], d1y = Q[1]-P[1], d2x = b[0]-a[0], d2y = b[1]-a[1];
+      const den = d1x*d2y - d1y*d2x;
+      if (den) {
+        const t = ((a[0]-P[0])*d2y - (a[1]-P[1])*d2x) / den;
+        const u = ((a[0]-P[0])*d1y - (a[1]-P[1])*d1x) / den;
+        if (t > 0 && t <= 1 && u >= 0 && u <= 1) {
+          const pt = [P[0] + d1x*t, P[1] + d1y*t];
+          const d = KM(P[0]-pt[0], P[1]-pt[1], P[1]);
+          if (!ray || d < ray.d) ray = { d, pt };
+        }
+      }
+      // (2) 최단 수선 (물러설 곳)
+      const L = d2x*d2x + d2y*d2y;
+      let s = L ? ((P[0]-a[0])*d2x + (P[1]-a[1])*d2y) / L : 0;
+      s = Math.max(0, Math.min(1, s));
+      const pp = [a[0] + d2x*s, a[1] + d2y*s];
+      const dd = KM(P[0]-pp[0], P[1]-pp[1], P[1]);
+      if (!best || dd < best.d) best = { d: dd, pt: pp };
+    }
+  }
+  if (ray) best = ray;
+  if (!best) console.warn('  해안선을 못 찾아 동쪽 종점을 그대로 둔다');
+  else if (best.d > 2) console.warn(`  해안선이 ${best.d.toFixed(2)}km 떨어져 있어 잇지 않는다`);
+  else {
+    const brg = (Math.atan2((best.pt[0]-P[0]) * Math.cos(P[1]*Math.PI/180), best.pt[1]-P[1]) * 180/Math.PI + 360) % 360;
+    /* 별도 조각(kind: "shore")으로 낸다. 이 227m 는 우리 시도 경계가 아니라 해안선까지
+       건너가는 다리라, 육상 구간과 섞으면 '국경선이 색칠과 꼭짓점 단위로 붙는다' 검사에 걸린다. */
+    shore = {
+      type: 'Feature',
+      properties: { kind: 'shore' },
+      geometry: { type: 'LineString', coordinates: [[Number(best.pt[0].toFixed(6)), Number(best.pt[1].toFixed(6))], P.slice()] },
+    };
+    console.log(`  동쪽 종점을 해안선까지 이음 — 방위 ${brg.toFixed(0)}° · ${(best.d*1000).toFixed(0)}m (별도 조각)`);
+  }
+}
+
 /* 서쪽 끝은 **말도**(강화군 서도면)에서 끊는다.
 
    OSM 의 KP-KR 경계는 서해 멀리 124.98°E 까지 이어지지만, 정전협정상 중립수역이
@@ -122,7 +228,7 @@ console.log(`  서쪽 끝: 말도에서 ${wd.toFixed(1)}km (${west[wi][0].toFixe
 console.log(`  하구 구간 ${estuary.length}점 (경도 ${estuary[0][0].toFixed(3)} ~ ${estuary.at(-1)[0].toFixed(3)})`);
 
 land.forEach(f => { f.properties = { ...(f.properties || {}), kind: 'land' }; });
-border.features = land.concat([{
+border.features = land.concat(shore ? [shore] : []).concat([{
   type: 'Feature',
   properties: { kind: 'estuary' },
   geometry: { type: 'LineString', coordinates: estuary },
