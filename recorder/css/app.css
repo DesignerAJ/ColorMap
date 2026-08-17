@@ -1,0 +1,916 @@
+#country-selector-container {
+  --bg: #e5e9f5;          /* 국가·행정구역·시도·시군구 탭을 감싸는 박스 바탕 */
+  --panel: rgba(255, 255, 255, 0.96);
+  --panel-2: #fff;
+  --line: rgba(15, 38, 70, 0.14);
+  --txt: #1f2937;
+  --muted: #64748b;
+  --accent: #ff3b30;
+  --accent-dim: #b3271f;
+  /* '지정됨' 같은 완료 표시에 쓰는 초록.
+     예전 값(#34c759)은 밝은 카드 위에서 대비가 1.84:1 밖에 안 나와 10px 글씨가 거의 안 읽혔다.
+     이 값은 5.5:1 로 작은 글씨 기준(4.5:1)을 넘는다. 배경으로 쓰는 곳(버튼 플래시)에서도
+     흰 글씨 대비가 2.2:1 → 6.7:1 로 같이 좋아진다. 옆 테두리(#2e5d39)와도 톤이 맞는다. */
+  --ok: #0f6b2c;
+  --radius: 10px;
+  --font: "Nanum Gothic Coding", ui-monospace, Menlo, Consolas, monospace;
+}
+@scope (#country-selector-container) {
+  * {
+    box-sizing: border-box;
+  }
+
+  /* 재지정 피드백 */
+  @keyframes btn-flash {
+    0% {
+      background: var(--ok);
+      border-color: var(--ok);
+      color: #fff;
+    }
+    100% {
+    }
+  }
+  .flash {
+    animation: btn-flash 0.45s ease-out;
+  }
+  .field {
+    margin-bottom: 12px;
+  }
+  .field > label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  input,
+  select {
+    width: 100%;
+    /* background 축약형을 쓰면 안 된다 — 축약형은 background-image 도 함께 none 으로
+       되돌리므로, 아래 select 의 화살표 이미지가 통째로 지워진다.
+       (실제로 그래서 3.0 의 드롭다운에는 화살표가 하나도 없었다. appearance:none 은
+        data/style.css 에서 계속 걸려 있어 OS 기본 화살표마저 사라진 상태였다) */
+    background-color: var(--panel-2);
+    color: var(--txt);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 8px 9px;
+    font-size: 12px;
+  }
+  /* 드롭다운 화살표 — 2.0 이 쓰던 채워진 역삼각형(Material arrow_drop_down)을 그대로.
+     appearance:none 때문에 OS 기본 화살표가 없으므로 이 배경 이미지가 유일한 표시다. */
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 26px;                /* 화살표 자리 — 긴 항목이 그 밑으로 파고들지 않게 */
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%2364748b" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px top 50%;
+    background-size: 13px auto;
+    cursor: pointer;
+  }
+  select:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+  }
+  input:focus,
+  select:focus {
+    outline: none;
+    border-color: #4a5160;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+  }
+  .row > * {
+    flex: 1;
+  }
+
+  button {
+    width: 100%;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--txt);
+    border-radius: 12px;
+    padding: 9px 10px;
+    font-size: 12px;
+    transition:
+      background 0.12s,
+      border-color 0.12s,
+      opacity 0.12s;
+  }
+  button:hover:not(:disabled) {
+    background: #eef3f8;
+  }
+  button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  button.set {
+    text-align: left;
+  }
+  button.set .tag {
+    color: var(--muted);
+    font-size: 10px;
+    display: block;
+    margin-top: 3px;
+    min-height: 13px;
+  }
+  button.set.done {
+    border-color: #2e5d39;
+  }
+  button.set.done .tag {
+    color: var(--ok);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--line);
+    margin: 14px 0;
+  }
+  .pin-style-row {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .pin-style-row .field {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 0;
+  }
+  .pin-style-row .field > label {
+    align-self: stretch;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .hint {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: 6px;
+  }
+  #resout {
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    margin-top: 4px;
+  }
+  .preview-row button {
+    font-size: 11px;
+    padding: 6px;
+  }
+  #goto-row {
+    display: flex;
+    gap: 6px;
+  }
+  #goto-row > button,
+  #wp-goto > button {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 11px;
+    padding: 6px;
+  }
+  #wp-goto {
+    display: contents;
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    margin-bottom: 5px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .chip input.sw {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    cursor: pointer;
+    background: transparent;
+  }
+  .chip input.sw::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+  .chip input.sw::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+  }
+  .chip input.sw::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
+  }
+  .chip .nm {
+    flex: 1;
+  }
+  .chip .x {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+  }
+  .chip .x:hover {
+    color: var(--accent);
+  }
+
+  /* 숫자 입력: 네이티브 스피너 숨기고 큼직한 −/＋ 버튼으로 대체 */
+  input[type="number"] {
+    -moz-appearance: textfield;
+    text-align: center;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .stepper {
+    display: flex;
+    align-items: stretch;
+  }
+  .stepper input {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    min-width: 0;
+  }
+  .stepper .step {
+    width: 36px;
+    flex: 0 0 36px;
+    padding: 0;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 0;
+    color: var(--txt);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .stepper .step:first-child {
+    border-radius: 7px 0 0 7px;
+  }
+  .stepper .step:last-child {
+    border-radius: 0 7px 7px 0;
+  }
+  .stepper .step:hover:not(:disabled) {
+    background: #e2e8f0;
+  }
+  .stepper .step:active:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* 접이식 세부 설정 */
+  details.adv {
+    margin-bottom: 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.7);
+    overflow: hidden;
+  }
+  details.adv summary {
+    cursor: pointer;
+    padding: 10px 11px;
+    font-size: 12px;
+    color: var(--muted);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  details.adv summary::-webkit-details-marker {
+    display: none;
+  }
+  details.adv summary::after {
+    content: "▾";
+    font-size: 14px;
+  }
+  details.adv[open] summary::after {
+    content: "▴";
+    font-size: 14px;
+  }
+  details.adv summary:hover {
+    color: var(--txt);
+  }
+  details.adv .pad {
+    padding: 2px 11px 6px;
+  }
+
+  /* 경유지 */
+  .wp-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .wp-row > * {
+    font-size: 11px;
+  }
+  .wp-row .wp-set {
+    flex: 1;
+    text-align: left;
+  }
+  .wp-row .wp-set.done {
+    border-color: #2e5d39;
+  }
+  .wp-pin {
+    flex: 0 0 88px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    cursor: grab;
+    font-size: 12px;
+    user-select: none;
+  }
+  .wp-pin:hover {
+    border-color: #4a5160;
+    background: #2c313d;
+  }
+  .wp-pin:active {
+    cursor: grabbing;
+  }
+  .wp-pin.done {
+    border-color: #7a4a23;
+  }
+  .wp-pin-num {
+    position: absolute;
+    top: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .wp-row .wp-del {
+    flex: 0 0 28px;
+    padding: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .wp-row .wp-del:hover:not(:disabled) {
+    color: var(--accent);
+  }
+  .add-wp {
+    border-style: dashed;
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+  .add-wp:hover:not(:disabled) {
+    color: var(--txt);
+  }
+
+  /* 드래그 핀 소스 */
+  .pin-row {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+  /* 핀 라벨 입력 + '현재 화면 지정' 뷰파인더 아이콘 + 지정됨 태그 (출발/도착/경유지 공통) */
+  input.pin-label-in {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    padding: 7px 8px;
+  }
+  .set-view {
+    flex: 0 0 32px;
+    width: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
+  .set-view:hover:not(:disabled) {
+    color: var(--txt);
+    border-color: #4a5160;
+  }
+  .set-view.done {
+    color: var(--ok);
+    border-color: #2e5d39;
+  }
+  .set-view .vf-ico {
+    display: block;
+  }
+  .set-tag {
+    flex: 0 0 auto;
+    align-self: center;
+    color: var(--ok);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .set-tag:empty {
+    display: none;
+  }
+  .pin-src {
+    flex: 0 0 88px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    cursor: grab;
+    font-size: 12px;
+    user-select: none;
+    transition:
+      border-color 0.12s,
+      background 0.12s;
+  }
+  .pin-src:hover {
+    border-color: #4a5160;
+    background: #2c313d;
+  }
+  .pin-src:active {
+    cursor: grabbing;
+  }
+  .pin-src.done {
+    border-color: #2e5d39;
+  }
+  .pin-ico {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pin-mini {
+    flex: 0 0 16px;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+  }
+  .drag-hint {
+    color: var(--muted);
+    font-size: 10px;
+    margin-left: 2px;
+  }
+  .pin-grab {
+    flex: 1;
+    font-size: 11px;
+    padding: 7px 9px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .pin-grab .tag {
+    color: var(--ok);
+    font-size: 10px;
+    display: inline;
+    margin-top: 0;
+    min-height: 0;
+  }
+  .pin-grab .tag:not(:empty) {
+    margin-left: auto;
+  }
+
+  #draw-mode.active {
+    background: #2f62af;
+    color: #fff;
+    border-color: #2f62af;
+  }
+  /* '직접 선 그리기'를 켜기만 하고 그리기 모드를 안 켜면 아무 일도 안 일어난다.
+     그 상태에서만 버튼을 깜빡여 다음 동작을 유도한다 (모드를 켜거나 선을 그리면 멈춤).
+     글자색은 반드시 accent 여야 한다 — 여기가 #fff 였던 탓에 버튼 바탕(--panel-2, 흰색)
+     위에 흰 글씨가 얹혀 '✏️ 그리기 모드' 가 통째로 안 보였다. 한 번 눌렀다 나오면
+     nudge 가 풀려 글씨가 돌아오니, 처음 켰을 때만 사라지는 것처럼 보였던 것. */
+  #draw-mode.nudge {
+    border-color: var(--accent);
+    color: var(--accent);
+    animation: draw-nudge 1.6s ease-in-out infinite;
+  }
+  @keyframes draw-nudge {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.55);
+    }
+    50% {
+      box-shadow: 0 0 0 5px rgba(255, 59, 48, 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #draw-mode.nudge {
+      animation: none;
+      box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.55);
+    }
+  }
+  .design-settings-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 12px !important;
+  }
+  /* ── 지도 디자인 패널 타이포 ──
+     data/style.css 에 2.0 시절 규칙 `#country-selector-container label { font-size:16px }`
+     이 남아 있다. ID 를 끼고 있어서(1,0,1) 이 카드 안의 클래스 규칙들(0,2,0)을 전부
+     이겨버렸고, 결과적으로 라벨이란 라벨은 죄다 16px 로 그려졌다. 바로 옆 '점선' 은
+     <span> 이라 그 규칙에 안 걸려 10px 인 탓에, 한 줄 안에서 크기가 따로 놀았다.
+     여기서도 ID 를 같이 끼워 되찾아온다. 위계는 2.0 을 따른다 — 굵은 주 라벨과
+     한 단계 작고 흐린 보조 라벨 (2.0 은 16 : 13, 좁아진 3.0 패널에서는 12 : 10). */
+  #country-selector-container .design-card label {
+    font-size: 12px;
+  }
+  #country-selector-container .design-card .bd-cell {
+    font-size: 10px;
+    color: var(--muted);   /* 보조 라벨은 흐리게 — 옆의 '점선' 과 톤을 맞춘다 */
+  }
+  .design-card {
+    border: 1px solid rgba(15, 38, 70, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.7);
+  }
+  .boundary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .map-color-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .map-color-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  /* 세그먼트 토글 — 눌린 칸이 한눈에 보이도록 트랙(움푹) + 선택 칸(도드라짐) 대비를 준다.
+     예전엔 hover 와 active 스타일이 같아서, 마우스를 올리면 어느 쪽이 선택된 건지
+     구분이 안 됐다. hover 는 은은하게만 두고 선택 상태만 파랗게 채운다. */
+  .seg-toggle {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 3px;
+    /* 지도 디자인의 접이식 카드(.design-card)와 같은 바탕·테두리를 쓴다.
+       패널 안에서 '무언가를 담는 상자'는 한 가지 모양으로 보이는 게 낫다. */
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(15, 38, 70, 0.08);
+    border-radius: 10px;
+  }
+  .seg-btn {
+    flex: 1;
+    padding: 8px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      color 0.15s,
+      box-shadow 0.15s;
+  }
+  /* 아래 두 규칙은 전역 button:hover 규칙(구체성 0,2,1)을 확실히 이기도록
+     .seg-toggle 을 앞에 붙여 구체성을 올려둔 것이다. 빼면 hover 색에 덮인다. */
+  .seg-toggle .seg-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--txt);
+  }
+  .seg-toggle .seg-btn.active {
+    background: #347bf7;
+    color: #fff;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+  .seg-toggle .seg-btn:active {
+    transform: translateY(1px);
+  }
+  /* 라벨 사이 중점(·). 모노스페이스라 중점에도 한 글자 폭을 통째로 줘서
+     '시 · 군 · 구' 처럼 벌어져 보인다. 그래서 중점만 음수 마진으로 당겨왔다.
+
+     당기는 양을 -0.22em → -0.12em 으로 줄여도 여전히 뭉개져 보였는데, 셈을 해보면
+     이유가 분명하다. 12px 기준 한 칸은 0.6em = 7.2px 인데 중점의 실제 잉크는 2px 남짓이다.
+       -0.12em × 양옆 = -2.88px,  전역 자간 -0.02em × 좌우 2군데 = -0.48px
+       → 칸이 7.2 - 3.36 = 3.84px 로 줄어 중점 양옆에 각각 0.9px 밖에 안 남는다.
+     사실상 앞뒤 글자에 붙어버려 점이 아니라 얼룩으로 읽혔다. 거기에 55% 투명도까지
+     겹쳐 더 안 보였다.
+
+     탭은 flex:1 로 폭을 똑같이 나눠 갖고 가장 긴 '시·군·구' 도 40px 언저리라
+     78px 칸에 한참 여유가 있다. 좁게 당길 이유가 애초에 없어서 당김을 아예 뺐다 —
+     지금은 고정폭 서체가 주는 자연스러운 간격 그대로다 (이보다 더 벌리려면
+     margin 을 양수로 주면 된다). 투명도도 0.8 로 올려 점이 점으로 보이게 한다. */
+  .seg-btn .mid {
+    font-style: normal;
+    margin: 0;
+    opacity: 0.8;
+  }
+  .hint-sm {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  .map-color-row .mc-toggle {
+    font-size: 12px;
+    cursor: pointer;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .map-color-row .mc-label {
+    font-size: 12px;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .map-color-row input[type="color"] {
+    margin: 0;
+  }
+  .map-color-row input[type="color"]:disabled {
+    opacity: 0.4;
+  }
+  .river-toggle-row input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  .style-projection-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 0.9fr) minmax(0, 1.4fr);
+    align-items: center;
+    gap: 10px;
+  }
+  .style-projection-card > label {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .style-projection-card select {
+    min-width: 0;
+  }
+  /* 색 선택 입력 — 원형 스와치 (칩 안의 .sw 제외, 아래에서 따로 처리) */
+  input[type="color"]:not(.sw) {
+    -webkit-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
+    width: 26px !important;
+    height: 26px !important;
+    flex: 0 0 26px !important;
+    padding: 0 !important;
+    border: 1px solid var(--line);
+    border-radius: 50% !important;
+    overflow: hidden;
+    cursor: pointer;
+    align-self: center;
+  }
+  input[type="color"]:not(.sw)::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+  input[type="color"]:not(.sw)::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+  }
+  input[type="color"]:not(.sw)::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
+  }
+  .bd-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .bd-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bd-head .line-label {
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .bd-head .bd-color {
+    margin: 0;
+  }
+  /* ── 점선 예시 그림 ↔ 아래 체크박스 열 맞추기 ──
+     둘은 짝이다. A 그림 바로 밑에 A 체크박스가 와야 어느 칸이 뭘 켜는지 알 수 있다.
+     어긋나 있던 이유는 두 줄의 칸 크기·간격이 서로 달랐기 때문이다.
+       그림   18px 칸 + 6px 간격 = 피치 24px
+       체크박스 14px 칸 + 3px 간격 = 피치 17px
+     게다가 원본 PNG 가 정사각형(128×128)이라 18×14 칸에 contain 으로 넣으면
+     실제 그림은 14px 로 그려지고 좌우에 2px 씩 빈 여백까지 생겼다.
+     둘 다 14px 칸 + 6px 간격으로 통일한다. 두 줄 모두 카드 오른쪽 끝에 붙으므로
+     (.dash-reference 는 margin-left:auto, .bd-dash-options 는 grid 의 auto 칸)
+     칸 크기만 같으면 오른쪽부터 차례로 정확히 겹친다. */
+  .dash-reference {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .dash-reference img {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    opacity: 0.4;
+  }
+  .bd-ctrls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding-left: 1px;
+  }
+  .bd-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .bd-cell input[type="range"] {
+    width: 0;
+    min-width: 38px;
+    flex: 1;
+    padding: 0;
+  }
+  .bd-dash-options {
+    display: flex;
+    align-items: center;
+    gap: 6px;   /* 위 .dash-reference 와 같은 간격 — 그림과 체크박스 열을 맞춘다 */
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .bd-dash-options input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;   /* 위 .dash-reference img 와 같은 칸 크기 */
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  .group-separator {
+    height: 1px;
+    background: rgba(15, 38, 70, 0.14);
+  }
+  .bd-block.disabled .bd-ctrls {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .wp-hold-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .wp-hold-row .wp-hold-label {
+    flex: 1;
+    font-size: 12px;
+  }
+  .wp-hold-row .wp-hold-wrap {
+    flex: 0 0 64px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .wp-hold-row .wp-hold {
+    flex: 1;
+    width: 100%;
+    text-align: center;
+  }
+  .wp-hold-row .wp-sec {
+    font-size: 10px;
+    color: var(--muted);
+    flex: 0 0 auto;
+  }
+
+  /* 색·투명도 동그라미 — 체크무늬 위에 반투명 색을 얹어 투명도가 눈에 바로 보이게 한다.
+     누르면 직접 만든 색상 팝업이 뜬다 (네이티브 색상 창에는 투명도를 못 넣는다). */
+  .color-dot {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 26px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    cursor: pointer;
+    background:
+      conic-gradient(#d7dde5 0 25%, #ffffff 0 50%, #d7dde5 0 75%, #ffffff 0) 0 0 / 8px 8px;
+  }
+  .color-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--c, #5A8EDB);
+    opacity: var(--o, 0.6);
+  }
+  .color-dot:hover {
+    border-color: var(--muted);
+  }
+  .color-dot:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .chip .color-dot {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+  }
+}
+
+/* ── 색상 팝업 ──
+   body 에 붙으므로 위의 @scope (#country-selector-container) 밖이다.
+   그래서 패널 변수를 쓸 수 없고 값을 직접 적는다 (패널과 같은 값). */
+#color-popup {
+  position: fixed;
+  z-index: 10000;
+  width: 208px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 38, 70, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 38, 70, 0.18);
+  font-family: "Nanum Gothic Coding", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: -0.02em;   /* 패널 밖이라 #colormap-ui 상속을 못 받는다 */
+  color: #1f2937;
+}
+#color-popup[hidden] { display: none; }
+
+#color-popup .cp-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+#color-popup .cp-sw {
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(15, 38, 70, 0.14);
+  border-radius: 5px;
+  cursor: pointer;
+}
+#color-popup .cp-sw.on {
+  outline: 2px solid #1f2937;
+  outline-offset: 1px;
+}
+#color-popup .cp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#color-popup .cp-row > span {
+  flex: 0 0 56px;
+  color: #64748b;
+}
+#color-popup .cp-color {
+  flex: 1;
+  height: 26px;
+  padding: 0 2px;
+  border: 1px solid rgba(15, 38, 70, 0.14);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+#color-popup .cp-opacity {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+#color-popup .cp-val {
+  flex: 0 0 34px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

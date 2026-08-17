@@ -1,0 +1,37 @@
+name: QA
+
+# 배포는 건드리지 않는다. 테스트만 돌린다.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 의존성이 필요 없는 층 — 사내에서 npm 이 막혀 있어도 로컬에서 그대로 돌아간다
+      - name: 순수 함수 · 데이터 · 정합성
+        run: node --test test/*.test.js
+
+      # jsdom 이 필요한 층 — CI 러너는 npm 이 열려 있다
+      - name: jsdom 설치
+        run: npm install --no-audit --no-fund
+      - name: DOM · CSS 캐스케이드
+        run: node --test test/dom/*.test.js
+
+  lint-functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix functions ci
+      - run: npm --prefix functions run lint

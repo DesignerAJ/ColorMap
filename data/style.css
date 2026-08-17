@@ -10,6 +10,20 @@ body,
     padding: 0;
 }
 
+/* 자간 −20 (디자인 툴 기준, 1/1000em) — UI 텍스트 전체에 상속시킨다.
+   #colormap-ui 는 패널·상태 팝업·검색 플로팅을 모두 담는 마운트다.
+   지도 위 핀 라벨(.map-pin)은 녹화 결과물에 그대로 찍히므로 일부러 건드리지 않는다. */
+#colormap-ui {
+    font-family: "Nanum Gothic Coding", monospace;
+    letter-spacing: -0.02em;
+}
+
+/* 폼 요소(input·select·button)에는 일부러 font-family 를 걸지 않는다.
+   폼 요소는 지정이 없으면 부모 폰트를 물려받지 않고 OS 기본 폰트로 그려지는데,
+   2.0 이 바로 그 상태였다 — 드롭다운·버튼은 시스템 산세리프, 나머지 글자는
+   Nanum Gothic Coding. 그 조합을 그대로 유지한다.
+   예외는 국가 검색 입력창 하나로, 2.0 에도 있던 .datalist-wrapper input[list] 규칙이다. */
+
 #country-selector-container {
     font-family: "Nanum Gothic Coding", monospace;
     font-weight: 700;
@@ -20,8 +34,8 @@ body,
     background-color: rgba(14, 23, 44, 0.6);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    padding: 16px;
-    border-radius: 24px;
+    padding: 14px;
+    border-radius: 20px;
     z-index: 10;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -229,12 +243,21 @@ input[list]::placeholder {
 /* 드롭다운 내부 옵션 (country-select, projection-select) 공통 스타일 */
 select option {
     font-weight: 400;
-    font-size: 16px;
+    font-size: 12px;   /* 드롭다운 본체(12px)와 맞춤 — 16px 은 2.0 패널 기준이었다 */
     padding: 5px;
 }
 
+/* 패널 라벨 기본 크기.
+   2.0 에서는 16px 이었는데, 그건 패널이 이 항목들만 담고 있을 때 이야기다.
+   3.0 은 같은 360px 폭에 훨씬 많은 줄이 들어가서 16px 이면 다 커 보인다.
+   더 큰 문제는 이 규칙이 ID 를 끼고 있어 명시도가 [1,0,1] 이라는 점이었다 —
+   app.css 가 컴포넌트별로 정해둔 크기(.field>label 11px, .bd-cell 10px …)를
+   전부 이겨버려서, 그 값들이 통째로 죽어 있었다. (@scope 는 명시도를 올려주지 않는다)
+   여기를 3.0 의 기본값인 11px 로 낮춰, 개별 규칙이 있는 곳은 그쪽이 이기고
+   없는 곳은 이 값으로 떨어지게 한다. 지우지 않는 이유는, 지우면 규칙 없는 라벨이
+   컨테이너의 20px 을 상속받아 오히려 더 커지기 때문이다. */
 #country-selector-container label {
-    font-size: 16px;
+    font-size: 11px;
     color: rgba(40, 40, 40, 1);
     white-space: nowrap;
 }
@@ -485,16 +508,17 @@ input[type="range"] {
 
 /* 상단 핸들 스타일 최소화 버튼 */
 .minimize-button {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.4);
     border: none;
-    border-radius: 10px;
+    padding: 0;
+    border-radius: 4px;
     cursor: pointer;
     width: 100px;
     height: 6px;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 0 auto 8px auto;
+    margin: 0 auto 12px auto;
     transition: all 0.2s ease;
     flex-shrink: 0;
 }
@@ -655,5 +679,509 @@ input[type="range"] {
     font-weight: 400;
     color: rgba(255, 255, 255, 0.35);
     text-align: center;
-    letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   v2.1 통합 패널
+   기존 유리 패널 디자인을 유지하고 recorder 기능을 한 패널에 배치한다.
+   ============================================================ */
+
+#country-selector-container {
+    width: 380px;
+    max-height: calc(100vh - 30px);
+    overflow: hidden;
+    gap: 0;
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 400;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+#country-selector-container #controls::-webkit-scrollbar {
+    width: 7px;
+}
+
+#country-selector-container #controls::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 99px;
+}
+
+/* 제목만 시스템 산세리프로 둔다. 패널 본문은 Nanum Gothic Coding 고정폭이고,
+   폼 요소는 폰트를 지정하지 않아 OS 기본 폰트로 그려진다 — 제목을 그 쪽에 맞춘 것.
+   폼 요소가 실제로 쓰는 폰트와 같아 보이도록 시스템 UI 서체를 직접 지정한다. */
+.colormap-panel-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 2px 12px;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo",
+        "Helvetica Neue", Arial, sans-serif;
+}
+
+.colormap-panel-title > span {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.colormap-panel-title > small {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 10px;
+    font-weight: 400;
+}
+
+#controls {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* padding-right: 4px; */
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+    scrollbar-width: thin;
+}
+
+#country-selector-container details.adv {
+    flex: 0 0 auto;
+}
+
+#country-selector-container details.adv summary {
+    min-height: 36px;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+#country-selector-container details.adv .pad {
+    padding: 4px 12px 10px;
+}
+
+#export-actions {
+    flex: 0 0 auto;
+    padding: 6px 0px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#export-actions-title {
+    margin-bottom: 7px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#export-actions .export-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+
+#export-actions .export-tile {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 4px;
+    border: 1px solid var(--export-color, rgba(15, 38, 70, 0.22));
+    border-radius: 10px;
+    background: var(--export-bg, rgba(255, 255, 255, 0.9));
+    color: var(--export-color, #334155);
+}
+
+#export-actions .export-tile:hover:not(:disabled) {
+    border-color: var(--export-hover, var(--export-color));
+    background: var(--export-hover, var(--export-color));
+    color: #fff;
+}
+
+#export-actions .export-tile strong {
+    font-size: 13px;   /* 20px 의 2/3 — MP4·PSD·PNG·SVG 글자가 타일에 비해 과했다 */
+    font-weight: 700;
+    line-height: 1;
+}
+
+#export-actions .export-tile small {
+    font-size: 10px;
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+/* 내보내기 버튼 색상 — 네 개가 한 색을 쓴다 (국가·구역별 색상의 선택 탭과 같은 파랑).
+   버튼마다 파랑·보라·초록·주황으로 갈라두니 한 줄이 알록달록해서 시선이 분산됐다.
+   기본 상태는 글자와 테두리만 그 색이고, 마우스를 올리면 그 색으로 꽉 채운다
+   (--export-hover 를 --export-color 와 같게 둔 것). 색을 바꾸려면 이 한 줄만 고치면 된다. */
+#record,
+#capture-psd,
+#capture-png,
+#export-svg { --export-color: #347bf7; --export-bg: #e9f1fe; --export-hover: #347bf7; }
+
+/* 작업 상태는 패널 안에 상주하지 않고 화면 중앙에서 잠시 나타났다 디졸브된다. */
+#status {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 1000;
+    width: max-content;
+    max-width: min(560px, calc(100vw - 40px));
+    transform: translate(-50%, -48%) scale(0.98);
+    padding: 16px 22px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(14, 23, 44, 0.88);
+    color: #fff;
+    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
+    font-family: "Nanum Gothic Coding", monospace;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.45;
+    text-align: center;
+    opacity: 0;
+    filter: blur(7px);
+    pointer-events: none;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: opacity 0.5s ease, filter 0.5s ease, transform 0.5s ease;
+}
+
+#status[hidden] { display: none; }
+
+#status.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    filter: blur(0);
+}
+
+#status.busy { border-color: rgba(255, 214, 10, 0.5); }
+#status.done { border-color: rgba(52, 199, 89, 0.6); color: #d9ffe3; }
+#status.error { border-color: rgba(255, 59, 48, 0.65); color: #ffe1df; }
+
+/* 2.0의 하단 줌 바를 계승한 아이콘형 컨트롤. 메뉴 카드와 분리해 패널 맨 아래에 둔다. */
+#panel-zoom-control {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 1px;
+    padding: 4px 2px 0;
+    border: 0;
+    background: transparent;
+}
+
+#panel-zoom-control .zoom-icon-button {
+    display: flex;
+    flex: 0 0 28px;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 4px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+#panel-zoom-control .zoom-icon-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+#panel-zoom-control .zoom-icon-button svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+}
+
+#panel-zoom-control #zoom-slider {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+#panel-zoom-control #zoom-slider::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.34);
+}
+
+#panel-zoom-control #zoom-slider::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+    margin-top: -5.5px;
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+#panel-zoom-control #zoom-slider::-moz-range-track {
+    height: 3px;
+    border: 0;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.34);
+}
+
+#panel-zoom-control #zoom-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+#country-selector-container.minimized {
+    max-height: 24px;
+    overflow: hidden;
+}
+
+#country-selector-container.minimized > :not(.minimize-button) {
+    display: none !important;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* 지도 위 지역·주소 검색 */
+#geo-float {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 12;
+    width: 320px;
+    max-width: calc(100vw - 32px);
+    font-family: "Nanum Gothic Coding", monospace;
+}
+
+#geo-float .geo-input-wrap {
+    position: relative;
+}
+
+#geo-float input,
+#geo-float button {
+    box-sizing: border-box;
+    min-height: 38px;
+    border: 0px solid rgba(255, 255, 255, 0.8);
+    border-radius: 10px;
+    background: rgba(230, 230, 230, 0.78);
+    color: #000000;
+    font-size: 14px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+#geo-float input {
+    width: 100%;
+    padding: 9px 42px 9px 11px;
+}
+
+#geo-float input::placeholder {
+    color: rgb(80, 80, 80);
+}
+
+#geo-float input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: none;
+}
+
+#geo-float input:focus::placeholder {
+    color: transparent;
+}
+
+#geo-float button {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: rgb(109, 139, 184);
+    color: rgb(255, 255, 255);
+    font-size: 18px;
+    line-height: 1;
+    transform: translateY(-50%);
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+
+#geo-float button:hover,
+#geo-float button:focus-visible {
+    background: rgb(58, 83, 163);
+    color: #fff;
+}
+
+#geo-float .geo-results {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    left: 0;
+    z-index: 20;
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(14, 23, 44, 0.94);
+    color: #fff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+#geo-float .geo-item {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+#geo-float .geo-item:last-child {
+    border-bottom: 0;
+}
+
+#geo-float .geo-item:hover {
+    background: rgba(47, 98, 175, 0.35);
+}
+
+#geo-float .geo-item .gi-ctx,
+#geo-float .geo-item.empty {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 10px;
+}
+
+#frame-guide {
+    position: absolute;
+    z-index: 5;
+    display: none;
+    pointer-events: none;
+    border: 1px dashed rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+}
+
+#drop-hint {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    z-index: 11;
+    display: none;
+    transform: translateX(-50%);
+    padding: 9px 18px;
+    border-radius: 20px;
+    background: rgba(15, 53, 100, 0.92);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+#drop-hint.show {
+    display: block;
+}
+
+/* Mapbox 마커는 패널 바깥 #map 아래에 생성된다. */
+.map-pin {
+    width: 28px;
+    height: 38px;
+    cursor: grab;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+    transition: opacity 0.15s;
+}
+
+.map-pin .pin-inner {
+    transform: translateY(-4px);
+    transform-origin: center bottom;
+}
+
+@keyframes pin-bounce {
+    0% { transform: translateY(-4px) scale(1); }
+    30% { transform: translateY(-14px) scale(1.15); }
+    60% { transform: translateY(-4px) scale(1); }
+    80% { transform: translateY(-9px) scale(1.06); }
+    100% { transform: translateY(-4px) scale(1); }
+}
+
+.map-pin.bounce .pin-inner {
+    animation: pin-bounce 0.6s ease-out;
+}
+
+.map-pin .label {
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.map-pin .loc-label {
+    position: absolute;
+    top: 12px;
+    transform: translateY(-50%);
+    color: #0f3564;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff;
+}
+
+.map-pin.label-right .loc-label { left: 32px; text-align: left; }
+.map-pin.label-left .loc-label { right: 32px; text-align: right; }
+.map-pin .loc-label:empty { display: none; }
+#map.pins-ghost .map-pin:not(.loc-pin) { opacity: 0.35 !important; }
+#map.locpins-ghost .map-pin.loc-pin { opacity: 0.35 !important; }
+
+.bootstrap-error {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    z-index: 100;
+    transform: translateX(-50%);
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: #7f1d1d;
+    color: #fff;
+    font-family: "Nanum Gothic Coding", monospace;
+}
+
+@media (max-width: 720px) {
+    #country-selector-container {
+        top: 8px;
+        right: 8px;
+        width: min(380px, calc(100vw - 16px));
+        max-height: calc(100vh - 16px);
+    }
+
+    #geo-float {
+        display: none;
+    }
 }

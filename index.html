@@ -1,275 +1,40 @@
 <!DOCTYPE html>
-<html lang='ko-KR'>
+<html lang="ko-KR">
 
 <head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="지도 영역 디자인과 카메라 경로 녹화를 하나의 화면에서 만드는 ColorMap">
     <link rel="apple-touch-icon" sizes="180x180" href="./image/apple-touch-icon.png">
-    <!-- <link rel="shortcut icon" type="image/png" size="512x512" href="./image/android-chrome-512x512.png">
-    <link rel="shortcut icon" type="image/png" size="192x192" href="./image/android-chrome-192x192.png"> -->
     <link rel="icon" type="image/png" sizes="32x32" href="./image/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="./image/favicon-16x16.png">
     <link rel="manifest" href="./image/site.webmanifest">
-    <title>ColorMap v2.0</title>
+    <title>ColorMap v3.0</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Serif+KR:wght@200..900&display=swap"
-        rel="stylesheet">
-    <script src='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js'></script>
-    <link href='https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css' rel='stylesheet' />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/monolith.min.css" />
-    <link href='./data/style.css' rel='stylesheet' />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
+
+    <link href="./data/style.css?v=3.2.25" rel="stylesheet">
+    <link href="./recorder/css/app.css?v=3.2.25" rel="stylesheet">
 </head>
 
 <body>
-    <div id='country-selector-container'>
-        <button id="minimize-button" class="minimize-button"><i class="fas fa-angle-up"></i></button>
-        <div class="tab-header">
-            <div class="tab-switch">
-                <div class="tab-slider"></div>
-                <button class="tab-button active" data-tab="country">국가별 선택</button>
-                <i class="fa-solid fa-arrow-right-arrow-left tab-switch-icon"></i>
-                <button class="tab-button" data-tab="province">대한민국 시도 선택</button>
-            </div>
-        </div>
+    <div id="colormap-ui"></div>
+    <div id="map"></div>
 
-
-
-        <div class="tab-content-container">
-            <div id="country-tab-content" class="tab-content active">
-                <div class="control-group-box" id="county-addminus-group">
-                    <div class="control-group">
-                        <label for="country-select-1">국가<span class="roman">Ⅰ</span></label>
-                        <input type="color" id="highlight-color-picker-1" value="#2eca89">
-                        <div class="datalist-wrapper">
-                            <input list="country-datalist-1" id="country-select-1" placeholder="국가 선택 or 검색.."
-                                autocomplete="off">
-                        </div>
-                        <datalist id="country-datalist-1"></datalist>
-                    </div>
-
-                    <div class="control-group hidden" id="country-group-2">
-                        <label for="country-select-2">국가<span class="roman">Ⅱ</span></label>
-                        <input type="color" id="highlight-color-picker-2" value="#29dff2">
-                        <div class="datalist-wrapper">
-                            <input list="country-datalist-2" id="country-select-2" placeholder="국가 선택 or 검색.."
-                                autocomplete="off">
-                        </div>
-                        <datalist id="country-datalist-2"></datalist>
-                    </div>
-
-                    <div class="control-group hidden" id="country-group-3">
-                        <label for="country-select-3">국가<span class="roman">Ⅲ</span></label>
-                        <input type="color" id="highlight-color-picker-3" value="#fcec26">
-                        <div class="datalist-wrapper">
-                            <input list="country-datalist-3" id="country-select-3" placeholder="국가 선택 or 검색.."
-                                autocomplete="off">
-                        </div>
-                        <datalist id="country-datalist-3"></datalist>
-                    </div>
-
-                    <div class="control-group" id="country-buttons">
-                        <button id="add-country">＋ <span class="max-text">(최대 3개)</span></button>
-                        <button id="remove-country" disabled>－</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="province-tab-content" class="tab-content hidden">
-                <div class="control-group-box" id="province-addminus-group">
-                    <div class="control-group">
-                        <label for="province-select-1">시도<span class="roman">Ⅰ</span></label>
-                        <input type="color" id="highlight-color-picker-province-1" value="#2eca89">
-                        <div class="datalist-wrapper">
-                            <input list="province-datalist-1" id="province-select-1" placeholder="시도 선택 or 검색.."
-                                autocomplete="off">
-                        </div>
-                        <datalist id="province-datalist-1"></datalist>
-                    </div>
-
-                    <div class="control-group hidden" id="province-group-2">
-                        <label for="province-select-2">시도<span class="roman">Ⅱ</span></label>
-                        <input type="color" id="highlight-color-picker-province-2" value="#29dff2">
-                        <div class="datalist-wrapper">
-                            <input list="province-datalist-2" id="province-select-2" placeholder="시도 선택 or 검색.."
-                                autocomplete="off">
-                        </div>
-                        <datalist id="province-datalist-2"></datalist>
-                    </div>
-
-                    <div class="control-group hidden" id="province-group-3">
-                        <label for="province-select-3">시도<span class="roman">Ⅲ</span></label>
-                        <input type="color" id="highlight-color-picker-province-3" value="#fcec26">
-                        <div class="datalist-wrapper">
-                            <input list="province-datalist-3" id="province-select-3" placeholder="시도 선택 or 검색.."
-                                autocomplete="off">
-                        </div>
-                        <datalist id="province-datalist-3"></datalist>
-                    </div>
-
-                    <div class="control-group" id="province-buttons">
-                        <button id="add-province">＋ <span class="max-text">(최대 3개)</span></button>
-                        <button id="remove-province" disabled>－</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="control-group-box vertical-group" id="border-admin-color-group">
-            <!-- 국경선 설정 그룹 -->
-            <div class="line-item-group">
-                <div class="control-group">
-                    <label class="line-label" for="border-color-picker">국경선</label>
-                    <input type="color" id="border-color-picker" value="#ffffff">
-                    <div class="dash-reference"
-                        style="margin-left: auto; display: flex; align-items: center; gap: 6px; margin-top: auto;">
-                        <img src="./image/dashLine_TypeA.png" alt="A" style="height: 14px; opacity: 0.4;">
-                        <img src="./image/dashLine_TypeB.png" alt="B"
-                            style="height: 14px; opacity: 0.4; margin-left: 0px;">
-                        <img src="./image/dashLine_TypeC.png" alt="C"
-                            style="height: 14px; opacity: 0.4; margin-left: 0px; margin-right: 3px;">
-                    </div>
-                </div>
-                <div class="control-group line-property-row">
-                    <div class="property-item">
-                        <label class="line-property-label" for="border-opacity-slider">투명도</label>
-                        <input type="range" id="border-opacity-slider" min="0" max="1" step="0.01" value="1">
-                    </div>
-                    <div class="property-item">
-                        <label class="line-property-label" for="border-width-slider">두께</label>
-                        <input type="range" id="border-width-slider" min="0" max="6" step="0.1" value="2.5">
-                    </div>
-                    <div class="property-item checkbox-item">
-                        <label class="line-property-label">점선</label>
-                        <input type="checkbox" id="border-dotline-a" title="점선 타입 A" class="dotline-chk">
-                        <input type="checkbox" id="border-dotline-b" title="점선 타입 B" class="dotline-chk">
-                        <input type="checkbox" id="border-dotline-c" title="점선 타입 C" class="dotline-chk">
-                    </div>
-                </div>
-            </div>
-
-            <div class="group-separator"></div>
-
-            <!-- 분쟁지역 국경선 설정 그룹 -->
-            <div class="line-item-group">
-                <div class="control-group">
-                    <label class="line-label disputed-label" for="disputed-color-picker">분쟁지역 국경선</label>
-                    <input type="color" id="disputed-color-picker" value="#fff82e">
-                    <div class="dash-reference"
-                        style="margin-left: auto; display: flex; align-items: center; gap: 6px; margin-top: auto;">
-                        <img src="./image/dashLine_TypeA.png" alt="A" style="height: 14px; opacity: 0.4;">
-                        <img src="./image/dashLine_TypeB.png" alt="B"
-                            style="height: 14px; opacity: 0.4; margin-left: 0px;">
-                        <img src="./image/dashLine_TypeC.png" alt="C"
-                            style="height: 14px; opacity: 0.4; margin-left: 0px; margin-right: 3px;">
-                    </div>
-                </div>
-                <div class="control-group line-property-row">
-                    <div class="property-item">
-                        <label class="line-property-label" for="disputed-opacity-slider">투명도</label>
-                        <input type="range" id="disputed-opacity-slider" min="0" max="1" step="0.01" value="1">
-                    </div>
-                    <div class="property-item">
-                        <label class="line-property-label" for="disputed-width-slider">두께</label>
-                        <input type="range" id="disputed-width-slider" min="0" max="6" step="0.1" value="2.5">
-                    </div>
-                    <div class="property-item checkbox-item">
-                        <label class="line-property-label">점선</label>
-                        <input type="checkbox" id="disputed-dotline-a" title="점선 타입 A" class="dotline-chk" checked>
-                        <input type="checkbox" id="disputed-dotline-b" title="점선 타입 B" class="dotline-chk">
-                        <input type="checkbox" id="disputed-dotline-c" title="점선 타입 C" class="dotline-chk">
-                    </div>
-                </div>
-            </div>
-
-            <div class="group-separator"></div>
-
-            <!-- 행정구역 설정 그룹 -->
-            <div class="line-item-group">
-                <div class="control-group">
-                    <label class="line-label" for="admin-color-picker">행정구역선</label>
-                    <input type="color" id="admin-color-picker" value="#ededed">
-                    <div class="dash-reference"
-                        style="margin-left: auto; display: flex; align-items: center; gap: 6px; margin-top: auto;">
-                        <img src="./image/dashLine_TypeA.png" alt="A" style="height: 14px; opacity: 0.4;">
-                        <img src="./image/dashLine_TypeB.png" alt="B"
-                            style="height: 14px; opacity: 0.4; margin-left: 0px;">
-                        <img src="./image/dashLine_TypeC.png" alt="C"
-                            style="height: 14px; opacity: 0.4; margin-left: 0px; margin-right: 3px;">
-                    </div>
-                </div>
-                <div class="control-group line-property-row">
-                    <div class="property-item">
-                        <label class="line-property-label" for="admin-opacity-slider">투명도</label>
-                        <input type="range" id="admin-opacity-slider" min="0" max="1" step="0.01" value="0.6">
-                    </div>
-                    <div class="property-item">
-                        <label class="line-property-label" for="admin-width-slider">두께</label>
-                        <input type="range" id="admin-width-slider" min="0" max="6" step="0.1" value="1.2">
-                    </div>
-                    <div class="property-item checkbox-item">
-                        <label class="line-property-label">점선</label>
-                        <input type="checkbox" id="admin-dotline-a" title="점선 타입 A" class="dotline-chk">
-                        <input type="checkbox" id="admin-dotline-b" title="점선 타입 B" class="dotline-chk">
-                        <input type="checkbox" id="admin-dotline-c" title="점선 타입 C" class="dotline-chk">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="control-group-box solid-color-group" id="landwater-color-group">
-            <div class="control-group" id="land-color-group">
-                <label for="land-color-picker">육지색</label>
-                <input type="color" id="land-color-picker" value="#8896a1">
-            </div>
-            <div class="control-group" id="water-color-group">
-                <label for="water-color-picker">바다색</label>
-                <input type="color" id="water-color-picker" value="#172c4d">
-            </div>
-            <div class="control-group" id="water-visible-group">
-                <label for="water-checker">강·호수</label>
-                <input type="checkbox" id="water-checker">
-            </div>
-        </div>
-
-        <div class="control-group-box horizontal-group">
-            <div class="control-group">
-                <label for="style-select">스타일</label>
-                <select id="style-select"></select>
-                <select id="projection-select"></select>
-            </div>
-        </div>
-        <div class="control-group-box" id="map-zoom-slider-group">
-            <div class="control-group">
-                <i class="fa fa-search-minus zoom-icon"></i>
-                <input type="range" id="map-zoom-slider" min="1" max="16" step="0.1" value="6">
-                <i class="fa fa-search-plus zoom-icon"></i>
-            </div>
-        </div>
-
-        <div class="info-guide-section">
-            <div class="guide-title">
-                <i class="fas fa-question-circle"></i> 사용법 참고
-            </div>
-            <ul class="guide-list">
-                <li>국가, 시도를 검색하거나 리스트에서 선택합니다.</li>
-                <li>[＋] 버튼으로 최대 3개까지 다른 색상 지정 가능합니다.</li>
-                <li>색상 피커에서 투명도(알파값) 변경 가능 합니다.</li>
-                <li>상단의 ㅡ 버튼으로 사이드바를 숨길 수 있습니다. (캡처용)</li>
-            </ul>
-        </div>
-
-        <div class="sidebar-copyright">
-            © 2025-26 ColorMap Project for KBS News graphics Office.
-        </div>
-    </div>
-    <div id='map'></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
-    <script src='./data/config.js'></script>
-    <script type='module' src='./data/script.js'></script>
+    <!-- ?v= 는 브라우저 캐시를 끊는 용도다. 파일마다 값이 제각각이면
+         (CSS 는 2.3.3, JS 는 2.2.0/2.2.9 처럼) 하나만 깜빡했을 때
+         "CSS 는 새것, JS 는 옛것"이 캐시에 남아 원인 못 찾는 버그가 된다.
+         고칠 때마다 아래 다섯 줄과 위 CSS 두 줄, script.js 의 PANEL_URL 을
+         같은 값으로 함께 올린다. -->
+    <script src="./recorder/js/vendor/mp4-muxer.js?v=3.2.25"></script>
+    <script src="./recorder/js/config.js?v=3.2.25"></script>
+    <script src="./recorder/js/data/regions.js?v=3.2.25"></script>
+    <script src="./recorder/js/recorder.js?v=3.2.25"></script>
+    <script type="module" src="./data/script.js?v=3.2.25"></script>
 </body>
 
 </html>
