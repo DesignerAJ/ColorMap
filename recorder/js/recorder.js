@@ -3171,8 +3171,15 @@ function initRecorder(map) {
        지도의 실제 렌더링을 쓰기 때문에 선 굵기·점선·라벨이 화면과 완전히 동일하다.
 
      ag-psd 는 이 기능에서만 쓰이므로 처음 누를 때 동적으로 불러온다 (810KB). */
+  /* 한 모드를 여러 레이어가 나눠 그리는 경우가 있다 — 국가는 나머지 나라를 Mapbox 레이어가,
+     남·북한을 우리 폴리곤 레이어가 그린다. prop 은 둘 다 iso_3166_1_alpha_3 로 같다. */
+  const fillLayersOf = (p) => [p.layer, ...(p.id === 'country' ? [KC_LAYER] : [])];
+
+  /* 색칠 목록을 손으로 적지 말 것. 예전에 네 개를 적어 뒀다가 남·북한 레이어가 빠졌고,
+     PSD 의 '지도' 레이어에 대한민국 색칠이 함께 구워졌다 — 포토샵에서 대한민국 레이어를
+     꺼도 색이 남았다. PAINTERS 에서 뽑아 쓰면 모드를 늘려도 여기가 뒤처지지 않는다. */
   const OVERLAY_LAYERS = {
-    색칠: ['country-color-fill', 'admin1-color-fill', 'sido-color-fill', 'sigungu-color-fill'],
+    색칠: PAINTERS.flatMap(fillLayersOf),
     경로선: ['route-line-layer', 'route-dots-layer', 'route-arrow-layer', 'draw-lines-layer'],
     핀: ['capture-pins-layer'],
   };
@@ -3181,10 +3188,7 @@ function initRecorder(map) {
      그 지역만 그려진다. 지역별로 레이어를 나눌 때 이 방식을 쓴다.
      레이어 id·키 속성·표시 이름은 모드 정의(PAINTERS)에 이미 있으므로 그대로 빌려 쓴다
      — 여기서 따로 적어두면 모드를 늘릴 때 또 한 군데가 뒤처진다. */
-  /* 한 모드를 여러 레이어가 나눠 그리는 경우가 있다 — 국가는 나머지 나라를 Mapbox 레이어가,
-     남·북한을 우리 폴리곤 레이어가 그린다. PSD·SVG 로 뽑을 때 한쪽만 보면 대한민국·북한이
-     통째로 빠지므로 둘 다 훑는다. prop 이 같아서(iso_3166_1_alpha_3) 그대로 쓸 수 있다. */
-  const fillLayersOf = (p) => [p.layer, ...(p.id === 'country' ? [KC_LAYER] : [])];
+  // PSD·SVG 도 한 모드를 나눠 그리는 레이어를 전부 훑어야 남·북한이 빠지지 않는다
   const COLOR_SOURCES = PAINTERS.map(p => ({
     layer: p.layer, layers: fillLayersOf(p),
     prop: p.prop, list: p.entries, keyOf: e => e.key, labelOf: e => p.label(e.key),
