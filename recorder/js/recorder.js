@@ -3181,8 +3181,13 @@ function initRecorder(map) {
      그 지역만 그려진다. 지역별로 레이어를 나눌 때 이 방식을 쓴다.
      레이어 id·키 속성·표시 이름은 모드 정의(PAINTERS)에 이미 있으므로 그대로 빌려 쓴다
      — 여기서 따로 적어두면 모드를 늘릴 때 또 한 군데가 뒤처진다. */
+  /* 한 모드를 여러 레이어가 나눠 그리는 경우가 있다 — 국가는 나머지 나라를 Mapbox 레이어가,
+     남·북한을 우리 폴리곤 레이어가 그린다. PSD·SVG 로 뽑을 때 한쪽만 보면 대한민국·북한이
+     통째로 빠지므로 둘 다 훑는다. prop 이 같아서(iso_3166_1_alpha_3) 그대로 쓸 수 있다. */
+  const fillLayersOf = (p) => [p.layer, ...(p.id === 'country' ? [KC_LAYER] : [])];
   const COLOR_SOURCES = PAINTERS.map(p => ({
-    layer: p.layer, prop: p.prop, list: p.entries, keyOf: e => e.key, labelOf: e => p.label(e.key),
+    layer: p.layer, layers: fillLayersOf(p),
+    prop: p.prop, list: p.entries, keyOf: e => e.key, labelOf: e => p.label(e.key),
   }));
   // 파일명·레이어명에 쓸 안전한 이름 (빈 값이면 대체어)
   const layerName = (s, fallback) => (String(s || '').trim() || fallback).replace(/[\\/:*?"<>|]/g, '');
@@ -3311,22 +3316,22 @@ function initRecorder(map) {
       const paintBackup = [];
       const colorItems = [];
       for (const src of COLOR_SOURCES) {
-        if (!map.getLayer(src.layer)) continue;
+        src.live = src.layers.filter(id => map.getLayer(id));       // 지금 깔려 있는 것만
+        if (!src.live.length) continue;
         const list = src.list();
         if (!list.length) continue;
-        paintBackup.push({ layer: src.layer, value: map.getPaintProperty(src.layer, 'fill-color') });
+        src.live.forEach(id => paintBackup.push({ layer: id, value: map.getPaintProperty(id, 'fill-color') }));
         list.forEach(e => colorItems.push({ src, entry: e }));
       }
       if (colorItems.length) {
-        allIds.forEach(id => setVis(id, id === colorItems[0].src.layer ? 'visible' : 'none'));
         const kids = [];
         for (let i = 0; i < colorItems.length; i++) {
           const { src, entry } = colorItems[i];
           setStatus(`색칠 ${i + 1}/${colorItems.length} 캡처 중…`, 'busy');
-          allIds.forEach(id => setVis(id, id === src.layer ? 'visible' : 'none'));
-          // 이 지역만 칠하고 나머지는 투명
-          map.setPaintProperty(src.layer, 'fill-color',
-            ['match', ['get', src.prop], src.keyOf(entry), entry.color, 'rgba(0,0,0,0)']);
+          allIds.forEach(id => setVis(id, src.live.includes(id) ? 'visible' : 'none'));
+          // 이 지역만 칠하고 나머지는 투명 (같은 모드를 나눠 그리는 레이어 전부에)
+          src.live.forEach(id => map.setPaintProperty(id, 'fill-color',
+            ['match', ['get', src.prop], src.keyOf(entry), entry.color, 'rgba(0,0,0,0)']));
           const img = await captureTransparent();
           if (hasPixels(img)) kids.push({ name: layerName(src.labelOf(entry), '색칠 ' + (i + 1)), imageData: img });
         }
@@ -3445,7 +3450,9 @@ function initRecorder(map) {
           }
           for (const k in byKey) acc.push(byKey[k]);
         };
-        PAINTERS.forEach(p => collect(p.layer, p.prop, (key) => p.entries().find(x => x.key === key)));
+        // 국가는 Mapbox 레이어와 우리 남·북한 레이어가 나눠 그린다 — 둘 다 훑어야 빠지지 않는다
+        PAINTERS.forEach(p => fillLayersOf(p)
+          .forEach(id => collect(id, p.prop, (key) => p.entries().find(x => x.key === key))));
 
         if (!acc.length) { setStatus('화면에 보이는 색칠 영역이 없습니다.', ''); return; }
 
