@@ -18,6 +18,7 @@
    의존성 없음. 실행: node recorder/tools/build-nk-admin1.mjs
 */
 import fs from 'node:fs';
+import { buildPolygons } from './lib/rings.mjs';
 
 const R = 'recorder/js/data/';
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
@@ -401,7 +402,19 @@ for (const e of data.elements) {
   rings = rings.flatMap(splitAtPinches).filter(r => r.length >= 4);
   if (rings.length !== before) note += ` · 핀치 ${rings.length - before}개 링으로 나눔`;
 
-  const pts = rings.flat();
+  /* 5) 링을 바깥/구멍으로 나누고 감김 방향을 맞춘다.
+
+     전에는 `rings.map(r => [r])` 로 링 하나하나를 별개 폴리곤으로 내보냈다. GeoJSON 으로는
+     틀린 게 아니지만 **벡터 타일에는 '구멍' 표시가 없다 — 감김 방향이 유일한 기준이다.**
+     타일로 구우면 링이 한 줄로 늘어서고, mapbox-gl 은 첫 링의 부호를 바깥으로 잡은 뒤
+     부호가 반대인 링을 전부 앞 폴리곤의 구멍으로 붙인다. OSM 의 호수·섬은 본토와 감김이
+     반대라, 함경남도는 링 165개 중 164개가 통째로 본토의 구멍이 됐다. 그 구멍들이 서로
+     겹치고 맞닿아 화면에 긴 다각형이 뻗었다(128.0, 40.04). 시도 도구와 같은 처리를 쓴다. */
+  const polys = buildPolygons(rings);
+  const holes = polys.reduce((s, p) => s + p.length - 1, 0);
+  if (holes) note += ` · 구멍 ${holes}개`;
+
+  const pts = polys.flat(2);
   const lo = pts.map(p => p[0]), la = pts.map(p => p[1]);
   const [w, h] = [Math.max(...lo) - Math.min(...lo), Math.max(...la) - Math.min(...la)];
   const prev = old.get(short);
@@ -414,11 +427,11 @@ for (const e of data.elements) {
   built.push({
     type: 'Feature',
     properties: { country: '북한', short, name: `북한 ${short}`, c, z },
-    geometry: rings.length === 1
-      ? { type: 'Polygon', coordinates: [rings[0]] }
-      : { type: 'MultiPolygon', coordinates: rings.map(r => [r]) },
+    geometry: polys.length === 1
+      ? { type: 'Polygon', coordinates: polys[0] }
+      : { type: 'MultiPolygon', coordinates: polys },
   });
-  console.log(`  ${short.padEnd(7)} 링 ${String(rings.length).padStart(2)} · ${String(pts.length).padStart(6)}점` +
+  console.log(`  ${short.padEnd(7)} 폴리곤 ${String(polys.length).padStart(3)} · ${String(pts.length).padStart(6)}점` +
     `${prev ? '' : '  (새로 추가)'}${note}`);
 }
 

@@ -451,6 +451,36 @@ test('국가 폴리곤과 행정구역 폴리곤에 핀치가 없다', () => {
   check(admin1.features.filter((f) => f.properties.country === '대한민국'), 'admin1 대한민국');
 });
 
+test('링 감김 방향이 GeoJSON 규약대로다 (바깥 반시계 / 구멍 시계)', () => {
+  /* **벡터 타일에는 '구멍' 이라는 표시가 없다 — 감김 방향이 유일한 기준이다.**
+     GeoJSON 에서 링을 폴리곤마다 따로 내보내도 타일로 구우면 한 줄로 늘어서고,
+     mapbox-gl 은 첫 링의 부호를 바깥으로 잡은 뒤 부호가 반대인 링을 전부 앞 폴리곤의
+     구멍으로 붙인다. 그래서 방향이 섞이면 섬과 호수가 통째로 구멍이 되고, 그 구멍들이
+     서로 겹쳐 화면에 긴 다각형이 뻗는다 — 함경남도(128.0, 40.04)에서 링 165개 중
+     164개가 그렇게 본토의 구멍이 됐다. 삼각형 스파이크의 여섯 번째 원인이다. */
+  const area = (r) => {
+    let a = 0;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0] * r[i][1] - r[i][0] * r[j][1];
+    return a / 2;
+  };
+  const check = (feats, label) => {
+    const bad = [];
+    for (const f of feats) for (const poly of ringsOf(f.geometry)) {
+      poly.forEach((r, i) => {
+        const a = area(r);
+        if (!a) return;                                   // 넓이 0 은 아래 다른 검사가 잡는다
+        const want = i === 0;                             // 바깥 링만 반시계
+        if ((a > 0) !== want) bad.push(`${label} ${f.properties.short || f.properties.name} ${i === 0 ? '바깥' : '구멍'}링`);
+      });
+    }
+    assert.deepEqual(bad.slice(0, 3), [], `${label}: 방향이 뒤집힌 링 ${bad.length}개`);
+  };
+  check(countries.features, 'korea-countries');
+  check(NK, 'admin1 북한');
+  check(admin1.features.filter((f) => f.properties.country === '대한민국'), 'admin1 대한민국');
+  check(hires.features, 'sido-hires');
+});
+
 test('국가 폴리곤이 시도마다 나뉘어 있다', () => {
   /* 처음에는 나라별로 폴리곤 4,173개를 MultiPolygon 하나에 몰아넣었는데, 그 거대한
      feature 를 타일마다 삼각분할하면서 충남 해안에 삼각형이 뻗었다. 시도 탭은 시도마다

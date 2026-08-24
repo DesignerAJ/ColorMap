@@ -34,7 +34,7 @@
 */
 
 import fs from 'node:fs';
-import { nudgeTouchingHoles } from './lib/rings.mjs';
+import { nudgeTouchingHoles, buildPolygons } from './lib/rings.mjs';
 import path from 'node:path';
 
 const SRC = 'recorder/js/data/sigungu.json';
@@ -60,42 +60,6 @@ function signedArea(ring) {
     a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
   }
   return a / 2;
-}
-
-function bboxOf(ring) {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const [x, y] of ring) {
-    if (x < x0) x0 = x; if (x > x1) x1 = x;
-    if (y < y0) y0 = y; if (y > y1) y1 = y;
-  }
-  return [x0, y0, x1, y1];
-}
-
-const bboxInside = (a, b) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
-
-/* 링이 다른 링 안에 들어 있는지. 한 점만 보고 정하면 안 된다 —
-   핀치를 잘라 만든 링은 첫 점이 바깥 링과 맞닿은 공유 꼭짓점이라
-   그 점 하나로는 안팎 판정이 흔들린다. 여러 점을 고르게 뽑아 다수결로 정한다. */
-function ringInside(ring, outer) {
-  const n = ring.length - 1;
-  let inside = 0, tested = 0;
-  for (let s = 1; s <= 7; s++) {
-    const p = ring[Math.floor((n * s) / 8)];
-    if (!p) continue;
-    tested++;
-    if (pointInRing(p, outer)) inside++;
-  }
-  return tested > 0 && inside * 2 > tested;
-}
-
-function pointInRing(pt, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i], [xj, yj] = ring[j];
-    if ((yi > pt[1]) !== (yj > pt[1]) &&
-        pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
 }
 
 /* 한 링이 같은 점을 두 번 지나면 그 지점에서 자기 자신과 만난다(핀치).
@@ -306,41 +270,8 @@ for (const [sido, feats] of groups) {
   const rings = assembleRings(kept, coord).map((r) => r.map((k) => coord.get(k))).flatMap(cleanRing);
   if (!rings.length) { console.error(`${sido}: 링 조립 실패 — 건너뜀`); continue; }
 
-  /* 4) 바깥 링 / 구멍 구분 — **중첩 깊이**로 정한다.
-
-     "어떤 바깥 링 안에 있으면 구멍"으로 처리하면 안 된다. 구멍 안에 또 링이 있는 경우가
-     있는데(호수 속의 섬), 그걸 다시 구멍으로 넣으면 구멍 둘이 겹쳐 놓이고 mapbox-gl 이
-     구멍을 바깥 링에 잇다가 엉뚱한 삼각형을 그린다 — 충남 부사호(126.560, 36.470)와
-     경기(126.691, 37.111)에서 실제로 났다.
-
-     깊이 0 = 바깥, 1 = 구멍, 2 = 그 구멍 안의 섬(다시 바깥), … 짝수면 육지, 홀수면 구멍.
-     부모는 자기를 감싸는 링 중 **가장 작은 것**이라야 한다. 큰 것부터 훑으며 마지막으로
-     자기를 감싼 링이 곧 가장 작은 부모다. */
-  const info = rings.map((r) => ({ ring: r, bbox: bboxOf(r), area: Math.abs(signedArea(r)) }));
-  info.sort((a, b) => b.area - a.area);                    // 큰 것부터 — 부모는 늘 앞에 있다
-  const depth = new Array(info.length).fill(0);
-  const parentOf = new Array(info.length).fill(-1);
-  for (let i = 0; i < info.length; i++) {
-    for (let j = 0; j < i; j++) {
-      if (!bboxInside(info[i].bbox, info[j].bbox)) continue;
-      if (!ringInside(info[i].ring, info[j].ring)) continue;
-      parentOf[i] = j;                                     // 계속 덮어써서 가장 작은(마지막) 부모가 남는다
-    }
-    depth[i] = parentOf[i] === -1 ? 0 : depth[parentOf[i]] + 1;
-  }
-  const holesOf = new Map();
-  const outers = [];
-  for (let i = 0; i < info.length; i++) {
-    if (depth[i] % 2 === 0) { outers.push(i); holesOf.set(i, []); }
-    else holesOf.get(parentOf[i]).push(i);
-  }
-
-  // 5) GeoJSON 규약대로 방향을 맞춘다 (바깥 반시계 / 구멍 시계)
-  const wind = (ring, ccw) => (signedArea(ring) < 0) === ccw ? ring.slice().reverse() : ring;
-  const polys = outers.map((oi) => nudgeTouchingHoles([
-    wind(info[oi].ring, true),
-    ...holesOf.get(oi).map((hi) => wind(info[hi].ring, false)),
-  ]));
+  // 4) 바깥 링 / 구멍 구분 + 감김 방향 정리 (lib/rings.mjs — 북한 도구와 같은 처리)
+  const polys = buildPolygons(rings);
 
   const pts = polys.reduce((s, p) => s + p.reduce((t, r) => t + r.length, 0), 0);
   totalPts += pts;
