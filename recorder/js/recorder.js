@@ -1409,6 +1409,17 @@ function initRecorder(map) {
 
   function boundaryKindOf(l) {
     if (l.type !== 'line' || !BOUNDARY_SOURCE_LAYERS.has(l['source-layer'])) return null;
+    /* **스타일이 꺼둔 레이어는 켜지 않는다.** 디자이너가 visibility:none 으로 빼둔 것이
+       스타일마다 서넛씩 있다. 한 번 전부 켰다가 그대로 사고가 났다 —
+         · country_border 는 country_boundaries 소스라 **maritime 조건이 없다.**
+           켜면 해안선(육지-바다 경계)에까지 흰 선이 그어진다.
+         · 같은 레이어가 KP-KR 가리기에서도 빠져 있어(그건 admin 소스만 훑는다)
+           우리 국경선과 두 겹이 됐다. 두 데이터가 어긋나는 양구 위쪽에서 선이
+           갈라졌다 합쳐졌고, 점선으로 바꾸면 점선 두 줄로 보였다.
+       위성 스타일의 landColor·water 를 건드리면 안 되는 것과 같은 이야기다.
+       꺼진 채로 두면 우리가 손대지 않으므로 계속 목록 밖이다 — 스스로 일관된다.
+       그래서 '표시' 체크를 끌 때도 visibility 가 아니라 불투명도로 끈다(아래). */
+    if ((l.layout || {}).visibility === 'none') return null;
     if (l['source-layer'] === 'country_boundaries') return 'country';
     /* 스타일 원본이 아니라 **지금 걸린** 필터를 읽는다. hideMapboxKoreanAdmin1 이
        남·북한을 빼려고 필터를 덧씌우는데, 덧씌운 절은 admin_level 을 0 으로 고정하지도
@@ -1474,11 +1485,12 @@ function initRecorder(map) {
     bdExistingLayers(kind).forEach(id => {
       const isBg = id.endsWith('-bg');   // 외곽선(배경 라인)은 좀 더 두껍게/연하게
       try {
-        map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+        /* 끌 때 visibility 를 none 으로 만들면 그 레이어가 '스타일이 꺼둔 것'과
+           구별되지 않아 다시 켤 수 없게 된다(위 참고). 불투명도로 끈다. */
+        map.setPaintProperty(id, 'line-opacity', !on ? 0 : (isBg ? Math.min(1, opac) * 0.6 : opac));
         if (!on) return;
         map.setLayoutProperty(id, 'line-cap', cap);
         map.setPaintProperty(id, 'line-color', color);
-        map.setPaintProperty(id, 'line-opacity', isBg ? Math.min(1, opac) * 0.6 : opac);
         map.setPaintProperty(id, 'line-width', isBg ? width + 1.5 : width);
         map.setPaintProperty(id, 'line-dasharray', dashPatterns[dashType] || [1]);
       } catch (_) {}

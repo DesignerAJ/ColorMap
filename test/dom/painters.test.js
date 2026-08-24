@@ -113,10 +113,13 @@ test('스타일을 바꿔도 색칠 레이어가 다시 붙는다', () => {
   assert.ok(e.layers.get('country-color-fill'), '스타일 교체 후 색칠이 돌아오지 않는다');
 });
 
-/* 하네스의 가짜 스타일에는 실제 스타일과 같은 경계선 레이어들이 들어 있다.
-   admin-2-* 는 시군구 경계선이고, country_border 는 country_boundaries 소스에서 온
-   국경선이다. 예전에는 이 둘이 끌어올림 목록에 없어서 색칠에 덮였다. */
-const BOUNDARY_IDS = ['country-border-dot', 'admin-boundaries', 'dispute-boundaries', 'country_border'];
+/* 하네스의 가짜 스타일은 '단색지형' 을 그대로 옮긴 것이다. 스타일이 켜둔 경계선은 셋뿐이고
+   (admin-boundaries · country-border · dispute-boundaries) 나머지는 디자이너가
+   visibility:none 으로 꺼뒀다. 예전에는 이름 목록으로 골라 country-border 를 놓쳤다. */
+const BOUNDARY_IDS = ['admin-boundaries', 'country-border', 'dispute-boundaries'];
+// 스타일이 꺼둔 것들 — 우리가 켜서도, 끌어올려서도 안 된다
+const STYLE_OFF_IDS = ['country_border', 'country-border-dot', 'admin-boundaries-dot',
+                       'admin-2-boundaries-bg', 'admin-2-boundaries-dispute'];
 
 test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다', async () => {
   const geo = (name) => ({ type: 'FeatureCollection', features: [{ type: 'Feature',
@@ -136,7 +139,7 @@ test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다
 
   const order = e.layers.order();
   const lineAt = BOUNDARY_IDS.map((id) => order.indexOf(id)).filter((i) => i >= 0);
-  assert.ok(lineAt.length >= 4, '가짜 스타일에 경계선이 다 안 들어 있다');
+  assert.equal(lineAt.length, BOUNDARY_IDS.length, '가짜 스타일에 경계선이 다 안 들어 있다');
   for (const mode of ['country', 'admin1', 'sido', 'sigungu']) {
     const fill = order.indexOf(`${mode}-color-fill`);
     assert.ok(fill >= 0, `${mode} 색칠 레이어가 없다`);
@@ -145,12 +148,16 @@ test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다
   }
 });
 
-test('경계선 후보를 이름이 아니라 소스로 고른다 (목록에서 빠지는 일이 없게)', () => {
+test('경계선 후보를 이름이 아니라 필터로 고른다 (목록에서 빠지는 일이 없게)', () => {
   const e = boot(); e.styleLoad();
-  // admin 소스의 선인데 BOUNDARY_LAYERS 에는 없는 레이어도 끌어올려야 한다
   const moved = new Set(e.calls.filter((c) => c.api === 'moveLayer').map((c) => c.id));
-  assert.ok(moved.has('country_border'), 'country_boundaries 소스의 국경선이 안 올라갔다');
-  assert.ok(moved.has('dispute-boundaries'), 'admin 소스의 분쟁 경계선이 안 올라갔다');
+  // 이름 목록에 없던 레이어도 끌어올려야 한다 — country-border 를 놓쳐 색칠에 덮였다
+  assert.ok(moved.has('country-border'), '국경선이 안 올라갔다');
+  assert.ok(moved.has('dispute-boundaries'), '분쟁 경계선이 안 올라갔다');
+  // 꺼둔 레이어는 올릴 것도 없다 (올려도 안 보이지만, 대상에서 빠졌다는 확인이기도 하다)
+  for (const id of STYLE_OFF_IDS) {
+    assert.ok(!moved.has(id), `${id} 는 스타일이 꺼둔 레이어인데 끌어올렸다`);
+  }
 });
 
 test('대한민국 국가 색칠이 시도·시군구 색칠 아래에 깔린다', async () => {

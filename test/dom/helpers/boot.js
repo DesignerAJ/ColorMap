@@ -31,17 +31,19 @@ export const FIXTURES = {
    여기 없던 country-border · admin-2-* · admin-boundaries-dot 이 조절 대상에서
    빠져 투명도를 0 으로 내려도 흰 선이 남았다. 축약된 이 파일이 그걸 초록으로 통과시켰다.
    (필터는 아래 filters 에 실제 값을 넣어 둔다 — 종류 판정이 필터를 읽기 때문이다) */
+const OFF = { visibility: 'none' };                      // 디자이너가 꺼둔 레이어
 const STYLE_LAYERS = [
   { id: 'background', type: 'background' },
   { id: 'landColor', type: 'fill', 'source-layer': 'country_boundaries' },
   { id: 'water', type: 'fill' },
-  { id: 'country_border', type: 'line', 'source-layer': 'country_boundaries' },
-  { id: 'admin-2-boundaries-bg', type: 'line', 'source-layer': 'admin' },
-  { id: 'admin-2-boundaries-dispute', type: 'line', 'source-layer': 'admin' },
+  // country_border 는 country_boundaries 소스라 maritime 조건이 없다 — 켜면 해안선까지 그린다
+  { id: 'country_border', type: 'line', 'source-layer': 'country_boundaries', layout: OFF },
+  { id: 'admin-2-boundaries-bg', type: 'line', 'source-layer': 'admin', layout: OFF },
+  { id: 'admin-2-boundaries-dispute', type: 'line', 'source-layer': 'admin', layout: OFF },
   { id: 'admin-boundaries', type: 'line', 'source-layer': 'admin' },
-  { id: 'admin-boundaries-dot', type: 'line', 'source-layer': 'admin' },
+  { id: 'admin-boundaries-dot', type: 'line', 'source-layer': 'admin', layout: OFF },
   { id: 'country-border', type: 'line', 'source-layer': 'admin' },
-  { id: 'country-border-dot', type: 'line', 'source-layer': 'admin' },
+  { id: 'country-border-dot', type: 'line', 'source-layer': 'admin', layout: OFF },
   { id: 'dispute-boundaries', type: 'line', 'source-layer': 'admin' },
   { id: 'poi-label', type: 'symbol' },
 ];
@@ -71,7 +73,7 @@ export function boot({
   /* 레이어는 '순서'가 곧 그리는 순서다 — 색칠이 국경선 위로 올라가는지 같은 문제가
      여기서 갈리므로, addLayer(def, beforeId) / moveLayer(id, beforeId) 를 배열로
      제대로 흉내낸다. 기존 테스트가 쓰던 .get/.delete/.keys 는 그대로 쓸 수 있게 둔다. */
-  const layerList = STYLE_LAYERS.map((l) => ({ ...l }));
+  const layerList = STYLE_LAYERS.map((l) => ({ ...l, layout: { ...(l.layout || {}) } }));
   const at = (id) => layerList.findIndex((l) => l.id === id);
   const put = (l, before) => {
     const i = before ? at(before) : -1;
@@ -142,8 +144,12 @@ export function boot({
     },
     setPaintProperty: (id, p, v) => paint.push({ id, p, v }),
     getPaintProperty: () => '#334455',
-    setLayoutProperty: (id, p, v) => layout.push({ id, p, v }),
-    getLayoutProperty: () => 'visible',
+    setLayoutProperty: (id, p, v) => {
+      layout.push({ id, p, v });
+      const L = layerList.find((x) => x.id === id);      // 실제로 반영해야 '꺼진 레이어' 판정이 흔들리지 않는다
+      if (L) (L.layout ||= {})[p] = v;
+    },
+    getLayoutProperty: (id, p) => (layerList.find((x) => x.id === id)?.layout || {})[p] ?? 'visible',
     getFilter: (id) => filters[id],
     setFilter: (id, f) => { filters[id] = f; },
     setStyle: () => {}, setProjection: () => {}, setZoom: () => {}, setLanguage: () => {},
