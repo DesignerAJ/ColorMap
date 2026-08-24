@@ -104,3 +104,27 @@ test('국경선 투명도를 0 으로 내리면 국경선이 전부 사라진다
     assert.ok(!zeroed.has(id), `${id} 는 분쟁지역인데 국경선 칸에 딸려갔다`);
   }
 });
+
+/* ── 점선 ──
+   점선으로 바꿔도 한국과 북한만 실선으로 보였다. 정점이 촘촘해서가 아니다 —
+   line-dasharray 의 단위는 선 두께의 배수이고, 둥근 끝은 대시를 양쪽으로
+   두께의 절반씩 불려 그 만큼 간격을 먹는다. [1,1] 이면 간격이 통째로 사라진다.
+   우리가 만든 남·북한 선만 line-cap 이 round 였다. */
+test('점선을 켜면 선 끝이 각지게 바뀐다 (둥근 끝은 간격을 먹는다)', async () => {
+  const e = await ready();
+  const blk = e.doc.querySelector('.bd-block[data-bd="country"]');
+  const dash = blk.querySelector('.bd-dash-option');
+  dash.checked = true;
+  dash.dispatchEvent(new e.window.Event('change', { bubbles: true }));
+
+  const caps = e.layout.filter((l) => l.p === 'line-cap');
+  const mine = caps.filter((l) => l.id === 'kr-land-border');
+  assert.ok(mine.length, '우리 국경선에 line-cap 을 안 건드렸다');
+  assert.equal(mine.at(-1).v, 'butt', '점선인데 끝이 둥글다 — 간격이 메워져 실선으로 보인다');
+  // 점선을 껐을 때는 다시 둥글게
+  const solid = blk.querySelector('.bd-dash-option');
+  solid.checked = false;
+  solid.dispatchEvent(new e.window.Event('change', { bubbles: true }));
+  const after = e.layout.filter((l) => l.p === 'line-cap' && l.id === 'kr-land-border');
+  assert.equal(after.at(-1).v, 'round', '실선으로 되돌리면 끝도 되돌아와야 한다');
+});

@@ -1447,12 +1447,22 @@ function initRecorder(map) {
       b: [4, 1.5, 1, 1.5],
       c: [1, 1],
     };
+    /* 점선을 켜면 선 끝을 **각지게** 바꾼다.
+       line-dasharray 의 단위는 선 두께의 배수인데, 둥근 끝(line-cap: round)은 대시
+       양 끝을 각각 두께의 절반만큼 불려서 그린다. 그만큼 간격이 먹힌다 —
+       [2, 1.5] 는 간격이 1.5 에서 0.5 로 줄고, [1, 1] 은 0 이 되어 실선처럼 보인다.
+       남·북한 선(kr-land-border · korea-admin1-lines)만 round 로 만들어 뒀던 탓에
+       "한국과 북한만 점선이 안 보인다"가 됐다. 스타일이 주는 경계선은 전부 기본값
+       butt 이라 멀쩡했다(6개 스타일을 받아 확인했다).
+       실선일 때는 둥근 끝이 더 낫다 — 조각난 선의 끝이 부드럽게 이어져 보인다. */
+    const cap = dashType ? 'butt' : 'round';
     block.classList.toggle('disabled', !on);
     bdExistingLayers(kind).forEach(id => {
       const isBg = id.endsWith('-bg');   // 외곽선(배경 라인)은 좀 더 두껍게/연하게
       try {
         map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
         if (!on) return;
+        map.setLayoutProperty(id, 'line-cap', cap);
         map.setPaintProperty(id, 'line-color', color);
         map.setPaintProperty(id, 'line-opacity', isBg ? Math.min(1, opac) * 0.6 : opac);
         map.setPaintProperty(id, 'line-width', isBg ? width + 1.5 : width);
