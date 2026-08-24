@@ -503,7 +503,10 @@ test('경계 폴리곤에 자기교차가 없다 (핀치가 아닌 가로지름)
     return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
   };
   const bad = [];
-  for (const [feats, label] of [[hires.features, '시도'], [NK, '북한']]) {
+  /* korea-countries 도 봐야 한다. 이 파일은 시도(7자리)를 **5자리로 새로 반올림**하는데,
+     반올림은 없던 겹침을 만들어낸다 — CLAUDE.md 가 경고하는 그 단계다. 원본 둘이
+     깨끗해도 이 출력이 깨끗하다는 보장이 없어서, 한동안 아무도 안 보는 파일이었다. */
+  for (const [feats, label] of [[hires.features, '시도'], [NK, '북한'], [countries.features, '국가']]) {
     for (const f of feats) for (const poly of ringsOf(f.geometry)) for (const r of poly) {
       if (r.length < 5) continue;
       const C = 0.01, grid = new Map();                   // 전수 비교는 느리다 — 격자로 후보만
