@@ -105,3 +105,66 @@ test("'없음'은 정말 0 이다 (0.5 단계도 남으면 도로·지명이 빠
   const d = dipOf({ from: [127.0, 37.55], to: [2.35, 48.86], zoom: 10, curve: 0.01 });
   assert.ok(d < 0.01, `줌아웃이 ${d.toFixed(3)} 단계 남았다`);
 });
+
+/* ── '부드럽게 녹화'도 같은 곡선을 타야 한다 ──
+   이 모드는 flyTo 를 안 쓴다. 프레임마다 jumpTo 로 세워 놓고 타일이 다 도착할 때까지
+   기다렸다 찍는다 — 이동 중 저해상도 타일이 잡히던 문제를 그렇게 없앴다. 그러면서
+   카메라 궤적을 직선 보간으로 대신했고, 비행 곡선이 통째로 빠졌다.
+   출발·도착 줌이 같으면 줌이 처음부터 끝까지 고정이라, '이동 중 줌아웃'을 '많이'로
+   놔도 이 모드에서만 아무 반응이 없었다. */
+const F = extract('recorder/js/recorder.js', ['lerp', 'lerpAngle', 'CLAMP_LAT', 'mercX', 'mercY',
+  'unmercX', 'unmercY', 'FLY_CURVES', 'flightPath', 'interpCam']);
+
+const SEOUL = { center: [127.0, 37.55], zoom: 8, bearing: 0, pitch: 0 };
+const BUSAN = { center: [129.08, 35.18], zoom: 8, bearing: 0, pitch: 0 };
+const PARIS = { center: [2.35, 48.86], zoom: 10, bearing: 0, pitch: 0 };
+
+const lowest = (from, to, curve, w0 = 1600) => {
+  const p = F.flightPath(from, to, curve, w0);
+  assert.ok(p, '곡선을 못 세웠다');
+  let lo = Infinity;
+  for (let k = 0; k <= 400; k++) lo = Math.min(lo, p(k / 400).zoom);
+  return from.zoom - lo;
+};
+
+test('부드럽게 녹화의 곡선이 flyTo 와 같은 깊이로 내려간다', () => {
+  // 위쪽 dipOf 는 mapbox 소스에서 옮긴 것, flightPath 는 recorder.js 안의 구현.
+  // 서로 독립적으로 쓴 두 계산이 맞아야 '진짜 flyTo 와 같다'고 말할 수 있다.
+  for (const [name, to, zoom] of [['부산', BUSAN, 8], ['파리', PARIS, 10]]) {
+    for (const curve of [1.42, 2.0, 2.8, 4.0]) {
+      const mine = lowest({ ...SEOUL, zoom }, { ...to, zoom }, curve);
+      const ref  = dipOf({ from: SEOUL.center, to: to.center, zoom, curve });
+      assert.ok(Math.abs(mine - ref) < 0.02,
+        `${name} curve ${curve}: flightPath ${mine.toFixed(3)} vs flyTo ${ref.toFixed(3)}`);
+    }
+  }
+});
+
+test('곡선의 양 끝은 출발·도착과 정확히 맞물린다', () => {
+  const p = F.flightPath(SEOUL, BUSAN, 2.8, 1600);
+  const a = F.interpCam(SEOUL, BUSAN, 0, p), b = F.interpCam(SEOUL, BUSAN, 1, p);
+  assert.ok(Math.abs(a.zoom - SEOUL.zoom) < 1e-6, `출발 줌이 어긋난다: ${a.zoom}`);
+  assert.ok(Math.abs(b.zoom - BUSAN.zoom) < 1e-6, `도착 줌이 어긋난다: ${b.zoom}`);
+  for (const [i, want] of [[0, SEOUL.center], [1, BUSAN.center]]) {
+    const got = (i ? b : a).center;
+    assert.ok(Math.abs(got[0] - want[0]) < 1e-6 && Math.abs(got[1] - want[1]) < 1e-6,
+      `${i ? '도착' : '출발'} 중심이 어긋난다: ${got}`);
+  }
+});
+
+test('중간에 실제로 줌이 내려간다 (양 끝 줌이 같아도)', () => {
+  const dips = [1.42, 2.0, 2.8, 4.0].map((c) => lowest(SEOUL, BUSAN, c));
+  assert.ok(dips[0] > 0.05, `직선 보간처럼 줌이 그대로다 (${dips[0].toFixed(3)})`);
+  for (let i = 1; i < dips.length; i++) {
+    assert.ok(dips[i] > dips[i - 1], `단계가 단조롭지 않다: ${dips.map((d) => d.toFixed(2)).join(' → ')}`);
+  }
+});
+
+test('곡선이 없으면(직선 이동) 예전처럼 선형 보간', () => {
+  const mid = F.interpCam(SEOUL, BUSAN, 0.5, null);
+  assert.equal(mid.zoom, 8, '직선 이동인데 줌이 흔들린다');
+});
+
+test('제자리 이동은 곡선을 세우지 않는다 (0 으로 나눈다)', () => {
+  assert.equal(F.flightPath(SEOUL, { ...SEOUL, zoom: 12 }, 2.8, 1600), null);
+});

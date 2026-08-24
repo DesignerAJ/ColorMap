@@ -2899,17 +2899,82 @@ function initRecorder(map) {
     }
   }
   /* ── 부드럽게 녹화 (오프라인: 프레임 단위 렌더 → 캡처) ── */
-  // 카메라 보간 헬퍼
+  /* ── 카메라 보간 헬퍼 ──
+
+     '부드럽게 녹화'는 flyTo 를 돌리지 않는다. 프레임마다 jumpTo 로 세워 놓고 타일이
+     다 도착할 때까지 기다렸다 찍는다 — 이동 중 저해상도 부모 타일이 잡히던 문제를
+     그렇게 없앴다. 그 대신 카메라 궤적을 **직선 보간**으로 대신했고, 그래서 비행 곡선이
+     통째로 빠졌다. 출발·도착 줌이 같으면 줌이 처음부터 끝까지 고정이라
+     '이동 중 줌아웃' 설정이 이 모드에서만 아무 반응이 없었다.
+
+     그래서 flyTo 의 곡선(van Wijk)을 여기서 직접 계산한다. mapbox-gl v3.13.0 의
+     flyTo 를 그대로 옮긴 것이다:
+       ρ = curve, w₀ = 화면 긴 변, w₁ = w₀/2^(도착줌-출발줌), u₁ = 투영 픽셀 거리
+       r(e) = ln(√(b²+1) − b),  b = (w₁²−w₀²+(∓)ρ⁴u₁²) / (2·(e?w₁:w₀)·ρ²·u₁)
+       S = (r(1)−r(0))/ρ,  f = t·S
+       줌   = 출발줌 + log₂( cosh(r₀+ρf) / cosh(r₀) )
+       중심 = 투영 좌표에서 D(f) 만큼 — 직선 위를 **불균등한 속도로** 지난다
+     중심을 위경도로 섞으면 안 된다. flyTo 는 투영(머케이터) 좌표에서 섞는다.
+
+     화면 크기(w₀)에 따라 곡선 깊이가 달라지므로 실제 캔버스 크기를 쓴다. */
   const lerp = (a, b, t) => a + (b - a) * t;
   const lerpAngle = (a, b, t) => { let d = ((b - a + 540) % 360) - 180; return a + d * t; };
-  function interpCam(from, to, t) {
+
+  const CLAMP_LAT = (lat) => Math.max(-85.051129, Math.min(85.051129, lat));
+  const mercX = (lng) => (180 + lng) / 360;
+  const mercY = (lat) => 0.5 - 0.25 * Math.log((1 + Math.sin(CLAMP_LAT(lat) * Math.PI / 180)) / (1 - Math.sin(CLAMP_LAT(lat) * Math.PI / 180))) / Math.PI;
+  const unmercX = (x) => x * 360 - 180;
+  const unmercY = (y) => (2 * Math.atan(Math.exp((0.5 - y) * 2 * Math.PI)) - Math.PI / 2) * 180 / Math.PI;
+
+  /* 이 이동에 쓸 곡선 세기. 녹화(record)의 moveOpts 와 같은 값을 봐야 두 모드가 같은 그림을 낸다. */
+  function flyCurveNow(mode) {
+    if (mode !== 'fly') return null;                 // 직선(easeTo) 이동은 곡선이 없다
+    const dip = $('fly-dip').value;
+    if (dip === '0') return 0.01;
+    return FLY_CURVES[dip] || 1.42;                  // 'auto' = mapbox 기본
+  }
+
+  /* from → to 의 비행 곡선. t(0~1) 를 카메라로 바꾸는 함수를 돌려준다.
+     곡선을 못 세우면(거리 0 등) null — 부르는 쪽이 직선 보간으로 넘어간다. */
+  function flightPath(from, to, curve, w0) {
+    const rho = curve, T = rho * rho;
+    const scale = Math.pow(2, from.zoom);
+    const u1 = Math.hypot((mercX(to.center[0]) - mercX(from.center[0])) * 512 * scale,
+                          (mercY(to.center[1]) - mercY(from.center[1])) * 512 * scale);
+    if (!(u1 > 1e-6) || !(rho > 0)) return null;     // 제자리 이동 — 줌만 바뀐다
+    const w1 = w0 / Math.pow(2, to.zoom - from.zoom);
+    const r = (e) => {
+      const b = (w1*w1 - w0*w0 + (e ? -1 : 1) * T*T * u1*u1) / (2 * (e ? w1 : w0) * T * u1);
+      return Math.log(Math.sqrt(b*b + 1) - b);
+    };
+    const r0 = r(0), S = (r(1) - r0) / rho;
+    if (!isFinite(S) || Math.abs(S) < 1e-9) return null;
+    const sinh = (v) => (Math.exp(v) - Math.exp(-v)) / 2;
+    const cosh = (v) => (Math.exp(v) + Math.exp(-v)) / 2;
+    return (t) => {
+      const f = t * S, k = r0 + rho * f;
+      const d = w0 * ((cosh(r0) * (sinh(k) / cosh(k)) - sinh(r0)) / T) / u1;   // 0 → 1
+      return {
+        zoom: from.zoom + Math.log2(cosh(k) / cosh(r0)),
+        d,
+      };
+    };
+  }
+
+  function interpCam(from, to, t, path) {
+    const p = path && path(t);
+    // 중심은 투영 좌표에서 섞는다 (flyTo 와 같은 방식). 곡선이 있으면 진행도만 d 로 바꾼다.
+    const k = p ? p.d : t;
+    const x = lerp(mercX(from.center[0]), mercX(to.center[0]), k);
+    const y = lerp(mercY(from.center[1]), mercY(to.center[1]), k);
     return {
-      center: [lerp(from.center[0], to.center[0], t), lerp(from.center[1], to.center[1], t)],
-      zoom: lerp(from.zoom, to.zoom, t),
+      center: [unmercX(x), unmercY(y)],
+      zoom: p ? p.zoom : lerp(from.zoom, to.zoom, t),
       bearing: lerpAngle(from.bearing || 0, to.bearing || 0, t),
       pitch: lerp(from.pitch || 0, to.pitch || 0, t),
     };
   }
+
   // 한 프레임 렌더 완료까지 대기 (타일 로딩 포함)
   function renderFrame(cam) {
     return new Promise((resolve) => {
@@ -2974,10 +3039,17 @@ function initRecorder(map) {
       if (drawLinesOn) { addDrawLayer(); applyDrawStyle(); setDrawVisible(true); setDrawData(0); }
 
       // 구간 시퀀스
+      /* 이동 방식·이동 중 줌아웃은 '녹화'와 같은 컨트롤을 본다. 두 모드가 다른 그림을
+         내면 안 된다 — 예전에는 이 모드만 직선 보간이라 줌아웃 설정이 통째로 무시됐다.
+         곡선 깊이는 화면 크기에 따라 달라지므로 실제 캔버스 긴 변을 넘긴다. */
+      const smoothMode = $('mode').value;
+      const curve = flyCurveNow(smoothMode);
+      const w0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
       const legs = [];
       let prev = startCam;
       for (const w of stops) { legs.push({ from: prev, to: w.cam, hold: w.hold }); prev = w.cam; }
       legs.push({ from: prev, to: endCam, hold: 0 });
+      legs.forEach((lg) => { lg.path = curve ? flightPath(lg.from, lg.to, curve, w0) : null; });
       const totalLegs = legs.length;
 
       // 프리로드
@@ -2990,14 +3062,14 @@ function initRecorder(map) {
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
       for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
       // 경로 타일 미리 데우기 — 각 구간 중간 시점을 훑어 타일 캐시에 올림 → 인코딩 중 프레임별 타일 로딩 대기 ↓ (화질 손실 없음)
-      // 부드럽게 녹화는 프레임 카메라가 interpCam(선형 보간)이므로 같은 식으로 표본을 뽑으면 궤적이 정확히 일치한다.
+      // 프레임 카메라와 **같은 곡선**으로 표본을 뽑아야 궤적이 정확히 일치한다 (안 그러면 엉뚱한 타일을 데운다).
       setStatus('경로 타일 프리로드 중…','busy');
       {
         const N = 12;   // 구간당 표본 수 (촘촘할수록 이동 중 화질이 균일해짐)
         for (let li = 0; li < legs.length; li++) {
           const lg = legs[li];
           for (let s = 1; s <= N; s++) {
-            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1))));
+            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1)), lg.path));
             await tilesSettled();
             setStatus(`경로 타일 프리로드 중… (구간 ${li+1}/${legs.length} · ${s}/${N})`,'busy');
           }
@@ -3128,13 +3200,13 @@ function initRecorder(map) {
 
       // 구간 보간
       for (let L = 0; L < legs.length; L++) {
-        const { from, to, hold } = legs[L];
+        const { from, to, hold, path } = legs[L];
         for (let f = 1; f <= legFrames; f++) {
           const t = easeInOut(f / legFrames);
           if (showPins) map.getSource('capture-pins').setData(capPinFC(gFrame));   // 핀 사이즈 갱신
           if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(L, t, totalLegs)));
           if (drawLinesOn) setDrawData((L + t) / totalLegs);
-          await renderFrame(interpCam(from, to, t));            // setData 반영된 프레임 캡처
+          await renderFrame(interpCam(from, to, t, path));      // setData 반영된 프레임 캡처
           await encodeFrame(f === 1);
           gFrame++;
           if (f % 3 === 0) setStatus(`부드럽게 · 구간 ${L+1}/${legs.length} (${Math.round(f/legFrames*100)}%)`,'busy');
