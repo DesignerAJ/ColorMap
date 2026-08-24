@@ -37,7 +37,18 @@ const KEY = (p) => p[0].toFixed(7) + ',' + p[1].toFixed(7);
    가로채는 환경). curl 은 시스템 키체인을 쓰므로 그대로 통과한다. 그래서 fetch 를 먼저
    해보고 막히면 curl 로 넘어간다. 인증서를 끄는(NODE_TLS_REJECT_UNAUTHORIZED=0) 선택은
    하지 않는다 — 한 번 끄면 그 뒤로 아무도 안 켠다. */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Overpass 는 혼잡하면 JSON 대신 HTML 안내문을 준다. 기다렸다 다시 부른다. */
 async function overpass(query) {
+  const waits = [0, 15, 45, 90];
+  for (let i = 0; i < waits.length; i++) {
+    if (waits[i]) { console.log(`  Overpass 혼잡 — ${waits[i]}초 뒤 다시 시도`); await sleep(waits[i] * 1000); }
+    try { return await overpassOnce(query); } catch (e) { if (i === waits.length - 1) throw e; }
+  }
+}
+
+async function overpassOnce(query) {
   try {
     const r = await fetch(OVERPASS, { method: 'POST', body: query });
     if (!r.ok) throw new Error(`Overpass ${r.status} — 잠시 뒤 다시 시도하세요`);
@@ -299,7 +310,18 @@ function clipToLand(ring, C) {
     const ex = crossing(open[prev], open[k], C);
     const en = crossing(open[next], open[(next - 1 + n) % n], C);
     if (ex && en && ex.L === en.L) { out.push(...coastSlice(ex, en, C)); bridged++; }
-    else { out.push(...(ex ? [ex.pt.slice()] : []), ...(en ? [en.pt.slice()] : [])); straight++; }
+    else {
+      /* 두 교차점이 서로 다른 해안선 고리에 있으면 이어붙일 길이 없다. 강 하구가 대표적이다 —
+         OSM 해안선은 강어귀에서 끊기고 강둑은 해안선이 아니라, 양쪽이 다른 고리가 된다.
+
+         예전에는 두 점을 **직선으로 이어** 버렸는데, 두만강 하구에서 21.5km 짜리 수평선이
+         생기고 그 선과 해안 사이가 통째로 칠해졌다 — 화면의 삼각형이 이것이었다.
+
+         직선으로 때우는 대신 **원래 경계를 그대로 둔다.** 강을 따라 내려가는 실제 국경선이라
+         모양이 맞고, 바다로 조금 나가더라도 없는 땅을 만들어내지는 않는다. */
+      for (let t = 0; t < len; t++) out.push(open[(start + c + t) % n].slice());
+      straight++;
+    }
     c += len - 1;
   }
   out.push(out[0].slice());

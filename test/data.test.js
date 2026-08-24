@@ -615,3 +615,22 @@ test('행정구역 카메라 목표가 그 지역을 가리킨다', () => {
   }
   assert.deepEqual(bad.slice(0, 5), [], `카메라 목표가 지역에서 멀리 떨어진 곳 ${bad.length}개`);
 });
+
+test('북한 경계에 없던 긴 직선이 끼어들지 않는다', () => {
+  /* 해안선으로 자를 때 두 교차점이 서로 다른 해안선 고리에 있으면 이어붙일 길이 없다.
+     강 하구가 그렇다 — OSM 해안선은 강어귀에서 끊기고 강둑은 해안선이 아니다.
+     예전에는 그 자리를 두 점을 잇는 직선으로 때웠고, 두만강 하구에 21.5km 짜리 수평선이
+     생겨 그 선과 해안 사이가 통째로 칠해졌다. 화면의 삼각형이 그것이었다.
+     지금은 원래 경계를 그대로 둔다.
+
+     10km 로 잡는다 — 량강도 백두산 쪽처럼 원본 OSM 에 7.6km 짜리 직선 국경이 실제로 있다. */
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+  const bad = [];
+  for (const f of NK) for (const r of nkRings(f)) {
+    for (let i = 1; i < r.length; i++) {
+      const d = KM(r[i][0]-r[i-1][0], r[i][1]-r[i-1][1], r[i][1]);
+      if (d > 10) bad.push(`${f.properties.short} ${d.toFixed(1)}km @ ${JSON.stringify(r[i-1])}`);
+    }
+  }
+  assert.deepEqual(bad.slice(0, 3), [], `10km 넘는 변 ${bad.length}개`);
+});
