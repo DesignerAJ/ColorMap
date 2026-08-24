@@ -1349,19 +1349,67 @@ function initRecorder(map) {
   map.on('style.load', addKoreaAdmin1Lines);
 
   /* ── 경계선 (국경선 / 분쟁지역 / 행정구역선) ── */
-  // 종류별 레이어 후보 (스타일마다 이름 다름, -bg 외곽선 포함)
-  const BOUNDARY_LAYERS = {
-    country:  ['admin-0-boundary', 'admin-0-boundary-bg',     // 도로표시/모노톤
-               'country-border-dot',                          // 단색/단색지형: 국경선
-               KR_BORDER_LAYER],                              // 북쪽 육상 국경선 — 우리 데이터로 그린다 (아래 참고)
-    disputed: ['admin-0-boundary-disputed',                   // 도로표시/모노톤
-               'dispute-boundaries'],                         // 단색/단색지형: 분쟁지역
-    admin:    ['admin-1-boundary', 'admin-1-boundary-bg',     // 도로표시/모노톤
-               'admin-boundaries',                            // 단색/단색지형: 행정구역선
-               KA_LAYER],                                     // 남·북한 — 우리 데이터로 그린다
-  };
+
+  /* 어떤 레이어가 어느 종류의 경계선인지는 **필터를 읽어서** 정한다.
+
+     예전에는 종류마다 레이어 id 를 적어 뒀는데, 스타일마다 이름이 달라 반드시 빠뜨린다.
+     빠진 레이어는 UI 가 손을 못 대므로 투명도를 0 으로 내려도 그대로 남았다 —
+     "조절 불가능한 흰색 국경선" 이 그것이다. 실제로 스타일 6개를 받아 세어 보니:
+
+       단색지형·단색   country_border · country-border · admin-2-boundaries-* ·
+                       admin-boundaries-dot  → 8개 중 5개가 목록 밖
+       위성사진        country-border-dot 이 아예 없어서, 국경선 칸이 우리 선(남·북한)
+                       하나만 잡고 있었다 → 한국 국경만 조절되고 나머지는 흰 선만 보였다
+       지형도          country-border 가 목록 밖
+       모노톤·지명참고용  admin-0/1-* 이름이라 우연히 전부 맞았다 → 원래 멀쩡했다
+
+     증상이 스타일마다 제각각이었던 게 전부 이 표로 설명된다.
+
+     id 대신 필터를 보면 이름이 뭐든 따라온다. Mapbox 의 admin 소스는 세 속성으로
+     갈린다 — admin_level(0=국경, 1=행정구역), disputed, maritime.
+       · disputed 가 "true" 로 고정 → 분쟁지역
+       · admin_level 이 0 으로 **고정** → 국경선
+       · 그 외 → 행정구역선
+     '고정'이 중요하다. admin-boundaries-dot 은 `>= 0` `<= 1` 이라 둘 다 지나가는데,
+     이건 행정구역선 쪽이다. `==` 만 본다.
+     country_boundaries 소스에서 나온 선(country_border)은 필터가 없고 국경선뿐이다. */
+  const BOUNDARY_SOURCE_LAYERS = new Set(['admin', 'country_boundaries']);
+
+  // 필터 어딘가에 `["==", ["get", prop], value]` 가 있는가 (구문법 `["==", prop, value]` 도 본다)
+  function filterPins(filter, prop, value) {
+    let found = false;
+    (function walk(node) {
+      if (found || !Array.isArray(node)) return;
+      if (node[0] === '==' && node.length === 3) {
+        const lhs = node[1];
+        const name = Array.isArray(lhs) && lhs[0] === 'get' ? lhs[1] : lhs;
+        if (name === prop && node[2] === value) { found = true; return; }
+      }
+      node.forEach(walk);
+    })(filter);
+    return found;
+  }
+
+  // 우리가 직접 그리는 경계선 — 소스가 geojson 이라 필터로는 안 잡힌다
+  const OUR_BOUNDARY_LAYERS = { country: [KR_BORDER_LAYER], disputed: [], admin: [KA_LAYER] };
+
+  function boundaryKindOf(l) {
+    if (l.type !== 'line' || !BOUNDARY_SOURCE_LAYERS.has(l['source-layer'])) return null;
+    if (l['source-layer'] === 'country_boundaries') return 'country';
+    /* 스타일 원본이 아니라 **지금 걸린** 필터를 읽는다. hideMapboxKoreanAdmin1 이
+       남·북한을 빼려고 필터를 덧씌우는데, 덧씌운 절은 admin_level 을 0 으로 고정하지도
+       disputed 를 true 로 고정하지도 않으므로 판정은 그대로다. */
+    let f = l.filter;
+    try { f = map.getFilter(l.id) ?? l.filter; } catch (_) {}
+    if (filterPins(f, 'disputed', 'true')) return 'disputed';
+    if (filterPins(f, 'admin_level', 0)) return 'country';
+    return 'admin';
+  }
+
   function bdExistingLayers(kind) {
-    return BOUNDARY_LAYERS[kind].filter(id => map.getLayer(id));
+    const ids = (map.getStyle()?.layers || []).filter(l => boundaryKindOf(l) === kind).map(l => l.id);
+    OUR_BOUNDARY_LAYERS[kind].forEach(id => { if (map.getLayer(id)) ids.push(id); });
+    return ids;
   }
 
   /* ── 색칠 위로 끌어올릴 경계선 찾기 ──
@@ -1369,22 +1417,13 @@ function initRecorder(map) {
      그대로 두면 불투명도 0.6 짜리 색칠이 선 위를 덮어 선 색이 탁해지거나 아예 사라진다.
      색칠을 올린 뒤 경계선만 그 위로 끌어올린다 — 스타일 원래의 상하 순서는 그대로 둔다.
 
-     끌어올릴 대상을 id 목록(BOUNDARY_LAYERS)으로 고르면 반드시 빠뜨린다.
-     실제로 단색지형·단색에서 경계선 8개 중 5개가 목록에 없어 색칠에 덮이고 있었다:
-       country_border · country-border            국경선 (이름만 다른 변형)
-       admin-2-boundaries-bg · -dispute           시군구 경계선  ← 시군구를 칠하면 이게 사라졌다
-       admin-boundaries-dot                       행정구역선 점선
-     그래서 이름 대신 '어느 소스에서 나온 선인가'로 판단한다. 스타일이 바뀌거나
-     레이어 이름이 달라져도 따라온다. (BOUNDARY_LAYERS 는 색·두께를 입히는 대상이라
-     별개로 두되, 우리가 직접 만든 국경선은 소스가 달라 여기에 합쳐 준다) */
-  const BOUNDARY_SOURCE_LAYERS = new Set(['admin', 'country_boundaries']);
+     여기도 이름으로 고르다가 단색지형·단색에서 8개 중 5개를 놓쳐 시군구 경계선이
+     색칠에 덮인 적이 있다. 위와 같은 기준을 쓰므로 이제 둘이 어긋날 일이 없다. */
   function boundaryLayerIds(layers) {
-    const named = new Set(Object.values(BOUNDARY_LAYERS).flat());
-    return layers
-      .filter(l => named.has(l.id) ||
-                   (l.type === 'line' && BOUNDARY_SOURCE_LAYERS.has(l['source-layer'])))
-      .map(l => l.id);
+    const ours = new Set(Object.values(OUR_BOUNDARY_LAYERS).flat());
+    return layers.filter(l => ours.has(l.id) || boundaryKindOf(l)).map(l => l.id);
   }
+
   function raiseBoundaries() {
     const layers = map.getStyle()?.layers || [];
     const firstSymbol = layers.find(l => l.type === 'symbol')?.id;
@@ -1427,8 +1466,12 @@ function initRecorder(map) {
     ['country','disputed','admin'].forEach(kind => {
       const block = document.querySelector(`.bd-block[data-bd="${kind}"]`);
       if (!block) return;
+      /* 피커에 보일 색은 **맨 위에 그려지는** 선에서 읽는다. 목록이 그리는 순서라
+         마지막이 위다. 예전에는 첫 번째를 읽었는데, 그때는 목록이 손으로 적은 id 라
+         우연히 위쪽 선이 앞에 있었다. 지금은 스타일 순서 그대로여서 첫 번째는
+         맨 아래 선(단색지형이면 country_border 의 하늘색)이다. */
       const layers = bdExistingLayers(kind).filter(id => !id.endsWith('-bg'));
-      const main = layers[0];
+      const main = layers.at(-1);
       if (main) {
         try { const hex = toHex(map.getPaintProperty(main, 'line-color')); if (hex) block.querySelector('.bd-color').value = hex; } catch (_) {}
       }

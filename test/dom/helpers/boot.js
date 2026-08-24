@@ -26,15 +26,23 @@ export const FIXTURES = {
   empty: { features: [] },
 };
 
-// 실제 커스텀 스타일과 같은 모양의 레이어들 (국경선 가리기 검증용)
+/* '단색지형' 스타일의 경계선 레이어를 **id 와 순서까지 그대로** 옮겨 놓은 것이다.
+   줄여 놓으면 안 된다 — 국경선 UI 가 종류마다 손으로 적은 id 목록을 쓰던 시절,
+   여기 없던 country-border · admin-2-* · admin-boundaries-dot 이 조절 대상에서
+   빠져 투명도를 0 으로 내려도 흰 선이 남았다. 축약된 이 파일이 그걸 초록으로 통과시켰다.
+   (필터는 아래 filters 에 실제 값을 넣어 둔다 — 종류 판정이 필터를 읽기 때문이다) */
 const STYLE_LAYERS = [
   { id: 'background', type: 'background' },
-  { id: 'landColor', type: 'fill' },
+  { id: 'landColor', type: 'fill', 'source-layer': 'country_boundaries' },
   { id: 'water', type: 'fill' },
-  { id: 'country-border-dot', type: 'line', 'source-layer': 'admin' },
-  { id: 'admin-boundaries', type: 'line', 'source-layer': 'admin' },
-  { id: 'dispute-boundaries', type: 'line', 'source-layer': 'admin' },
   { id: 'country_border', type: 'line', 'source-layer': 'country_boundaries' },
+  { id: 'admin-2-boundaries-bg', type: 'line', 'source-layer': 'admin' },
+  { id: 'admin-2-boundaries-dispute', type: 'line', 'source-layer': 'admin' },
+  { id: 'admin-boundaries', type: 'line', 'source-layer': 'admin' },
+  { id: 'admin-boundaries-dot', type: 'line', 'source-layer': 'admin' },
+  { id: 'country-border', type: 'line', 'source-layer': 'admin' },
+  { id: 'country-border-dot', type: 'line', 'source-layer': 'admin' },
+  { id: 'dispute-boundaries', type: 'line', 'source-layer': 'admin' },
   { id: 'poi-label', type: 'symbol' },
 ];
 
@@ -78,10 +86,25 @@ export function boot({
     indexOf: at,
   };
   const sources = new Map();
+  /* 실제 스타일에서 그대로 가져온 필터. 경계선 종류(국경/분쟁/행정구역)를 id 가 아니라
+     이 필터로 판정하므로 값이 정확해야 한다. admin-boundaries-dot 의 >= 0 · <= 1 이
+     특히 중요하다 — '0 을 지나간다'와 '0 으로 고정'을 구별하는 유일한 표본이다. */
+  const W = ['match', ['get', 'worldview'], ['all', 'US'], true, false];
   const filters = {
-    'country-border-dot': ['all', ['==', ['get', 'admin_level'], 0]],
-    'admin-boundaries': ['all', ['==', ['get', 'admin_level'], 1]],
-    'dispute-boundaries': ['all', ['==', ['get', 'disputed'], 'true']],
+    'admin-2-boundaries-bg': ['all', ['<=', ['get', 'admin_level'], 1], ['==', ['get', 'admin_level'], 0],
+      ['==', ['get', 'maritime'], 'false'], W],
+    'admin-2-boundaries-dispute': ['all', ['<=', ['get', 'admin_level'], 1], ['==', ['get', 'admin_level'], 0],
+      ['==', ['get', 'disputed'], 'true'], ['==', ['get', 'maritime'], 'false'], W],
+    'admin-boundaries': ['all', ['<=', ['get', 'admin_level'], 1], ['match', ['get', 'maritime'], ['false'], true, false],
+      ['>=', ['get', 'admin_level'], 1], W],
+    'admin-boundaries-dot': ['all', ['<=', ['get', 'admin_level'], 1], ['==', ['get', 'maritime'], 'false'],
+      ['>=', ['get', 'admin_level'], 0], W],
+    'country-border': ['all', ['<=', ['get', 'admin_level'], 1], ['==', ['get', 'admin_level'], 0],
+      ['==', ['get', 'disputed'], 'false'], ['==', ['get', 'maritime'], 'false'], W],
+    'country-border-dot': ['all', ['<=', ['get', 'admin_level'], 1], ['==', ['get', 'admin_level'], 0],
+      ['==', ['get', 'disputed'], 'false'], ['==', ['get', 'maritime'], 'false'], W],
+    'dispute-boundaries': ['all', ['<=', ['get', 'admin_level'], 1], ['==', ['get', 'admin_level'], 0],
+      ['==', ['get', 'disputed'], 'true'], ['==', ['get', 'maritime'], 'false'], W],
   };
   const handlers = {};
   const paint = [];
