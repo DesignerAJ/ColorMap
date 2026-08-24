@@ -579,3 +579,39 @@ test('국경선 동쪽 끝이 고성에서 바다에 닿고 해안을 따라 내
   const len = KM(s[0][0]-s.at(-1)[0], s[0][1]-s.at(-1)[1], s[0][1]);
   assert.ok(len > 0.05 && len < 1, `해안까지 ${(len*1000).toFixed(0)}m — 너무 짧거나 길다`);
 });
+
+test('행정구역 카메라 목표가 그 지역을 가리킨다', () => {
+  /* 지역을 고르면 flyTo 로 c·z 를 비춘다. 이 값은 파일에 미리 들어 있는데,
+     경도 최소·최대를 그냥 평균 내어 만든 탓에 두 경우에 엉뚱한 곳을 가리켰다.
+
+       날짜변경선을 넘는 지역   알래스카는 -179.1° ~ 179.8° 라 평균이 0.3° —
+                            아프리카 앞바다다. 실제로 카메라가 거기로 날아갔다.
+       멀리 떨어진 섬이 있는 곳  칠레 발파라이소(이스터섬), 일본 도쿄도(오가사와라),
+                            남아프리카 웨스턴케이프(프린스에드워드) 등
+
+     build-admin1-camera.mjs 가 경도를 연속 좌표계로 펴고, 본토가 뚜렷하면 본토만 보고
+     목표를 정한다. 88개를 고쳤고 가장 크게는 키리바시가 17,797km 옮겨졌다. */
+  const KM = (a, b) => {
+    let d = a[0] - b[0];
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    return Math.hypot(d * 111 * Math.cos(b[1] * Math.PI / 180), (a[1] - b[1]) * 111);
+  };
+  const bad = [];
+  for (const f of admin1.features) {
+    const c = f.properties && f.properties.c;
+    if (!c) continue;
+    // 도형 안이면 통과. 큰 지역은 중심이 경계에서 수백 km 떨어지는 게 정상이다
+    if (ringsOf(f.geometry).some((p) => inRing(c, p[0]))) continue;
+    let best = Infinity, i = 0;
+    (function walk(x) {
+      if (typeof x[0] === 'number') {
+        if (i++ % 20 === 0) { const d = KM(x, c); if (d < best) best = d; }   // 성능 — 20개마다
+        return;
+      }
+      x.forEach(walk);
+    })(f.geometry.coordinates);
+    if (best > 500) bad.push(`${f.properties.name} @ ${JSON.stringify(c)} → ${Math.round(best)}km`);
+  }
+  assert.deepEqual(bad.slice(0, 5), [], `카메라 목표가 지역에서 멀리 떨어진 곳 ${bad.length}개`);
+});
