@@ -44,6 +44,7 @@ export function boot({
   googleReply = { places: [] },
   mapboxReply = FIXTURES.empty,
   loadBorder = false,
+  loadCountries = false,
 } = {}) {
   const dom = new JSDOM(
     `<!DOCTYPE html><body><div id="colormap-ui">${read('recorder/panel.html')}</div><div id="map"></div></body>`,
@@ -147,8 +148,17 @@ export function boot({
   window.console.warn = (...a) => warns.push(a.join(' '));
 
   const borderData = loadBorder ? JSON.parse(read('recorder/js/data/korea-border.json')) : null;
+  /* 실제 파일은 10MB 라 테스트에서 읽지 않는다. 레이어 순서만 보면 되므로 최소 도형이면 충분하다. */
+  const countryData = loadCountries ? { type: 'FeatureCollection', features: [
+    { type: 'Feature', properties: { iso_3166_1_alpha_3: 'KOR', name: '경기도' },
+      geometry: { type: 'Polygon', coordinates: [[[126,37],[128,37],[128,38],[126,38],[126,37]]] } },
+  ] } : null;
   window.fetch = (url, opt) => {
     const u = String(url);
+    if (u.includes('korea-countries')) {
+      return countryData ? Promise.resolve({ ok: true, json: async () => countryData })
+                         : Promise.reject(new Error('offline'));
+    }
     if (u.includes('korea-border')) {
       return borderData ? Promise.resolve({ ok: true, json: async () => borderData })
                         : Promise.reject(new Error('offline'));

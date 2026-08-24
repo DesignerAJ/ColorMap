@@ -152,3 +152,27 @@ test('경계선 후보를 이름이 아니라 소스로 고른다 (목록에서 
   assert.ok(moved.has('country_border'), 'country_boundaries 소스의 국경선이 안 올라갔다');
   assert.ok(moved.has('dispute-boundaries'), 'admin 소스의 분쟁 경계선이 안 올라갔다');
 });
+
+test('대한민국 국가 색칠이 시도·시군구 색칠 아래에 깔린다', async () => {
+  /* 국가를 칠한 위에 시도를 칠하면 시도 색이 보여야 한다. 해외는 Mapbox 레이어가
+     그려서 멀쩡했는데, 대한민국·북한만 우리 레이어(korea-country-fill)로 그리면서
+     반대가 됐다 — PAINTERS 가 먼저 깔린 뒤에 얹히는 탓에 시도 위로 올라갔다.
+     그래서 대한민국을 칠하면 시도 색이 국가 색에 가려졌다. */
+  const e = boot({ loadCountries: true });
+  e.styleLoad();
+  await e.tick(40);
+
+  const order = e.layers.order();
+  const kc = order.indexOf('korea-country-fill');
+  assert.ok(kc >= 0, '남·북한 국가 색칠 레이어가 없다');
+
+  for (const above of ['sido-color-fill', 'country-color-fill']) {
+    const i = order.indexOf(above);
+    if (i < 0) continue;
+    if (above === 'country-color-fill') {
+      assert.ok(kc > i, '남·북한 색칠이 Mapbox 국가 색칠보다 아래에 있다');
+    } else {
+      assert.ok(kc < i, `${above} 이 국가 색칠에 가려진다`);
+    }
+  }
+});

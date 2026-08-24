@@ -1247,10 +1247,16 @@ function initRecorder(map) {
   function addKoreaCountryLayer() {
     if (!KC_GEO || !styleReady || map.getLayer(KC_LAYER)) return;
     if (!map.getSource(KC_LAYER)) map.addSource(KC_LAYER, { type: 'geojson', tolerance: 0, data: KC_GEO });
+    /* 국가 색칠이므로 **다른 색칠 모드 아래**에 깔려야 한다. 이 레이어를 다른 색칠처럼
+       첫 symbol 바로 아래에 넣으면, PAINTERS 가 먼저 깔린 뒤에 얹히는 탓에 시도·시군구
+       **위**로 올라간다. 그러면 대한민국을 칠한 상태에서 시도를 칠해도 시도 색이 안 보인다
+       (해외는 Mapbox 레이어가 그려서 멀쩡했고 대한민국·북한만 반대였던 이유).
+       그래서 자기보다 위에 있어야 할 색칠 중 가장 아래 것 바로 밑에 끼운다. */
+    const above = ['admin1-color-fill', 'sido-color-fill', 'sigungu-color-fill'].find(id => map.getLayer(id));
     map.addLayer({
       id: KC_LAYER, type: 'fill', source: KC_LAYER,
       paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY },
-    }, (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id);
+    }, above || (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id);
     excludeKoreaFromMapbox();
     syncKoreaCountries();
     raiseBoundaries();
