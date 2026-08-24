@@ -46,6 +46,10 @@ OSM + korea-border.json ──(build-nk-admin1.mjs)──>  admin1.json 의 '북
 - 같은 인증서 때문에 **node 의 `fetch` 도 막힌다**(`SELF_SIGNED_CERT_IN_CHAIN`). `curl` 은
   시스템 키체인을 써서 통과하므로, 외부를 부르는 도구는 `fetch` 실패 시 `curl` 로 넘어가게
   써 두었다(`build-nk-admin1.mjs`). 인증서 검증을 끄는 선택은 하지 않았다.
+- **Overpass 는 User-Agent 를 안 밝히면 406 으로 막는다.** node 의 `fetch` 기본 UA(`node`)도
+  막힌다 — `curl` 만 통과해서 오래 '사내망 탓'으로 보였다. 응답이 HTML 안내문이라 혼잡과
+  구별도 안 됐다. 도구들은 UA 를 밝히고, 재시도 로그에 **실제 오류**를 찍는다. 남은 504 는
+  진짜 부하라 다음 시도에 200 이 온다(재시도 8번).
 - 이 맥을 만든 환경에선 `python3` 이 깨져 있었다(Command Line Tools). `node tools/serve.mjs` 를 쓴다.
 - **검색 인증키는 브라우저에 노출되는 값이다.** 도메인·리퍼러 제한이 유일한 방어선.
   - VWorld: 사용 도메인에 `127.0.0.1` 과 `designeraj.github.io` 둘 다 등록해야 한다.
@@ -208,22 +212,12 @@ npm install && node --test test/dom/*.test.js   # 39개, jsdom 필요
 
 ## 이어서 할 일
 
-0. **북한 데이터 재생성 — 사내망에서는 못 한다. 집에서 할 것.** (2026-08-24)
-   함경남도·북한 색칠에 뻗던 긴 다각형의 원인은 **링 감김 방향**이었다(위 함정 참고).
-   `build-nk-admin1.mjs` 는 고쳐서 커밋했지만, **생성물은 아직 옛날 것**이라
-   `test/data.test.js` 의 '링 감김 방향이 GeoJSON 규약대로다' 가 **빨간불**이다.
-   사내망에서 Overpass 본 서버가 과부하(`Dispatcher_Client … too busy`)였고
-   미러 세 곳(kumi·private.coffee·osm.jp)은 응답조차 막혔다. 집 회선에서 순서대로:
-
-   ```bash
-   node recorder/tools/build-nk-admin1.mjs        # OSM 재수신 (몇 분)
-   node recorder/tools/build-korea-countries.mjs  # admin1 의 북한을 받아 쓴다
-   node recorder/tools/build-korea-admin1-lines.mjs
-   node --test test/*.test.js                     # 감김 검사가 초록이 되어야 한다
-   ```
-
-   그 뒤 브라우저에서 **북한·함경남도를 칠하고 줌 7 부근**을 확인한다(줌 8 에서는 원래
-   안 보였다). 호수가 구멍으로 뚫려 보이면 그건 정상이다 — 남한 시도도 그렇게 되어 있다.
+0. **북한 데이터 재생성 — 끝났다. 브라우저 확인만 남았다.** (2026-08-25)
+   생성물을 다시 만들었고 `node --test test/*.test.js` 는 **67/67 초록**이다.
+   막혀 있던 이유는 사내망이 아니라 **Overpass 의 User-Agent 차단**이었다(406) —
+   재시도 로그가 그걸 '혼잡'으로 찍어 오래 헛짚었다. 도구를 고쳤으니 어디서든 돌아간다.
+   브라우저에서 **북한·함경남도를 칠하고 줌 7 부근**을 확인할 것(줌 8 에서는 원래 안 보였다).
+   호수가 구멍으로 뚫려 보이면 그건 정상이다 — 남한 시도도 그렇게 되어 있다.
 
 1. **Google Places 키의 API 제한** — 키와 리퍼러 제한은 걸었고 폴백도 확인했다(2026-08-16).
    남은 것은 콘솔에서 **API 제한을 `Places API (New)` 하나로** 좁히는 것뿐이다. 2차 방어라
