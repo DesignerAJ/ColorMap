@@ -24,7 +24,7 @@
    실행: node recorder/tools/build-korea-countries.mjs
 */
 import fs from 'node:fs';
-import { nudgeTouchingHoles } from './lib/rings.mjs';
+import { buildPolygons } from './lib/rings.mjs';
 
 const R = 'recorder/js/data/';
 const PREC = 5;
@@ -54,6 +54,19 @@ const polysOf = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'Mul
    그 점에서 잘라 나누면 양쪽 다 온전해지고 면적도 그대로다.
    (build-sido-hires.mjs 의 splitAtPinches 와 같은 처리. 정밀도를 줄이면 원본에 없던
    핀치가 새로 생길 수 있어 여기서도 돌린다.) */
+/* 핀치를 자르면 좌표 반올림이 만든 부스러기 조각이 같이 나온다. 5자리(약 1m)로 줄이는
+   과정에서 링이 스스로를 스치면 생기는 것이라, 넓이가 1m² 도 안 되는 4점짜리 링이다.
+   그대로 두면 buildPolygons 가 안쪽 조각을 구멍으로 잡고, 그 구멍이 바깥 링과 꼭짓점을
+   공유해 폭 0 인 삼각형이 난다 — 북한 강원도(127.44423, 39.33026)에서 실제로 났다.
+   정밀도보다 작은 링은 뜻이 없으므로 버린다. 한 칸(1e-5°)의 제곱이 기준이다.
+   실측상 진짜 조각과는 145배 넘게 벌어져 있어 애매한 구간이 없다 (0.48 m² vs 139 m²). */
+const MIN_PART = 1e-10;                                   // deg² — 좌표 한 칸(1e-5°)의 제곱
+function keepPart(ring) {
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += ring[j][0]*ring[i][1] - ring[i][0]*ring[j][1];
+  return Math.abs(a / 2) >= MIN_PART;
+}
+
 function splitAtPinches(ring) {
   const out = [], stack = [], pos = new Map();
   for (const p of ring) {
@@ -72,11 +85,6 @@ function splitAtPinches(ring) {
   return out.length ? out : [ring];
 }
 
-const ringArea = (r) => {
-  let a = 0;
-  for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0]*r[i][1] - r[i][0]*r[j][1];
-  return Math.abs(a / 2);
-};
 
 /* 원본 feature 하나당 결과 feature 하나로 낸다.
 
@@ -93,11 +101,17 @@ function collect(features, iso, label) {
       const rings = poly.map((r) => dedupeRing(trim(r))).filter(Boolean);
       if (!rings.length) continue;
       const [outer, ...holes] = rings;
-      const parts = splitAtPinches(outer);
-      if (parts.length > 1) pinched++;
-      // 구멍은 가장 큰 조각에 붙인다 (구멍이 있는 폴리곤에서 핀치가 난 적은 없다)
-      const sorted = parts.map((p) => p).sort((a, b) => ringArea(b) - ringArea(a));
-      sorted.forEach((p, i) => groups.push(nudgeTouchingHoles(i === 0 ? [p, ...holes] : [p], round)));
+      const split = splitAtPinches(outer);
+      if (split.length > 1) pinched++;                    // 부스러기를 버리기 **전에** 센다
+      const parts = split.filter(keepPart);
+      /* 조각과 구멍을 buildPolygons 에 통째로 넘긴다. 직접 조립하면 안 된다 —
+         핀치를 자른 조각은 **감김 방향이 제각각**이라 그대로 내보내면 mapbox-gl 이
+         부호가 반대인 조각을 앞 폴리곤의 구멍으로 붙인다(벡터 타일에는 구멍 표시가
+         없고 방향이 유일한 기준이다). 실제로 북한 강원도에서 넓이 0.6m² 짜리 조각
+         하나가 시계 방향으로 남아 검사에 걸렸다.
+         구멍을 '가장 큰 조각'에 몰아 붙이던 것도 buildPolygons 가 중첩 깊이로
+         제대로 나눠 준다. */
+      buildPolygons([...parts, ...holes], round).forEach((poly) => groups.push(poly));
     }
     if (!groups.length) continue;
     polys += groups.length;

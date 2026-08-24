@@ -23,6 +23,12 @@ import { buildPolygons } from './lib/rings.mjs';
 const R = 'recorder/js/data/';
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
 
+/* Overpass 는 User-Agent 없는 요청을 406 Not Acceptable 로 막는다. node 의 fetch 는
+   기본 UA 가 'node' 인데 그것도 막힌다 — curl 은 통과하므로 오래 '사내망 탓'으로 보였다.
+   실제 응답은 HTML 안내문이라 '혼잡'과 구별이 안 돼 재시도만 네 번 돌다 죽었다.
+   UA 를 밝히면 그대로 통과한다. OSM 은 어차피 UA 로 연락처를 밝히길 요구한다. */
+const UA = 'ColorMap/3.0 (+https://github.com/DesignerAJ/ColorMap)';
+
 /* OSM 이름 → 이 저장소가 쓰던 이름.
    기존 11개는 이름을 그대로 유지한다 (사용자가 입력하던 값이고, 검색 색인이 여기에 걸려 있다).
    OSM 은 '평양시'·'라선시'로 짧게 쓰지만 우리는 정식 명칭을 쓴다. */
@@ -42,23 +48,29 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* Overpass 는 혼잡하면 JSON 대신 HTML 안내문을 준다. 기다렸다 다시 부른다. */
 async function overpass(query) {
-  const waits = [0, 15, 45, 90];
+  /* Overpass 는 504 를 간헐적으로 뱉는다 — 부하가 걸리면 서버가 게이트웨이에서 끊는다.
+     같은 질의가 바로 다음 시도에 200 으로 돌아온다. 이 스크립트는 질의를 여러 번 하고
+     한 번에 몇 분씩 걸리므로, 중간에 한 번 걸려 죽으면 처음부터 다시다.
+     네 번으로는 모자랐다 (실측: 세 번 연속 504 뒤 네 번째 200). 넉넉히 기다린다. */
+  const waits = [0, 10, 20, 40, 60, 90, 120, 180];
+  let last;
   for (let i = 0; i < waits.length; i++) {
-    if (waits[i]) { console.log(`  Overpass 혼잡 — ${waits[i]}초 뒤 다시 시도`); await sleep(waits[i] * 1000); }
-    try { return await overpassOnce(query); } catch (e) { if (i === waits.length - 1) throw e; }
+    // 재시도 사유를 '혼잡'으로 단정하지 않는다 — 406(UA 차단)을 혼잡으로 읽어 네 번 헛돌았다
+    if (waits[i]) { console.log(`  ${last} — ${waits[i]}초 뒤 다시 시도`); await sleep(waits[i] * 1000); }
+    try { return await overpassOnce(query); } catch (e) { last = e.message || e; if (i === waits.length - 1) throw e; }
   }
 }
 
 async function overpassOnce(query) {
   try {
-    const r = await fetch(OVERPASS, { method: 'POST', body: query });
+    const r = await fetch(OVERPASS, { method: 'POST', body: query, headers: { 'User-Agent': UA } });
     if (!r.ok) throw new Error(`Overpass ${r.status} — 잠시 뒤 다시 시도하세요`);
     return await r.json();
   } catch (e) {
     if (!/certificate|fetch failed/i.test(String(e.message || e))) throw e;
     console.log('  (node fetch 가 인증서에 막혀 curl 로 받는다)');
     const { execFileSync } = await import('node:child_process');
-    const out = execFileSync('curl', ['-s', '-m', '600', '-X', 'POST', '--data-binary', '@-', OVERPASS],
+    const out = execFileSync('curl', ['-s', '-m', '600', '-A', UA, '-X', 'POST', '--data-binary', '@-', OVERPASS],
       { input: query, maxBuffer: 512 * 1024 * 1024, encoding: 'utf8' });
     if (!out.trim()) throw new Error('Overpass 응답이 비었다 — 잠시 뒤 다시 시도하세요');
     return JSON.parse(out);
@@ -382,7 +394,7 @@ for (const e of data.elements) {
   if (clipped.failed) throw new Error(`${short}: ${clipped.failed}`);
   rings[0] = clipped.ring;
   let note = clipped.sea ? ` · 바다쪽 ${clipped.sea}점 잘라냄` : '';
-  if (clipped.straight) note += ` (해안선 잇기 실패 ${clipped.straight}곳은 직선 처리)`;
+  if (clipped.straight) note += ` (해안선 잇기 실패 ${clipped.straight}곳은 원래 경계 유지)`;
 
   // 2) 잘라내면서 사라진 섬을 되붙인다 (갈도·무도·장재도 같은 것)
   if (clipped.sea) {

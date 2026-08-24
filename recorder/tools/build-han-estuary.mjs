@@ -28,6 +28,12 @@ import fs from 'node:fs';
 
 const R = 'recorder/js/data/';
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
+
+/* Overpass 는 User-Agent 없는 요청을 406 Not Acceptable 로 막는다. node 의 fetch 는
+   기본 UA 가 'node' 인데 그것도 막힌다 — curl 은 통과하므로 오래 '사내망 탓'으로 보였다.
+   실제 응답은 HTML 안내문이라 '혼잡'과 구별이 안 돼 재시도만 네 번 돌다 죽었다.
+   UA 를 밝히면 그대로 통과한다. OSM 은 어차피 UA 로 연락처를 밝히길 요구한다. */
+const UA = 'ColorMap/3.0 (+https://github.com/DesignerAJ/ColorMap)';
 const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
 const KEY = (p) => p[0].toFixed(7) + ',' + p[1].toFixed(7);
 
@@ -38,13 +44,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function overpassOnce(query) {
   try {
-    const r = await fetch(OVERPASS, { method: 'POST', body: query });
+    const r = await fetch(OVERPASS, { method: 'POST', body: query, headers: { 'User-Agent': UA } });
     if (!r.ok) throw new Error(`Overpass ${r.status}`);
     return await r.json();
   } catch (e) {
     if (!/certificate|fetch failed/i.test(String(e.message || e))) throw e;
     const { execFileSync } = await import('node:child_process');
-    const out = execFileSync('curl', ['-s', '-m', '300', '-X', 'POST', '--data-binary', '@-', OVERPASS],
+    const out = execFileSync('curl', ['-s', '-m', '300', '-A', UA, '-X', 'POST', '--data-binary', '@-', OVERPASS],
       { input: query, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' });
     if (!out.trim().startsWith('{')) throw new Error('Overpass 가 JSON 을 주지 않았다 (혼잡)');
     return JSON.parse(out);
@@ -52,10 +58,17 @@ async function overpassOnce(query) {
 }
 
 async function overpass(query) {
-  const waits = [0, 15, 45, 90];
+  /* Overpass 는 504 를 간헐적으로 뱉는다 — 부하가 걸리면 서버가 게이트웨이에서 끊는다.
+     같은 질의가 바로 다음 시도에 200 으로 돌아온다. 이 스크립트는 질의를 여러 번 하고
+     한 번에 몇 분씩 걸리므로, 중간에 한 번 걸려 죽으면 처음부터 다시다.
+     네 번으로는 모자랐다 (실측: 세 번 연속 504 뒤 네 번째 200). 넉넉히 기다린다. */
+  const waits = [0, 10, 20, 40, 60, 90, 120, 180];
+  let last;
   for (let i = 0; i < waits.length; i++) {
-    if (waits[i]) { console.log(`  Overpass 혼잡 — ${waits[i]}초 뒤 다시 시도`); await sleep(waits[i] * 1000); }
+    // 재시도 사유를 '혼잡'으로 단정하지 않는다 — 406(UA 차단)을 혼잡으로 읽어 네 번 헛돌았다
+    if (waits[i]) { console.log(`  ${last} — ${waits[i]}초 뒤 다시 시도`); await sleep(waits[i] * 1000); }
     try { return await overpassOnce(query); } catch (e) {
+      last = e.message || e;
       if (i === waits.length - 1) throw e;
     }
   }
