@@ -151,6 +151,13 @@ feature 하나가 너무 커서 타일마다 삼각분할이 깨진 것이다. *
 (`raiseBoundaries`). 끌어올릴 대상은 **이름이 아니라 소스**(`admin`·`country_boundaries`)로 고른다 —
 이름으로 나열했더니 8개 중 5개를 놓쳐 시군구 경계선이 색칠에 덮였다.
 
+**스타일 두 개가 같은 URL 을 쓴다.** '지명 참고용' 과 '글자 없음' 은 같은 mapbox 스타일이고
+라벨(심볼 레이어)을 끄고 켜는 것만 다르다 — Studio 에 스타일을 새로 만들 이유가 없다.
+그래서 그 둘 사이를 오갈 때 **setStyle 을 부르면 안 된다** — 같은 URL 이면 mapbox 가 아무
+일도 안 하고 `style.load` 도 안 와서, 라벨 토글이 영영 안 돈다. URL 이 그대로면 토글만 한다.
+라벨을 숨길 때 **우리가 만든 심볼 레이어는 빼야 한다** — 경로선 화살표와 캡처용 핀이
+심볼이라 싸잡아 숨기면 그 둘까지 사라진다.
+
 **스타일마다 레이어 이름이 다르다.** 같은 국경선이 `country_border`·`country-border`·
 `admin-0-boundary-bg` 로 제각각이다. 새 스타일을 추가하면 실제 레이어 목록을 먼저 확인할 것.
 
@@ -332,7 +339,7 @@ Enter 의 **기본 동작이 끝난 뒤에야** 입력창에 들어온다 — �
 ```bash
 node tools/serve.mjs                  # http://127.0.0.1:5500
 node --test test/*.test.js            # 93개, 설치 불필요
-npm install && node --test test/dom/*.test.js   # 53개, jsdom 필요
+npm install && node --test test/dom/*.test.js   # 55개, jsdom 필요
 ```
 
 푸시하면 `.github/workflows/qa.yml` 이 둘 다 돌린다 (배포는 건드리지 않는다).

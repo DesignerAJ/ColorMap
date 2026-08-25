@@ -157,7 +157,8 @@ export function boot({
     getLayoutProperty: (id, p) => (layerList.find((x) => x.id === id)?.layout || {})[p] ?? 'visible',
     getFilter: (id) => filters[id],
     setFilter: (id, f) => { filters[id] = f; },
-    setStyle: () => {}, setProjection: () => {}, setZoom: () => {}, setLanguage: () => {},
+    setStyle: (u) => calls.push({ api: 'setStyle', url: u }),   // 같은 URL 로 부르면 style.load 가 안 온다 — 그걸 검사한다
+    setProjection: () => {}, setZoom: () => {}, setLanguage: () => {},
     jumpTo: () => {}, flyTo: (o) => calls.push({ api: 'flyTo', o }), easeTo: () => {},
     fitBounds: (b) => calls.push({ api: 'fitBounds', b }),
     project: (c) => ({ x: (c[0] + 180) * 4, y: (90 - c[1]) * 4 }),

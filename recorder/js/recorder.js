@@ -117,6 +117,24 @@ function initRecorder(map) {
   }
   map.on('style.load', applyStyleLanguage);
 
+  /* ── 글자 없는 지도 ──
+     '글자 없음'은 '지명 참고용'과 **같은 스타일**을 쓰고 라벨만 끈 것이다. Studio 에
+     스타일을 새로 만들 필요가 없다 — 심볼 레이어를 숨기면 그만이다.
+
+     **우리가 만든 심볼 레이어는 건드리면 안 된다.** 경로선 화살표와 캡처용 핀이 심볼이라,
+     싸잡아 숨기면 화살표와 핀까지 사라진다. 그 둘은 이름으로 뺀다.
+     (스타일이 바뀌면 우리 레이어는 다시 붙으므로, style.load 시점에 없을 수도 있다.
+      그래서 '숨긴다'가 아니라 '스타일이 준 심볼만 숨긴다'로 판단한다) */
+  const OUR_SYMBOL_LAYERS = new Set(['route-arrow-layer', 'capture-pins-layer']);
+  function applyLabelVisibility() {
+    const hide = typeof NO_LABEL_STYLES !== 'undefined' && NO_LABEL_STYLES.has($('style-select').value);
+    for (const l of map.getStyle()?.layers || []) {
+      if (l.type !== 'symbol' || OUR_SYMBOL_LAYERS.has(l.id)) continue;
+      try { map.setLayoutProperty(l.id, 'visibility', hide ? 'none' : 'visible'); } catch (_) {}
+    }
+  }
+  map.on('style.load', applyLabelVisibility);
+
   /* 투영은 스타일에도 저장돼 있고, setStyle 은 그 값을 그대로 따라간다.
      '모노톤'만 globe 로 저장돼 있어서, 그 스타일로 바꾸면 지도는 3D 로 튀는데
      투영 드롭다운은 2D 인 채로 남아 둘이 어긋났다. 스타일이 바뀔 때마다 드롭다운
@@ -136,9 +154,16 @@ function initRecorder(map) {
   let styleReady = false;
   map.on('style.load', () => { styleReady = true; });
 
+  /* '지명 참고용' 과 '글자 없음' 은 URL 이 같다. 같은 URL 로 setStyle 을 부르면 mapbox 가
+     아무 일도 안 하고 style.load 도 안 와서, 라벨을 켜고 끄는 처리가 영영 안 돌아간다.
+     그래서 URL 이 그대로면 스타일을 갈지 않고 라벨만 토글한다. */
+  let _styleURL = STYLES.mono_terrain;
   $('style-select').addEventListener('change', (e) => {
+    const url = STYLES[e.target.value];
+    if (url === _styleURL) { applyLabelVisibility(); applyStyleLanguage(); return; }
+    _styleURL = url;
     styleReady = false;                     // 교체 시작 — style.load 가 올 때까지는 레이어를 못 붙인다
-    map.setStyle(STYLES[e.target.value]);
+    map.setStyle(url);
     applyStyleColors();
   });
   $('proj-select').addEventListener('change', (e) => map.setProjection(e.target.value));

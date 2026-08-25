@@ -260,3 +260,42 @@ test('입력을 지우면 다시 약칭만 남는다', () => {
   typeSido(e, '충청');
   assert.equal(typeSido(e, '').length, 17, '정식명 줄이 남아 있다');
 });
+
+/* ── 글자 없는 지도 ──
+   '글자 없음'은 '지명 참고용'과 같은 스타일을 쓰고 라벨만 끈 것이다. Studio 에 스타일을
+   새로 만들 필요가 없다 — 심볼 레이어를 숨기면 그만이다. 다만 경로선 화살표와 캡처용 핀도
+   심볼이라, 싸잡아 숨기면 그 둘까지 사라진다. */
+const setStyleTo = (e, key) => {
+  const sel = e.$('style-select');
+  sel.value = key;
+  sel.dispatchEvent(new e.window.Event('change', { bubbles: true }));
+};
+const visOf = (e, id) => (e.layers.get(id)?.layout || {}).visibility;
+
+test('글자 없음: 스타일이 준 라벨만 숨기고 우리 심볼은 남긴다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  // 우리 심볼 레이어를 흉내낸다 (실제로는 경로선·핀을 켤 때 붙는다)
+  e.map.addLayer({ id: 'route-arrow-layer', type: 'symbol', source: 'route-arrow' });
+
+  // 기본 스타일과 URL 이 다르므로 실제로는 setStyle → style.load 가 온다
+  setStyleTo(e, 'bare'); e.styleLoad(); await e.tick();
+  assert.equal(visOf(e, 'poi-label'), 'none', '스타일 라벨이 안 숨겨졌다');
+  assert.notEqual(visOf(e, 'route-arrow-layer'), 'none', '경로선 화살표까지 숨겼다');
+
+  setStyleTo(e, 'placenames');   // URL 이 같으므로 style.load 없이 라벨만 돌아와야 한다
+  assert.equal(visOf(e, 'poi-label'), 'visible', '라벨이 안 돌아왔다');
+});
+
+test('글자 없음 ↔ 지명 참고용은 URL 이 같아 setStyle 을 부르면 안 된다', async () => {
+  /* 같은 URL 로 setStyle 을 부르면 mapbox 가 아무 일도 안 하고 style.load 도 안 온다.
+     그러면 라벨을 켜고 끄는 처리가 영영 안 돌아간다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  setStyleTo(e, 'placenames');
+  const before = e.calls.filter((c) => c.api === 'setStyle').length;
+  setStyleTo(e, 'bare');
+  assert.equal(e.calls.filter((c) => c.api === 'setStyle').length, before,
+    'URL 이 같은데 setStyle 을 불렀다 — style.load 가 안 와서 라벨 토글이 안 돈다');
+  assert.equal(visOf(e, 'poi-label'), 'none', 'setStyle 없이도 라벨이 꺼져야 한다');
+});
