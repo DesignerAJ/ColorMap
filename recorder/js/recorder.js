@@ -123,11 +123,14 @@ function initRecorder(map) {
 
      사용자가 체크박스를 만지면 그때는 스타일 안의 글자를 **다 켜거나 다 끈다.** 시킨 일이다.
 
-     스타일이 올라올 때는 **아무것도 안 한다.** 방송용 스타일은 라벨을 일부러 꺼둔 것이
-     많아서 — 단색지형·단색·위성사진·지형도는 하나뿐인 심볼이 꺼져 있고, 모노톤은 18개 중
-     15개가 꺼져 있다 — 올라오자마자 켜면 지명이 저절로 쏟아진다. 실제로 그렇게 만들었다가
-     모든 스타일에 지명이 생겼다. 대신 체크 상태만 그 스타일이 원래 글자를 보여주던
-     스타일인지에 맞춰 둔다. 그래야 체크박스가 화면과 어긋나 보이지 않는다.
+     **한 번 만진 뒤로는 그 선택이 스타일을 바꿔도 따라간다.** 글자를 켜놓고 스타일만
+     비교해 보는 게 흔한데, 스타일마다 체크가 저절로 풀리면 매번 다시 켜야 한다.
+
+     아직 한 번도 안 만졌을 때만 스타일이 올라오면서 **아무것도 안 하고** 체크 상태만
+     그 스타일이 원래 글자를 보여주던 스타일인지에 맞춰 둔다. 방송용 스타일은 라벨을
+     일부러 꺼둔 것이 많아서 — 단색지형·단색·위성사진·지형도는 하나뿐인 심볼이 꺼져 있고,
+     모노톤은 18개 중 15개가 꺼져 있다 — 시키지도 않았는데 켜면 지명이 저절로 쏟아진다.
+     실제로 그렇게 만들었다가 모든 스타일에 지명이 생겼다.
 
      **우리가 만든 심볼 레이어는 건드리지 않는다** — 경로선 화살표와 캡처용 핀이 심볼이라
      싸잡아 숨기면 그 둘까지 사라진다. */
@@ -140,6 +143,8 @@ function initRecorder(map) {
      그러면 켤 방법이 없다 — 이미 켜진 것으로 보이니까. */
   const LABEL_ZOOM = 14;
 
+  let _labelChoice = null;                         // 사용자가 직접 고른 값. 만지기 전엔 null
+
   function snapshotLabels() {
     _labelIds.clear();
     let anyOn = false;
@@ -149,7 +154,7 @@ function initRecorder(map) {
       const on = ((l.layout && l.layout.visibility) || 'visible') !== 'none';
       if (on && (l.minzoom || 0) < LABEL_ZOOM) anyOn = true;
     }
-    $('label-on').checked = anyOn;                 // 화면에 보이는 대로만 맞춘다 — 켜지 않는다
+    $('label-on').checked = _labelChoice ?? anyOn;
   }
   function applyLabelVisibility() {
     const vis = $('label-on').checked ? 'visible' : 'none';
@@ -157,8 +162,16 @@ function initRecorder(map) {
       try { map.setLayoutProperty(id, 'visibility', vis); } catch (_) {}
     }
   }
-  map.on('style.load', () => { snapshotLabels(); applyStyleLanguage(); });
-  $('label-on').addEventListener('change', () => { applyLabelVisibility(); applyStyleLanguage(); });
+  map.on('style.load', () => {
+    snapshotLabels();
+    if (_labelChoice !== null) applyLabelVisibility();   // 고른 값이 있으면 새 스타일에도 건다
+    applyStyleLanguage();
+  });
+  $('label-on').addEventListener('change', () => {
+    _labelChoice = $('label-on').checked;
+    applyLabelVisibility();
+    applyStyleLanguage();
+  });
 
 
   /* 투영은 스타일에도 저장돼 있고, setStyle 은 그 값을 그대로 따라간다.

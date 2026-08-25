@@ -352,3 +352,22 @@ test('글자를 켜면 라벨이 한국어로 바뀌고, 끄면 원래대로 돌
   setLabels(e, true);
   assert.equal(langs().at(-1), 'ko', '글자를 켰는데 영어로 나온다');
 });
+
+test('한 번 고른 뒤에는 스타일을 바꿔도 그 선택이 따라간다', async () => {
+  /* 글자를 켜놓고 스타일만 바꿔 가며 비교하는 게 흔하다. 스타일마다 체크가 저절로
+     풀리면 매번 다시 켜야 한다. 만지기 전에만 스타일을 따라간다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  setLabels(e, true);
+
+  // 라벨을 전부 꺼둔 방송용 스타일로 갈아탄 셈 치고
+  for (const l of e.map.getStyle().layers) {
+    if (l.type === 'symbol') l.layout = { visibility: 'none' };
+  }
+  e.styleLoad(); await e.tick();
+
+  assert.equal(e.$('label-on').checked, true, '켜둔 게 스타일을 바꾸니 풀렸다');
+  assert.equal(visOf(e, 'label-for-check'), 'visible', '체크는 남았는데 글자가 안 켜졌다');
+  assert.equal(e.calls.filter((c) => c.api === 'setLanguage').at(-1).v, 'ko',
+    '스타일을 바꾸니 다시 영어로 돌아갔다');
+});
