@@ -399,11 +399,39 @@ test('종 모양은 양 끝에서 0 이고 가운데는 1 로 평평하다', () 
   }
 });
 
-test('직선 이동은 중심이 완급 없이 등속으로 간다', () => {
-  /* 진행도까지 곡선을 따르면 비행과 구별이 없어진다 — 두 모드가 다른 그림을 내야 한다. */
-  const p = easePath('3', LONDON);
-  for (const t of [0.1, 0.25, 0.5, 0.75, 0.9]) {
-    assert.ok(Math.abs(p(t).d - t) < 1e-12, `중심에 완급이 붙었다 (t=${t} → d=${p(t).d})`);
+test('화면상 속도가 고르다 — 중심을 등속으로 두면 중간 지점으로 줌인한다', () => {
+  /* 화면상 속도는 2^줌 에 비례한다. 중심을 등속으로 두면 줌이 낮은 동안 화면이 기어가고
+     줌이 올라오면 휙 지나간다 — 서울→런던에서 줌인이 시작될 때 중심이 아직 중부 유럽이라
+     런던이 아니라 중간 지점으로 줌인하는 것처럼 보였다.
+     진행도를 2^-줌 에 비례하게 매겨 화면상 속도를 고르게 한다. */
+  for (const [name, to] of [['부산', BUSAN], ['런던', LONDON]]) {
+    for (const dip of ['1', '3']) {
+      const p = withUI(dip, () => F.dipPath('ease', SEOUL, to, 1600));
+      const v = [];
+      for (let k = 1; k <= 400; k++) {
+        const x = p((k - 1) / 400), y = p(k / 400);
+        v.push((y.d - x.d) * Math.pow(2, (x.zoom + y.zoom) / 2));
+      }
+      const spread = Math.max(...v) / Math.min(...v);
+      assert.ok(spread < 1.1, `서울→${name} ${dip}: 화면상 속도가 ${spread.toFixed(2)}배까지 벌어진다`);
+      assert.ok(v.every((x) => x > 0), `서울→${name} ${dip}: 중심이 뒤로 간다`);
+    }
+  }
+});
+
+test('줌인이 시작될 때는 이미 도착지 위에 있다', () => {
+  /* 이게 어긋나면 "중간 지점으로 줌인" 으로 보인다. 서울→런던은 남은 4% 도 400km 라
+     자리가 아주 좁다 — 그래서 거리 기준으로 못을 박아 둔다. */
+  for (const dip of ['1', '3']) {
+    const p = withUI(dip, () => F.dipPath('ease', SEOUL, LONDON, 1600));
+    const lo = 8 - lowOf(p);
+    let start = 1;
+    for (let k = 1000; k >= 0; k--) {
+      if (p(easeInOut(k / 1000)).zoom < lo + 0.5) { start = k / 1000; break; }
+    }
+    const gone = p(easeInOut(start)).d;
+    assert.ok(gone > 0.93,
+      `${dip}: 줌인이 시작될 때 거리의 ${(gone * 100).toFixed(1)}% 밖에 안 갔다`);
   }
 });
 

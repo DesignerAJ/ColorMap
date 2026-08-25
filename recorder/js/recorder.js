@@ -3255,7 +3255,15 @@ function initRecorder(map) {
   }
 
   /* 이동 방식에 맞는 줌 궤적. interpCam 이 쓰는 모양(t → {zoom, d})은 비행 곡선과 같다.
-     직선은 d 를 t 그대로 돌려주므로 중심이 완급 없이 등속으로 간다. */
+
+     중심을 **등속**으로 두면 안 된다. 화면상 속도가 2^줌 에 비례하므로, 줌이 낮은 동안은
+     화면이 기어가고 줌이 올라오면 휙 지나간다. 서울→런던에서 재생 76% 지점에 줌인이
+     시작되는데 그때 중심은 아직 중부 유럽이라, 런던이 아니라 **중간 지점으로 줌인하는
+     것처럼** 보였다. 그러고 나서 높은 줌으로 미끄러져 간다.
+
+     그래서 진행도를 화면상 속도가 고르도록 다시 매긴다 — 줌이 낮을수록 빨리 나아간다
+     (2^-줌 에 비례). flyTo 가 하는 일과 같지만 **줌 궤적은 우리 것**이다.
+     그러면 넓게 빠진 동안 거리를 거의 다 먹고, 줌인이 시작될 때는 도착지 위에 있다. */
   function dipPath(mode, from, to, w0) {
     if (mode === 'fly') {
       const curve = flyCurveNow(mode);
@@ -3263,7 +3271,22 @@ function initRecorder(map) {
     }
     const depth = straightDepth($('fly-dip').value, from, to, w0);
     if (!(depth > 0)) return null;                   // '없음' — 선형 보간 그대로
-    return (t) => ({ zoom: lerp(from.zoom, to.zoom, t) - depth * dipBell(t), d: t });
+    const zAt = (t) => lerp(from.zoom, to.zoom, t) - depth * dipBell(t);
+
+    const N = 256;                                   // 사다리꼴로 적분해 진행도 표를 만든다
+    const cum = new Float64Array(N + 1);
+    let prev = Math.pow(2, -zAt(0)), sum = 0;
+    for (let i = 1; i <= N; i++) {
+      const cur = Math.pow(2, -zAt(i / N));
+      sum += (prev + cur) / 2; cum[i] = sum; prev = cur;
+    }
+    const dOf = (t) => {
+      if (!(sum > 0)) return t;
+      const x = Math.min(N, Math.max(0, t * N));
+      const i = Math.min(N - 1, Math.floor(x));
+      return (cum[i] + (cum[i + 1] - cum[i]) * (x - i)) / sum;
+    };
+    return (t) => ({ zoom: zAt(t), d: dOf(t) });
   }
 
   /* from → to 의 비행 곡선. t(0~1) 를 카메라로 바꾸는 함수를 돌려준다.
