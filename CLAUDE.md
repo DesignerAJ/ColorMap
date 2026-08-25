@@ -32,6 +32,7 @@ sigungu.json  ──(build-sido-hires.mjs)──>  sido-hires.json
 sido-hires.json ──(build-korea-border.mjs)──>  korea-border.json (북쪽 국경선)
 OSM + korea-border.json ──(build-nk-admin1.mjs)──>  admin1.json 의 '북한' 13개
 admin1.json + Natural Earth ──(build-admin1-split.mjs)──>  admin1-meta/-core/admin1/*.json
+geoBoundaries ──(build-admin1-hires.mjs)──>  admin1/*.json 의 유럽 21개국 (split 뒤에 돌린다)
 ```
 
 - 생성물을 손으로 고치지 말 것. 도구를 고치고 다시 생성한다.
@@ -216,6 +217,18 @@ Enter 의 **기본 동작이 끝난 뒤에야** 입력창에 들어온다 — �
   일본·러시아·이란·캐나다가 오히려 나빠진다. 구역끼리 짝짓기는 이름이 아니라 **무게중심**으로
   한다(표기가 달라 이름으로는 조용히 어긋난다). 속성(한글 이름·카메라 목표)은 우리 것을 지키고
   지오메트리만 바꾼다. 출처는 Natural Earth(퍼블릭 도메인).
+- **유럽 주요국 21곳은 geoBoundaries 로 한 단계 더 올렸다.** Natural Earth 로도 프랑스가
+  227점이라 우리 시도(2.3만점) 옆에서는 여전히 각졌다. geoBoundaries 는 각국 공식 기관
+  데이터라(프랑스 IGN·독일 BKG) 자릿수가 다르다 — 원본은 프랑스 전송 26MB 다.
+  **줌 10 에서 0.125px** 를 넘지 않게 줄인다. 그 값의 근거는 위 `tolerance` 항목이다 —
+  타일 반올림 격자가 0.0625px 이므로 그보다 크면서 안 보이는 선을 고른 것이다.
+  **행정 단위가 나라마다 다르다.** 우리 독일은 16개 주(ADM1)인데 프랑스는 101개
+  데파르트망(ADM2), 이탈리아는 110개 도(ADM3)다. 레벨을 박지 말고 구역 수로 고를 것.
+  짝짓기는 **우리 폴리곤 안에 상대 무게중심이 들어가는가**로 한다 — 이름은 표기가 다르고
+  거리는 작은 구역이 이웃에 붙는다. 절반도 못 붙으면 그 나라는 건드리지 않는다.
+  노르웨이·헝가리·아일랜드는 행정 개편·단위 차이로 짝이 없어 Natural Earth 그대로다.
+- **선은 아직 Mapbox 다.** 색칠을 아무리 올려도 출처가 다르면 정확히는 안 맞는다.
+  맞추려면 남·북한처럼 **선을 우리 폴리곤에서 뽑아야** 한다(`korea-admin1-lines.json` 방식).
 - **행정구역 탭의 '강원도(북한)' 는 보이는 이름만 바꾼 것이다**(`ADMIN1_RENAME`). 데이터의
   `short` 를 고치면 정식명이 `북한 ${short}` 로 조립돼 있어(`build-nk-admin1.mjs`)
   '북한 강원도(북한)' 이 된다. 남북 도의 두 글자 약칭(충북·평남)도 같은 자리에서 만드는데

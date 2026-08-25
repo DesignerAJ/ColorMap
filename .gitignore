@@ -15,4 +15,7 @@ Temp/
 
 # macOS Finder 가 폴더마다 만드는 파일. 폴더를 열기만 해도 내용이 바뀌어
 # 의미 없는 변경으로 잡히고, 맥마다 값이 달라 병합할 수도 없다.
-.DS_Storerecorder/tools/.cache/
+.DS_Store
+
+# geoBoundaries·Natural Earth 원본을 받아 두는 곳. 수십 MB 이고 도구가 다시 받을 수 있다.
+recorder/tools/.cache/

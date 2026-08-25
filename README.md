@@ -67,6 +67,36 @@ node tools/serve.mjs          # 또는  python -m http.server 5500
 **Natural Earth 10m**(퍼블릭 도메인)으로 올립니다 — 구역당 중앙값 73 → 166점.
 출처: Natural Earth (naturalearthdata.com), 퍼블릭 도메인.
 
+유럽 주요국 21곳은 한 단계 더 올렸습니다 — `node recorder/tools/build-admin1-hires.mjs` 가
+**geoBoundaries**(gbOpen)에서 각국 공식 기관 데이터를 받아 갈아끼웁니다.
+프랑스 227 → 3,000점대, 독일 903 → 5,800점대가 됩니다. 원본은 너무 커서
+(프랑스 전송 26MB) **줌 10 에서 0.125px 를 넘지 않는 선**까지 줄입니다 — 그 줌까지는
+화면상 원본과 같습니다. `build-admin1-split.mjs` 뒤에 돌려야 합니다(같은 파일을 덮어씁니다).
+
+라이선스가 나라마다 다릅니다. 출처는 다음과 같습니다.
+
+- 프랑스: Institut national de l'information géographique et forestière (IGN-F) (Etalab Open License 2.0)
+- 독일: Federal Agency for Cartography and Geodesy (Data license Germany - Attribution - Version 2.0)
+- 영국: Office for National Statistics Open Geography Portal (Open Government Licence v3.0)
+- 이탈리아: ISTAT, National Institute of Statistics (Creative Commons Attribution 3.0 License)
+- 스페인: El Instituto Nacional de Estadstica (National Institute of Statistics (INE) Data License)
+- 폴란드: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+- 네덜란드: National Georegister (CC0 1.0 Universal (CC0 1.0) Public Domain Dedication)
+- 벨기에: Statistics Belgium (Open Data Commons Open Database License 1.0)
+- 스위스: Federal Office of Topography swisstopo (Federal Office of Topography swisstopo License)
+- 오스트리아: geoBoundaries, Federal Office for Metrology and Survey, Austria (Creative Commons Attribution-ShareAlike 2.0)
+- 스웨덴: geoBoundaries, Erik Frohne (Creative Commons Attribution 3.0 License)
+- 덴마크: geoBoundaries, Web Vectors Map (Creative Commons Attribution 4.0 International (CC BY 4.0))
+- 핀란드: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+- 포르투갈: DG Territory (Open Data Commons Open Database License 1.0)
+- 그리스: EuroGeoGraphics, Regional IM Working Group - Europe (Creative Commons Attribution 4.0 International (CC BY 4.0))
+- 체코: Czech Office for Surveying (Creative Commons Attribution 4.0 International (CC BY 4.0))
+- 루마니아: World Bank (Creative Commons Attribution 4.0 International (CC BY 4.0))
+- 세르비아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+- 크로아티아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+- 슬로바키아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+- 불가리아: geoBoundaries, Wikimedia (Public Domain)
+
 북한 1급 행정구역(`admin1.json` 안의 '북한' 13개)은 OpenStreetMap 에서 받아
 `node recorder/tools/build-nk-admin1.mjs` 로 만듭니다. 원래 들어 있던 경계는 도당
 100~220점짜리라 도당 1.6만점인 우리 시도 옆에서 눈에 띄게 각졌고, 군사분계선 구간이
