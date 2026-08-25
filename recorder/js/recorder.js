@@ -881,42 +881,51 @@ function initRecorder(map) {
       `  키가 풀릴 때까지는 Mapbox 로 검색합니다 (한국 지명은 잘 안 나옵니다).`);
   }
 
-  /* VWorld 검색 API 2.0. type=place(관심지점)를 먼저 보고, 없으면 address(주소)로 한 번 더.
-     좌표계는 EPSG:4326(위경도)로 받아 그대로 쓴다. */
-  async function searchVWorld(q) {
+  /* VWorld 검색 API 2.0 — 한 번 부르는 단위. type 마다 category 가 필요한 것이 있다.
+     실측: type=place 는 category 없이 되지만, district·address 는 **category 가 필수**라
+     안 주면 PARAM_REQUIRED 로 떨어진다. 예전 코드는 address 를 category 없이 불러서
+     그 폴백이 늘 실패했고, 콘솔에 '인증키 문제' 경고까지 잘못 띄웠다. */
+  async function vworldQuery(q, type, category) {
     if (!keys.vworld) return [];
-    const base = 'https://api.vworld.kr/req/search?service=search&request=search&version=2.0'
-               + '&crs=EPSG:4326&size=8&page=1&format=json&errorformat=json'
-               + `&key=${encodeURIComponent(keys.vworld)}&query=${encodeURIComponent(q)}`;
-    for (const type of ['place', 'address']) {
-      const d = await jsonp(`${base}&type=${type}`);
-      // 무응답(시간제한·네트워크 오류)이면 두 번째 타입도 마찬가지다. 기다리게 하지 말고 바로 다음 제공자로.
-      if (d === null) { warnVWorld('응답 없음 (시간 초과)'); return []; }
-      const res = d && d.response;
-      /* 키가 거부되면(INVALID_KEY·도메인 불일치) 결과가 0건인 것과 겉보기가 같아서,
-         조용히 넘어가면 "검색이 안 되네"로만 보이고 원인을 알 수 없다. 콘솔에 한 번 남긴다. */
-      if (res && res.status === 'ERROR') {
-        warnVWorld((res.error && (res.error.text || res.error.code)) || '알 수 없는 오류');
-        return [];
-      }
-      if (!res || res.status !== 'OK') continue;
-      const items = (res.result && res.result.items) || [];
-      const out = items.map((it) => {
-        const x = parseFloat(it.point && it.point.x), y = parseFloat(it.point && it.point.y);
-        if (!isFinite(x) || !isFinite(y)) return null;
-        const addr = it.address || {};
-        return {
-          name: it.title || '',
-          ctx: addr.road || addr.parcel || it.category || '',
-          center: [x, y],
-          poi: type === 'place',
-          src: 'VWorld',
-        };
-      }).filter(Boolean);
+    const url = 'https://api.vworld.kr/req/search?service=search&request=search&version=2.0'
+              + '&crs=EPSG:4326&size=8&page=1&format=json&errorformat=json'
+              + `&key=${encodeURIComponent(keys.vworld)}&query=${encodeURIComponent(q)}&type=${type}`
+              + (category ? `&category=${category}` : '');
+    const d = await jsonp(url);
+    if (d === null) { warnVWorld('응답 없음 (시간 초과)'); return []; }
+    const res = d && d.response;
+    /* 키가 거부되면(INVALID_KEY·도메인 불일치) 결과 0건과 겉보기가 같아서, 조용히 넘어가면
+       "검색이 안 되네"로만 보인다. 다만 NOT_FOUND 는 그냥 '없음'이라 경고할 일이 아니다. */
+    if (res && res.status === 'ERROR') {
+      warnVWorld((res.error && (res.error.text || res.error.code)) || '알 수 없는 오류');
+      return [];
+    }
+    if (!res || res.status !== 'OK') return [];
+    return ((res.result && res.result.items) || []).map((it) => {
+      const x = parseFloat(it.point && it.point.x), y = parseFloat(it.point && it.point.y);
+      if (!isFinite(x) || !isFinite(y)) return null;
+      const addr = it.address || {};
+      return {
+        name: it.title || '',
+        ctx: addr.road || addr.parcel || it.category || '',
+        center: [x, y],
+        poi: type === 'place',
+        src: 'VWorld',
+      };
+    }).filter(Boolean);
+  }
+
+  /* 행정지명(시도·시군구·읍면동). **여기 걸리면 국내 지명이 확실하다** —
+     실측하면 서울·부산·강남구는 나오고 파리·런던·도쿄·베를린은 하나도 안 나온다.
+     그래서 이게 '국내냐 해외냐'를 가르는 잣대가 된다. */
+  const searchVWorldDistrict = async (q) => {
+    for (const category of ['L1', 'L2', 'L3']) {        // 시도 → 시군구 → 읍면동
+      const out = await vworldQuery(q, 'district', category);
       if (out.length) return out;
     }
     return [];
-  }
+  };
+  const searchVWorldPlace = (q) => vworldQuery(q, 'place');
 
   /* Google Places API (New) Text Search.
      좌표(location)와 이름(displayName)은 Pro SKU 라 월 5,000건까지 무료다.
@@ -988,12 +997,25 @@ function initRecorder(map) {
   }
 
   /* 제공자를 순서대로 훑어 처음으로 결과가 나온 곳을 쓴다.
-     한글이 섞였으면 국내 API 를 앞에 둔다 — Mapbox 는 한국 POI 가 거의 없어서
-     앞에 두면 '결과 없음' 만 돌려주고 뒤 제공자까지 가지도 못한다.
-     Google 은 유료 구간이 있으므로 항상 마지막 국내 후보로만 둔다. */
+
+     한글 검색이 까다롭다. 예전에는 VWorld 를 맨 앞에 두고 결과가 있으면 거기서 끝냈는데,
+     VWorld 는 **국내만** 아는 데다 상호명(POI)까지 준다. 그래서 '파리' 를 치면 프랑스 파리가
+     아니라 파리바게트 같은 국내 상호가 잔뜩 나오고, 뒤 제공자는 불리지도 않았다.
+
+     그래서 국내인지 먼저 가른다. VWorld 의 **행정지명(district)** 에 걸리면 국내 지명이
+     확실하다 — 실측하면 서울·부산·강남구는 나오고 파리·런던·도쿄·베를린은 하나도 안 나온다.
+     그 뒤에야 해외를 보고, 국내 상호명은 **맨 뒤**로 미룬다.
+
+       한글:  행정지명(VWorld) → 해외(Mapbox → Google) → 국내 상호명(VWorld place)
+       그 외: Mapbox → Google
+
+     국내 상호명을 맨 뒤에 둬도 '서울시청'·'남대문시장' 은 그대로 나온다 — 그 앞 단계가
+     전부 0건이기 때문이다(Mapbox 는 한국 POI 가 사실상 비어 있다. 실측으로 확인했다).
+     반대로 '도쿄' 는 Mapbox 가 0건이라 Google 이 받아 '도쿄도'를 준다.
+     Google 은 유료 구간이 있으므로 앞 단계가 비었을 때만 불린다. */
   async function fetchPlaces(q, token) {
     const chain = hasKo(q)
-      ? [searchVWorld, searchGoogle, (s) => searchMapbox(s, token)]
+      ? [searchVWorldDistrict, (s) => searchMapbox(s, token), searchGoogle, searchVWorldPlace]
       : [(s) => searchMapbox(s, token), searchGoogle];
     let failed = 0;
     for (const provider of chain) {

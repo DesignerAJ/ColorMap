@@ -56,6 +56,11 @@ OSM ──(build-admin1-firstlevel.mjs)──>  admin1.json 의 프랑스·이�
   진짜 부하라 다음 시도에 200 이 온다(재시도 8번).
 - 이 맥을 만든 환경에선 `python3` 이 깨져 있었다(Command Line Tools). `node tools/serve.mjs` 를 쓴다.
 - **검색 인증키는 브라우저에 노출되는 값이다.** 도메인·리퍼러 제한이 유일한 방어선.
+  - VWorld: 검색 API 는 type 마다 category 가 필요한 것이 있다 — place 는 없어도 되지만
+    district·address 는 **필수**라 안 주면 PARAM_REQUIRED 로 떨어진다. 한동안 address 폴백이
+    그래서 늘 실패했고 콘솔에 인증키 문제라고 잘못 떴다.
+    district(category L1/L2/L3)는 **국내 행정지명만** 준다 — 파리·런던·도쿄는 0건이라
+    한글 질의가 국내인지 해외인지 가르는 잣대로 쓴다.
   - VWorld: 사용 도메인에 `127.0.0.1` 과 `designeraj.github.io` 둘 다 등록해야 한다.
     로컬에서 `등록되지 않은 인증키입니다` 가 뜨면 대개 이것.
   - Google: 키를 넣고 HTTP 리퍼러 제한을 걸었다. **리퍼러 패턴을 경로까지 좁히지 말 것** —
@@ -327,7 +332,7 @@ Enter 의 **기본 동작이 끝난 뒤에야** 입력창에 들어온다 — �
 ```bash
 node tools/serve.mjs                  # http://127.0.0.1:5500
 node --test test/*.test.js            # 93개, 설치 불필요
-npm install && node --test test/dom/*.test.js   # 47개, jsdom 필요
+npm install && node --test test/dom/*.test.js   # 50개, jsdom 필요
 ```
 
 푸시하면 `.github/workflows/qa.yml` 이 둘 다 돌린다 (배포는 건드리지 않는다).

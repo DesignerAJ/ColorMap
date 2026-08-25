@@ -17,6 +17,11 @@ export const FIXTURES = {
       address: { road: '인천광역시 중구 을왕동', parcel: '인천광역시 중구 을왕동 산 105-9' },
       point: { x: '126.3707', y: '37.4470' } }] } } },
   vworldEmpty: { response: { status: 'NOT_FOUND', result: { items: [] } } },
+  /* '파리' 로 VWorld place 를 부르면 실제로 이런 것이 온다 — 국내 상호명이다. */
+  vworldParisShops: { response: { status: 'OK', result: { crs: 'EPSG:4326', type: 'place', items: [
+    { title: '파리바게뜨 역삼점', point: { x: '127.0361', y: '37.5006' }, address: { road: '서울특별시 강남구 테헤란로' } },
+    { title: '파리크라상 광화문점', point: { x: '126.9769', y: '37.5714' }, address: { road: '서울특별시 종로구 세종대로' } },
+  ] } } },
   vworldBadKey: { response: { status: 'ERROR', error: { code: 'INVALID_KEY', text: '등록되지 않은 인증키입니다.' } } },
   googleHit: { places: [{ displayName: { text: '왕산해수욕장' }, formattedAddress: '인천광역시 중구',
     location: { latitude: 37.447, longitude: 126.3707 },
@@ -208,8 +213,14 @@ export function boot({
   window.document.head.appendChild = (el) => {
     if (el.tagName === 'SCRIPT' && String(el.src).includes('api.vworld.kr')) {
       const cb = /callback=([^&]+)/.exec(el.src)[1];
-      calls.push({ api: 'vworld', type: /[?&]type=([^&]+)/.exec(el.src)[1] });
-      setTimeout(() => window[cb]?.(vworldReply), 0);
+      const type = /[?&]type=([^&]+)/.exec(el.src)[1];
+      const category = (/[?&]category=([^&]+)/.exec(el.src) || [])[1];
+      calls.push({ api: 'vworld', type, category });
+      /* VWorld 는 type 마다 다른 것을 준다 — 행정지명(district)은 국내 지명만, place 는
+         상호명까지. '파리' 가 국내 상호로 뒤덮이던 문제를 재현하려면 그 차이가 필요하다.
+         함수를 주면 type 별로 다르게, 값을 주면 예전처럼 한 가지로 답한다. */
+      const reply = typeof vworldReply === 'function' ? vworldReply(type, category) : vworldReply;
+      setTimeout(() => window[cb]?.(reply), 0);
       return el;
     }
     return realAppend(el);

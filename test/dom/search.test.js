@@ -26,15 +26,53 @@ test('한글 질의는 VWorld 가 먼저 — 찾으면 구글은 안 부른다 (
   assert.ok(!e.calls.some((c) => c.api === 'mapbox'), 'Mapbox 를 불렀다');
 });
 
-test('VWorld 가 0건이면 구글로, 구글도 0건이면 Mapbox 로', async () => {
-  const e1 = boot({ vworldKey: 'K', googleKey: 'G', vworldReply: F.vworldEmpty, googleReply: F.googleHit });
-  assert.match((await search(e1, '왕산해수욕장'))[0].ctx, /Google/);
-  assert.equal(e1.calls.filter((c) => c.api === 'vworld').length, 2, 'place·address 두 번 시도해야 한다');
+test('행정지명이 없으면 해외를 보고, 국내 상호명은 맨 뒤로 미룬다', async () => {
+  /* 예전에는 VWorld 가 결과를 주면 거기서 끝냈다. VWorld 는 국내만 아는 데다 상호명까지
+     주므로 '파리' 가 파리바게뜨로 뒤덮였다. 이제 행정지명 → 해외 → 국내 상호명 순이다. */
+  const e = boot({
+    vworldKey: 'K', googleKey: 'G',
+    vworldReply: (type) => (type === 'district' ? F.vworldEmpty : F.vworldParisShops),
+    mapboxReply: F.mapboxHit,
+  });
+  const r = await search(e, '파리');
+  assert.equal(r[0].name, 'Paris', `첫 결과가 '${r[0].name}' — 해외 도시가 먼저 나와야 한다`);
+  assert.ok(!r.some((x) => x.name.includes('파리바게뜨')), '국내 상호명이 섞여 올라왔다');
 
-  const e2 = boot({ vworldKey: 'K', googleKey: 'G', mapboxReply: F.mapboxHit });
-  assert.match((await search(e2, '없는지명'))[0].ctx, /Mapbox/);
-  for (const api of ['vworld', 'google', 'mapbox']) {
-    assert.ok(e2.calls.some((c) => c.api === api), `${api} 를 건너뛰었다`);
+  const types = e.calls.filter((c) => c.api === 'vworld').map((c) => c.type);
+  assert.ok(types.includes('district'), '행정지명을 먼저 안 봤다');
+  assert.ok(!types.includes('place'), '해외에서 찾았는데도 국내 상호명까지 불렀다');
+});
+
+test('행정지명에 걸리면 거기서 끝낸다 (해외·유료 API 를 안 부른다)', async () => {
+  const e = boot({ vworldKey: 'K', googleKey: 'G', vworldReply: F.vworldHit, mapboxReply: F.mapboxHit });
+  const r = await search(e, '강남구');
+  assert.match(r[0].ctx, /VWorld/);
+  assert.ok(!e.calls.some((c) => c.api === 'google'), '구글을 불렀다 — 유료 구간이다');
+  assert.ok(!e.calls.some((c) => c.api === 'mapbox'), 'Mapbox 를 불렀다');
+});
+
+test('국내 상호명은 앞이 다 비었을 때 그대로 나온다', async () => {
+  /* 맨 뒤로 미뤄도 '서울시청' 은 나와야 한다 — Mapbox 는 한국 POI 가 사실상 비어 있어서
+     그 앞 단계가 전부 0건이기 때문이다(실측 확인). */
+  const e = boot({
+    vworldKey: 'K', googleKey: 'G',
+    vworldReply: (type) => (type === 'district' ? F.vworldEmpty : F.vworldHit),
+  });
+  const r = await search(e, '서울시청');
+  assert.equal(r[0].name, '왕산해수욕장');            // 픽스처의 place 결과
+  assert.match(r[0].ctx, /VWorld/);
+});
+
+test('행정지명은 시도 → 시군구 → 읍면동 순으로 본다 (category 가 필수다)', async () => {
+  /* 실측: type=district·address 는 category 없이 부르면 PARAM_REQUIRED 로 떨어진다.
+     예전 코드는 address 를 category 없이 불러서 그 폴백이 늘 실패했고,
+     콘솔에 '인증키 문제' 경고까지 잘못 띄웠다. */
+  const e = boot({ vworldKey: 'K', vworldReply: F.vworldEmpty });
+  await search(e, '없는지명');
+  const d = e.calls.filter((c) => c.api === 'vworld' && c.type === 'district');
+  assert.deepEqual(d.map((c) => c.category), ['L1', 'L2', 'L3'], '시도→시군구→읍면동 순이어야 한다');
+  for (const c of e.calls.filter((x) => x.api === 'vworld')) {
+    if (c.type !== 'place') assert.ok(c.category, `type=${c.type} 를 category 없이 불렀다 — 늘 실패한다`);
   }
 });
 
