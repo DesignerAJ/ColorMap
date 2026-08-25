@@ -582,17 +582,30 @@ function initRecorder(map) {
      입력창을 누르기만 해도 17개 시도가 34줄로 펼쳐졌다 — '충북'과 '충청북도'가 나란히 떠서
      고르는 데 방해만 됐다.
 
-     정식명을 label 로 붙여 두면 '충청'만 쳐도 '충북' 줄이 남지만(datalist 는 value 와 label
-     양쪽에서 거른다), 목록에 정식명이 회색으로 따라붙어 지저분하다. 그래서 안 붙인다.
-     정식명을 **끝까지 친 뒤** 고르는 건 그대로 된다 — resolveByMeta 가 별칭까지 보므로
-     '충청북도' 를 쳐도 해석된다. 중간까지만(‘충청’) 치면 후보가 안 뜬다는 것이 맞바꾼 값이다. */
+     그렇다고 정식명으로 못 찾으면 안 된다. 네이티브 datalist 는 브라우저가 value 와 label
+     **양쪽으로 거르고 둘 다 그리므로**, 라벨을 숨기면서 검색만 남기는 방법은 없다.
+     대신 목록을 **입력에 따라 다시 짠다** — 평소엔 약칭 17줄뿐이고, 약칭으로는 안 걸리는데
+     정식명에는 걸리는 글자를 치면(‘충청’) 그때만 해당 정식명 줄을 넣는다.
+       빈칸/‘충’  → 약칭만 (충북·충남…)         목록이 깨끗하다
+       ‘충청’     → 충청북도·충청남도            그때만 나타난다
+     골라서 들어간 정식명은 resolveByMeta 가 그대로 해석한다. */
   (function fillSidoList() {
     const dl = $('sido-list');
-    SIDO_META.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.s;
-      dl.appendChild(opt);
-    });
+    const input = $('sido-input');
+    const put = (v) => { const o = document.createElement('option'); o.value = v; dl.appendChild(o); };
+    const rebuild = () => {
+      const q = (input.value || '').trim();
+      dl.innerHTML = '';
+      SIDO_META.forEach((s) => put(s.s));
+      if (!q) return;
+      /* 약칭으로 이미 걸리는 글자면 정식명을 넣지 않는다 — 넣으면 또 두 줄이 된다. */
+      SIDO_META.forEach((s) => {
+        if (s.n === s.s || s.s.includes(q)) return;
+        if (s.n.includes(q)) put(s.n);
+      });
+    };
+    rebuild();
+    input.addEventListener('input', rebuild);
   })();
 
   /* ── 해외 행정구역(주·도) ──

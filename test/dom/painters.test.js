@@ -219,18 +219,44 @@ test('지리 데이터 소스는 반올림 격자보다 큰 값으로 단순화�
 /* ── 시도 검색 목록 ──
    입력창을 누르기만 해도 후보가 펼쳐지는데, 예전에는 약칭과 정식명을 각각 option 으로
    넣어서 17개 시도가 34줄로 떴다 — '충북'과 '충청북도'가 나란히 놓여 고르는 데 방해였다.
-   목록은 약칭만 보이는 게 맞다. 정식명은 label 로 붙이면 검색에 걸리지만 목록에 회색으로
-   따라붙어 지저분해서 안 붙인다 — 정식명을 끝까지 치면 resolveByMeta 가 해석한다. */
-test('시도 목록은 약칭 17줄뿐이고 군더더기가 없다', () => {
+
+   네이티브 datalist 는 브라우저가 value·label 양쪽으로 거르고 둘 다 그리므로, 라벨을
+   숨기면서 검색만 남길 수는 없다. 그래서 목록을 입력에 따라 다시 짠다 — 평소엔 약칭뿐이고
+   정식명에만 걸리는 글자를 칠 때만 그 줄이 생긴다. */
+const sidoOptions = (e) => [...e.doc.querySelectorAll('#sido-list option')].map((o) => o.value);
+const typeSido = (e, q) => {
+  const i = e.$('sido-input');
+  i.value = q;
+  i.dispatchEvent(new e.window.Event('input', { bubbles: true }));
+  return sidoOptions(e);
+};
+
+test('평소 시도 목록은 약칭 17줄뿐이다', () => {
   const e = boot();
-  const opts = [...e.doc.querySelectorAll('#sido-list option')];
-  assert.equal(opts.length, 17, `${opts.length}줄 — 시도는 17개다 (정식명을 따로 올리면 34줄이 된다)`);
+  const opts = sidoOptions(e);
+  assert.equal(opts.length, 17, `${opts.length}줄 — 시도는 17개다 (정식명을 늘 올리면 34줄이 된다)`);
+  assert.ok(opts.includes('충북'), '약칭이 없다');
+  assert.ok(!opts.includes('충청북도'), '정식명이 늘 올라가 있다 — 중복이다');
+  assert.equal(new Set(opts).size, 17, '같은 값이 두 번 올라가 있다');
+  assert.deepEqual([...e.doc.querySelectorAll('#sido-list option')].filter((o) => o.label).map((o) => o.value), [],
+    'label 이 붙어 목록에 군더더기가 보인다');
+});
 
-  const values = opts.map((o) => o.value);
-  assert.ok(values.includes('충북'), '약칭이 없다');
-  assert.ok(!values.includes('충청북도'), '정식명이 별도 줄로 올라가 있다 — 중복이다');
-  assert.equal(new Set(values).size, 17, '같은 값이 두 번 올라가 있다');
+test('약칭으로 걸리는 글자면 정식명을 안 넣는다', () => {
+  const e = boot();
+  const opts = typeSido(e, '충');                     // 충북·충남이 이미 걸린다
+  assert.ok(!opts.some((v) => v.length > 3), `정식명이 섞였다: ${opts.filter((v) => v.length > 3)}`);
+});
 
-  const labelled = opts.filter((o) => o.label);
-  assert.deepEqual(labelled.map((o) => o.value), [], 'label 이 붙어 목록에 군더더기가 보인다');
+test("정식명에만 걸리는 글자를 치면 그때 그 줄이 생긴다", () => {
+  const e = boot();
+  const opts = typeSido(e, '충청');                   // 약칭 '충북'·'충남' 으로는 안 걸린다
+  assert.ok(opts.includes('충청북도'), "'충청' 을 쳤는데 충청북도가 안 뜬다");
+  assert.ok(opts.includes('충청남도'), "'충청' 을 쳤는데 충청남도가 안 뜬다");
+});
+
+test('입력을 지우면 다시 약칭만 남는다', () => {
+  const e = boot();
+  typeSido(e, '충청');
+  assert.equal(typeSido(e, '').length, 17, '정식명 줄이 남아 있다');
 });
