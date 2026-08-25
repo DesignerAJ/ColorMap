@@ -108,14 +108,16 @@ function initRecorder(map) {
     }
   }
 
-  /* 지명 참고용 스타일에서만 라벨을 한국어로 바꾼다.
-     setLanguage 는 지도 전체에 걸리고 스타일을 바꿔도 유지되므로, 참고용이 아닌
-     방송용 스타일로 돌아올 때는 반드시 null 로 되돌려 원본 디자인을 지켜야 한다.
+  /* 글자가 켜져 있는 동안만 라벨을 한국어로 바꾼다.
+     스타일의 text-field 는 `coalesce(name_en, name)` 이라 그냥 두면 영어로 나온다.
+     예전엔 '지명 참고용' 스타일에서만 걸었는데, 이제 어느 스타일에서든 글자를 켤 수 있어
+     조건이 스타일이 아니라 **글자 체크박스**다.
+     setLanguage 는 지도 전체에 걸리고 스타일을 바꿔도 유지되므로, 글자를 끌 때는 반드시
+     null 로 되돌려 원본 디자인을 지켜야 한다.
      스타일 로드가 끝난 뒤 걸어야 라벨 레이어에 제대로 반영된다. */
   function applyStyleLanguage() {
-    try { map.setLanguage(KO_LABEL_STYLES.has($('style-select').value) ? 'ko' : null); } catch (_) {}
+    try { map.setLanguage($('label-on').checked ? 'ko' : null); } catch (_) {}
   }
-  map.on('style.load', applyStyleLanguage);
 
   /* ── 지도 글자(지명·도로명) 켜고 끄기 ──
 
@@ -132,13 +134,20 @@ function initRecorder(map) {
   const OUR_SYMBOL_LAYERS = new Set(['route-arrow-layer', 'capture-pins-layer']);
   const _labelIds = new Set();
 
+  /* 줌 14 이상에서만 나오는 심볼은 '글자가 보이는 스타일' 의 근거로 치지 않는다.
+     모노톤은 켜져 있는 심볼 3개가 전부 건물 번호·출입구·블록 번호(줌 16~18)라,
+     방송에서 쓰는 줌(6~10)에서는 글자가 하나도 안 보이는데 체크만 되어 있었다.
+     그러면 켤 방법이 없다 — 이미 켜진 것으로 보이니까. */
+  const LABEL_ZOOM = 14;
+
   function snapshotLabels() {
     _labelIds.clear();
     let anyOn = false;
     for (const l of map.getStyle()?.layers || []) {
       if (l.type !== 'symbol' || OUR_SYMBOL_LAYERS.has(l.id)) continue;
       _labelIds.add(l.id);
-      if (((l.layout && l.layout.visibility) || 'visible') !== 'none') anyOn = true;
+      const on = ((l.layout && l.layout.visibility) || 'visible') !== 'none';
+      if (on && (l.minzoom || 0) < LABEL_ZOOM) anyOn = true;
     }
     $('label-on').checked = anyOn;                 // 화면에 보이는 대로만 맞춘다 — 켜지 않는다
   }
@@ -148,8 +157,8 @@ function initRecorder(map) {
       try { map.setLayoutProperty(id, 'visibility', vis); } catch (_) {}
     }
   }
-  map.on('style.load', snapshotLabels);
-  $('label-on').addEventListener('change', applyLabelVisibility);
+  map.on('style.load', () => { snapshotLabels(); applyStyleLanguage(); });
+  $('label-on').addEventListener('change', () => { applyLabelVisibility(); applyStyleLanguage(); });
 
 
   /* 투영은 스타일에도 저장돼 있고, setStyle 은 그 값을 그대로 따라간다.

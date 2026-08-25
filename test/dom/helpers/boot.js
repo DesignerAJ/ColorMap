@@ -162,7 +162,8 @@ export function boot({
     getFilter: (id) => filters[id],
     setFilter: (id, f) => { filters[id] = f; },
     setStyle: (u) => calls.push({ api: 'setStyle', url: u }),   // 같은 URL 로 부르면 style.load 가 안 온다 — 그걸 검사한다
-    setProjection: () => {}, setZoom: () => {}, setLanguage: () => {},
+    setProjection: () => {}, setZoom: () => {},
+    setLanguage: (v) => calls.push({ api: 'setLanguage', v }),
     jumpTo: () => {}, flyTo: (o) => calls.push({ api: 'flyTo', o }), easeTo: () => {},
     fitBounds: (b) => calls.push({ api: 'fitBounds', b }),
     project: (c) => ({ x: (c[0] + 180) * 4, y: (90 - c[1]) * 4 }),

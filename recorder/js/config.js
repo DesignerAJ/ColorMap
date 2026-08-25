@@ -16,12 +16,9 @@ const STYLES = {
   detail:       'mapbox://styles/designeraj/cmmcpegvn00fn01sugpfi79x7', // 지형도
   monotone:     'mapbox://styles/designeraj/cmsswn1sr006u01rf9agr824g', // 모노톤
   // 지명 참고용 — Mapbox 기본 제공 스타일. 지명·도로명이 전부 나와서 위치 확인에 씀.
-  // 방송용이 아니라 "여기가 어디인지" 확인하는 용도. 이 스타일에서만 라벨을 한국어로 바꾼다.
+  // 방송용이 아니라 "여기가 어디인지" 확인하는 용도.
   placenames:   'mapbox://styles/mapbox/streets-v12',                // 지명 참고용
 };
-
-// 라벨을 한국어로 표시할 스타일. 나머지(방송용)는 원본 디자인의 라벨을 그대로 둔다.
-const KO_LABEL_STYLES = new Set(['placenames']);
 
 /* ── 장소 검색 인증키 ──
    Mapbox 는 한국 POI 데이터가 사실상 비어 있다. 실측(12개 표본)에서 '왕산해수욕장',

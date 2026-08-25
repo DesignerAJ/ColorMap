@@ -317,3 +317,38 @@ test('체크 상태는 그 스타일이 원래 글자를 보여주는지를 따�
   e.styleLoad(); await e.tick();
   assert.equal(e.$('label-on').checked, false, '보이는 라벨이 없는데 체크가 남아 있다');
 });
+
+test('줌 올려야 나오는 글자는 "글자 있는 스타일"의 근거가 아니다', async () => {
+  /* 모노톤은 켜져 있는 심볼 3개가 전부 건물 번호·출입구·블록 번호(줌 16~18)다.
+     방송에서 쓰는 줌에서는 글자가 하나도 안 보이는데 체크만 되어 있어, 이미 켜진 줄 알고
+     켤 방법이 없었다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  for (const l of e.map.getStyle().layers) {
+    if (l.type !== 'symbol') continue;
+    l.layout = { visibility: 'none' };
+    delete l.minzoom;
+  }
+  const high = e.map.getStyle().layers.find((l) => l.type === 'symbol');
+  high.layout = { visibility: 'visible' };
+  high.minzoom = 17;                                  // 건물 번호 같은 것
+
+  e.styleLoad(); await e.tick();
+  assert.equal(e.$('label-on').checked, false,
+    '줌 17에서만 나오는 글자를 보고 체크했다 — 그러면 켤 수가 없다');
+});
+
+test('글자를 켜면 라벨이 한국어로 바뀌고, 끄면 원래대로 돌아온다', async () => {
+  /* 스타일의 text-field 는 coalesce(name_en, name) 이라 그냥 두면 영어로 나온다.
+     setLanguage 는 지도 전체에 걸리고 스타일이 바뀌어도 남으므로 끌 때 되돌려야 한다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  const langs = () => e.calls.filter((c) => c.api === 'setLanguage').map((c) => c.v);
+
+  setLabels(e, false);
+  assert.equal(langs().at(-1), null, '글자를 껐는데 한국어 설정이 남았다');
+
+  setLabels(e, true);
+  assert.equal(langs().at(-1), 'ko', '글자를 켰는데 영어로 나온다');
+});
