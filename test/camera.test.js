@@ -116,7 +116,7 @@ test("'없음'은 정말 0 이다 (0.5 단계도 남으면 도로·지명이 빠
    놔도 이 모드에서만 아무 반응이 없었다. */
 const F = extract('recorder/js/recorder.js', ['lerp', 'lerpAngle', 'CLAMP_LAT', 'mercX', 'mercY',
   'unmercX', 'unmercY', 'FLY_CURVES', 'flightPath', 'interpCam', 'flyCurveNow',
-  'STRAIGHT_DIPS', 'DIP_DOWN', 'DIP_UP', 'dipBell', 'straightDepth', 'dipPath']);
+  'STRAIGHT_DIPS', 'DIP_REF', 'DIP_DOWN', 'DIP_UP', 'dipSpan', 'dipBell', 'straightDepth', 'dipPath']);
 
 const SEOUL = { center: [127.0, 37.55], zoom: 8, bearing: 0, pitch: 0 };
 const BUSAN = { center: [129.08, 35.18], zoom: 8, bearing: 0, pitch: 0 };
@@ -389,14 +389,44 @@ test('줌인은 도착 즈음에 들어온다 (좌우 대칭이 아니다)', () 
 });
 
 test('종 모양은 양 끝에서 0 이고 가운데는 1 로 평평하다', () => {
-  assert.equal(F.dipBell(0), 0);
-  assert.equal(F.dipBell(1), 0);
-  assert.equal(F.dipBell(F.DIP_DOWN), 1, '내려간 자리에서 바로 바닥이어야 평평한 구간이 생긴다');
-  assert.equal(F.dipBell(1 - F.DIP_UP), 1);
+  const [down, up] = [0.3, 0.25];
+  assert.equal(F.dipBell(0, down, up), 0);
+  assert.equal(F.dipBell(1, down, up), 0);
+  assert.equal(F.dipBell(down, down, up), 1, '내려간 자리에서 바로 바닥이어야 평평한 구간이 생긴다');
+  assert.equal(F.dipBell(1 - up, down, up), 1);
   for (let k = 0; k <= 100; k++) {                   // 가운데는 통째로 바닥이다
-    const t = F.DIP_DOWN + (1 - F.DIP_UP - F.DIP_DOWN) * (k / 100);
-    assert.equal(F.dipBell(t), 1, `가운데가 평평하지 않다 (t=${t})`);
+    const t = down + (1 - up - down) * (k / 100);
+    assert.equal(F.dipBell(t, down, up), 1, `가운데가 평평하지 않다 (t=${t})`);
   }
+});
+
+test('깊이 내려갈수록 오르내리는 데 오래 쓴다', () => {
+  /* 폭을 고정해 두면 '많이'(서울→런던 6.35단계)가 줌 시간 2.5초에서 초당 18.9단계로
+     튄다. 지배적인 항은 깊이 ÷ 줌 시간이라 폭으로는 다 못 잡지만, 가장 거친 쪽을
+     집중적으로 완화한다. */
+  const spans = [1, 2, 4, 8].map((d) => [F.dipSpan(F.DIP_DOWN, d), F.dipSpan(F.DIP_UP, d)]);
+  for (let i = 1; i < spans.length; i++) {
+    assert.ok(spans[i][0] >= spans[i-1][0] && spans[i][1] >= spans[i-1][1],
+      `깊어졌는데 폭이 줄었다: ${JSON.stringify(spans)}`);
+  }
+  const [dn, up] = spans[spans.length - 1];
+  assert.ok(dn + up < 0.85, `전부 오르내리는 데 써서 바닥이 없다 (${dn}+${up})`);
+  assert.ok(up < dn, '올라오는 구간이 더 길면 줌인이 일찍 시작돼 도착지에서 멀어진다');
+});
+
+const rateOf = (dip, to, dur = 2.5) => {
+  const p = withUI(dip, () => F.dipPath('ease', SEOUL, to, 1600));
+  let mx = 0;
+  for (let k = 1; k <= 2000; k++) {
+    const r = Math.abs(p(easeInOut(k / 2000)).zoom - p(easeInOut((k - 1) / 2000)).zoom) * 2000 / dur;
+    if (r > mx) mx = r;
+  }
+  return mx;
+};
+
+test('줌 변화율이 줌 시간에 반비례한다 — 완만하게 하려면 시간을 늘린다', () => {
+  const fast = rateOf('2', LONDON, 2.5), slow = rateOf('2', LONDON, 5);
+  assert.ok(Math.abs(fast / slow - 2) < 1e-6, `시간을 두 배로 줬는데 ${(fast/slow).toFixed(2)}배다`);
 });
 
 test('화면상 속도가 고르다 — 중심을 등속으로 두면 중간 지점으로 줌인한다', () => {
@@ -430,7 +460,7 @@ test('줌인이 시작될 때는 이미 도착지 위에 있다', () => {
       if (p(easeInOut(k / 1000)).zoom < lo + 0.5) { start = k / 1000; break; }
     }
     const gone = p(easeInOut(start)).d;
-    assert.ok(gone > 0.93,
+    assert.ok(gone > 0.88,
       `${dip}: 줌인이 시작될 때 거리의 ${(gone * 100).toFixed(1)}% 밖에 안 갔다`);
   }
 });

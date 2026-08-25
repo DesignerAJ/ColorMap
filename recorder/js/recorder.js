@@ -3234,18 +3234,25 @@ function initRecorder(map) {
      그래서 폭과 모양을 직접 만든다.
        폭  — 라벨의 뜻(1·2·3.5단계)에서 출발해 거리에 따라 자라되 **최대 2배**까지만.
              거리의 잣대는 '경로 전체가 들어오는 데 필요한 폭'(기본 곡선의 깊이)을 쓴다.
-       모양 — 바닥이 평평한 종. **좌우 대칭이 아니다** — 앞 25% 에 내려가 오래 머물다가
-             뒤 18% 에서 올라온다. 대칭으로 두면 절반을 지나자마자 줌인이 시작되는 것처럼
+       모양 — 바닥이 평평한 종. **좌우 대칭이 아니다** — 앞에서 내려가 오래 머물다가
+             도착 즈음에 올라온다. 대칭으로 두면 절반을 지나자마자 줌인이 시작되는 것처럼
              보인다. 도착 즈음에 들어와야 어디에 도착하는지가 눈에 남는다.
-             구간 시간에는 easeInOut 이 한 번 더 걸리므로, 뒤 18% 는 실제 재생 시간의
-             약 27% 다(끝으로 갈수록 t 가 천천히 자란다). */
+             **깊이 내려갈수록 오르내리는 데 오래 쓴다.** 폭을 고정해 두면 '많이'(서울→런던
+             6.35단계)가 줌 시간 2.5초에서 초당 18.9단계로 튀어 급격해 보인다.
+             깊이에 비례시키면 14.2단계/초까지 내려간다. 올라오는 구간은 상한을 더 낮게
+             잡는다 — 넓히면 줌인이 일찍 시작돼 도착지에서 멀어진다. 그래도 지배적인 항은
+             **깊이 ÷ 줌 시간**이라, 더 완만하게 하려면 '줌 시간(초)'를 늘려야 한다.
+             구간 시간에는 easeInOut 이 한 번 더 걸리므로 재생 시간 기준으로 봐야 한다. */
   const STRAIGHT_DIPS = { auto: 0.6, 1: 1, 2: 2, 3: 3.5 };
-  const DIP_DOWN = 0.25;                             // 내려가는 데 쓰는 구간
-  const DIP_UP   = 0.18;                             // 올라오는 데 쓰는 구간 (도착 직전)
+  const DIP_REF   = 2;                               // 이 깊이(단계)를 기준으로 폭을 잡는다
+  const DIP_DOWN  = [0.28, 0.46];                    // 내려가는 구간 [최소, 최대]
+  const DIP_UP    = [0.22, 0.32];                    // 올라오는 구간 (도착 직전)
 
-  function dipBell(t) {
-    const u = t <= DIP_DOWN ? t / DIP_DOWN
-            : t >= 1 - DIP_UP ? (1 - t) / DIP_UP
+  const dipSpan = ([lo, hi], depth) => Math.min(hi, Math.max(lo, lo * depth / DIP_REF));
+
+  function dipBell(t, down, up) {
+    const u = t <= down ? t / down
+            : t >= 1 - up ? (1 - t) / up
             : 1;
     return u * u * (3 - 2 * u);                      // smoothstep — 양 끝에서 기울기가 0
   }
@@ -3276,7 +3283,8 @@ function initRecorder(map) {
     }
     const depth = straightDepth($('fly-dip').value, from, to, w0);
     if (!(depth > 0)) return null;                   // '없음' — 선형 보간 그대로
-    const zAt = (t) => lerp(from.zoom, to.zoom, t) - depth * dipBell(t);
+    const down = dipSpan(DIP_DOWN, depth), up = dipSpan(DIP_UP, depth);
+    const zAt = (t) => lerp(from.zoom, to.zoom, t) - depth * dipBell(t, down, up);
 
     const N = 256;                                   // 사다리꼴로 적분해 진행도 표를 만든다
     const cum = new Float64Array(N + 1);
