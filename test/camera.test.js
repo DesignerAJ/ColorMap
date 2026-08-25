@@ -55,7 +55,9 @@ test('단계가 커질수록 곡선이 깊고, 전부 기본 곡선보다 깊다
   assert.ok(v[0] < v[1] && v[1] < v[2], `단계가 단조 증가하지 않는다: ${v.join(' < ')}`);
 });
 
-test('비행이 아니면 곡선을 건드리지 않는다', () => {
+test('직선 이동은 flyTo 옵션에 곡선을 얹지 않는다', () => {
+  /* easeTo 에는 curve 가 없다. 직선 이동의 줌아웃은 옵션이 아니라 프레임을 직접 몰아서
+     낸다(아래 '직선 이동에도 줌아웃') — 그래서 여기 값은 예전 그대로여야 한다. */
   const o = opts('3', 'ease');
   assert.equal(o.curve, undefined);
   assert.equal(o.minZoom, undefined);
@@ -113,7 +115,7 @@ test("'없음'은 정말 0 이다 (0.5 단계도 남으면 도로·지명이 빠
    출발·도착 줌이 같으면 줌이 처음부터 끝까지 고정이라, '이동 중 줌아웃'을 '많이'로
    놔도 이 모드에서만 아무 반응이 없었다. */
 const F = extract('recorder/js/recorder.js', ['lerp', 'lerpAngle', 'CLAMP_LAT', 'mercX', 'mercY',
-  'unmercX', 'unmercY', 'FLY_CURVES', 'flightPath', 'interpCam']);
+  'unmercX', 'unmercY', 'FLY_CURVES', 'flightPath', 'interpCam', 'flyCurveNow']);
 
 const SEOUL = { center: [127.0, 37.55], zoom: 8, bearing: 0, pitch: 0 };
 const BUSAN = { center: [129.08, 35.18], zoom: 8, bearing: 0, pitch: 0 };
@@ -305,4 +307,47 @@ test('녹화 흐름에서 원본 카메라를 쓰지 않는다', () => {
   });
   assert.deepEqual(bad.slice(0, 3), [],
     `원본 카메라를 쓰는 곳 ${bad.length}군데 — 그 지점에서 타일 칸이 달라져 튄다`);
+});
+
+
+/* ── 직선 이동에도 줌아웃 ──
+   '이동 방식: 직선' 이면 줌이 출발→도착으로 곧게 보간될 뿐이라, 양 끝 줌이 같으면
+   '이동 중 줌아웃'을 무엇으로 놔도 아무 일이 없었다. 이제 줌만 비행 곡선에서 가져오고
+   **중심 진행은 t 그대로** 둔다 — 진행도까지 곡선을 따르면 완급이 붙어 비행과 같아진다. */
+const curveFor = (dip, mode) => withUI(dip, () => F.flyCurveNow(mode));
+
+test('직선 이동에도 단계별 곡선이 잡힌다 (없음은 여전히 곡선 없음)', () => {
+  assert.equal(curveFor('0', 'ease'), null, "'없음' 인데 곡선을 세웠다");
+  assert.equal(curveFor('0', 'fly'), 0.01, '비행의 없음은 예전 그대로여야 한다');
+  assert.deepEqual(['1', '2', '3'].map((d) => curveFor(d, 'ease')), [2.0, 2.8, 4.0]);
+  assert.equal(curveFor('auto', 'ease'), 1.42);
+});
+
+test('직선 이동에서 줌은 내려가되 중심은 완급 없이 곧게 간다', () => {
+  const p = F.flightPath(SEOUL, BUSAN, 2.8, 1600);
+
+  // 줌은 곡선이 만든다 — 양 끝 줌이 같아도 중간에 내려간다
+  let lo = Infinity;
+  for (let k = 0; k <= 400; k++) lo = Math.min(lo, F.interpCam(SEOUL, BUSAN, k/400, p, null, true).zoom);
+  assert.ok(SEOUL.zoom - lo > 0.05, `직선인데 줌이 그대로다 (${(SEOUL.zoom - lo).toFixed(3)})`);
+
+  // 중심은 t 에 정비례한다 — 비행은 그렇지 않다
+  const at = (t, straight) => F.mercX(F.interpCam(SEOUL, BUSAN, t, p, null, straight).center[0]);
+  const x0 = F.mercX(SEOUL.center[0]), x1 = F.mercX(BUSAN.center[0]);
+  const frac = (t, straight) => (at(t, straight) - x0) / (x1 - x0);
+
+  for (const t of [0.25, 0.5, 0.75]) {
+    assert.ok(Math.abs(frac(t, true) - t) < 1e-9, `직선인데 중심에 완급이 붙었다 (t=${t} → ${frac(t, true)})`);
+  }
+  assert.ok(Math.abs(frac(0.25, false) - 0.25) > 1e-3,
+    '비행까지 등속이 됐다 — 두 모드가 같은 그림을 낸다');
+});
+
+test('직선 이동도 양 끝은 출발·도착과 정확히 맞물린다', () => {
+  const p = F.flightPath(SEOUL, PARIS, 4.0, 1600);
+  const a = F.interpCam(SEOUL, PARIS, 0, p, null, true);
+  const b = F.interpCam(SEOUL, PARIS, 1, p, null, true);
+  assert.ok(Math.abs(a.zoom - SEOUL.zoom) < 1e-6, `출발 줌이 어긋난다: ${a.zoom}`);
+  assert.ok(Math.abs(b.zoom - PARIS.zoom) < 1e-6, `도착 줌이 어긋난다: ${b.zoom}`);
+  assert.ok(Math.abs(b.center[0] - PARIS.center[0]) < 1e-6, `도착 중심이 어긋난다: ${b.center}`);
 });
