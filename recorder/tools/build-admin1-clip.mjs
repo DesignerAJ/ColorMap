@@ -21,7 +21,7 @@
 */
 import fs from 'node:fs';
 import { loadLand, clipRingToLand } from './lib/land.mjs';
-import { buildPolygons } from './lib/rings.mjs';
+import { nudgeTouchingHoles } from './lib/rings.mjs';
 import { setSource, readSources } from './lib/sources.mjs';
 
 const R = 'recorder/js/data/';
@@ -42,6 +42,11 @@ const MIN_LOSS = 0.01;
 const PREC = 5;
 const round = (v) => Number(v.toFixed(PREC));
 const ringsOf = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []);
+
+/* 자르고 나면 바깥 링의 방향이 뒤집힐 수 있다. 벡터 타일에는 '구멍' 표시가 없고 감김
+   방향이 유일한 기준이라, 뒤집힌 채 나가면 섬이 통째로 구멍이 된다. */
+const signed = (r) => { let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0]*r[i][1] - r[i][0]*r[j][1]; return a / 2; };
+const wind = (poly) => poly.map((r, i) => ((signed(r) > 0) === (i === 0) ? r : r.slice().reverse()));
 
 function areaOf(rings) {
   let t = 0;
@@ -81,29 +86,36 @@ for (const iso of list) {
   const file = OUT + iso + '.json';
   if (!fs.existsSync(file)) continue;
   const fc = JSON.parse(fs.readFileSync(file, 'utf8'));
-  let before = 0, after = 0, cutRegions = 0, unjoined = 0, refused = 0;
+  let before = 0, after = 0, cutRegions = 0, unjoined = 0, refused = 0, islands = 0;
 
   const feats = fc.features.map((f) => {
     const polys = ringsOf(f.geometry);
     const b = polys.reduce((s, p) => s + areaOf(p), 0);
     before += b;
-    const rings = [];
-    let changed = false, pending = 0;
-    for (const poly of polys) for (const r of poly) {
-      const cut = clipRingToLand(r, C);
+    let changed = false, pending = 0, unknown = 0;
+
+    /* **폴리곤 구조를 그대로 둔다.** 링을 전부 모아 buildPolygons 로 다시 나누면,
+       자른 본토 링이 만을 가로지르면서 그 안의 섬을 감싸고 — 중첩 깊이로 보면 그 섬이
+       구멍이 된다. 화면에서는 섬이 색칠 안 되는 것으로 보인다. 실제로 덴마크에서
+       폴리곤 83개, 이탈리아 61개가 그렇게 구멍이 됐다.
+       바깥 링만 자르고, 구멍(호수)은 건드리지 않는다 — 호수는 원래 물이라 자를 것이 없다. */
+    const outPolys = [];
+    for (const poly of polys) {
+      const cut = clipRingToLand(poly[0], C);
       pending += cut.unjoined;
+      if (cut.unknownIsland) unknown++;
       if (cut.changed) changed = true;
-      if (cut.ring) rings.push(cut.ring.map((p) => [round(p[0]), round(p[1])]));
+      const outer = (cut.ring || poly[0]).map((p) => [round(p[0]), round(p[1])]);
+      const holes = poly.slice(1).map((h) => h.map((p) => [round(p[0]), round(p[1])]));
+      outPolys.push(wind([outer, ...holes]));
     }
-    if (!changed || !rings.length) { after += b; return f; }
-    /* 자른 뒤에는 링의 안팎이 달라질 수 있다 — buildPolygons 가 중첩 깊이로 다시 나누고
-       감김 방향을 맞춘다. 이걸 건너뛰면 섬이 구멍이 되어 긴 다각형이 뻗는다. */
-    const rebuilt = buildPolygons(rings, round);
-    const a = rebuilt.reduce((s, p) => s + areaOf(p), 0);
+    if (!changed) { after += b; return f; }
+    const a = outPolys.reduce((s, p) => s + areaOf(p), 0);
     if (b > 0 && a < b * (1 - MAX_LOSS)) { refused++; after += b; return f; }
     if (b > 0 && a > b * (1 - MIN_LOSS)) { after += b; return f; }   // 잡음 — 원래 것을 둔다
-    after += a; cutRegions++; unjoined += pending;
-    return { type: 'Feature', properties: f.properties, geometry: { type: 'MultiPolygon', coordinates: rebuilt } };
+    after += a; cutRegions++; unjoined += pending; islands += unknown;
+    return { type: 'Feature', properties: f.properties,
+             geometry: { type: 'MultiPolygon', coordinates: outPolys.map((p) => nudgeTouchingHoles(p, round)) } };
   });
 
   if (!cutRegions) { clean++; continue; }
@@ -114,7 +126,7 @@ for (const iso of list) {
   touched++;
   const pct = before > 0 ? ((1 - after / before) * 100).toFixed(1) : '0.0';
   console.log(`  ${iso} ${(isoToKo[iso] || '').padEnd(10)} 구역 ${cutRegions}/${fc.features.length} 잘림 · 넓이 ${pct}% 줄어듦` +
-    (unjoined ? ` · 못 이은 구간 ${unjoined}` : '') + (refused ? ` · 너무 많이 줄어 되돌린 구역 ${refused}` : ''));
+    (unjoined ? ` · 못 이은 구간 ${unjoined}` : '') + (islands ? ` · NE 에 없는 섬 ${islands}개는 그대로` : '') + (refused ? ` · 너무 많이 줄어 되돌린 구역 ${refused}` : ''));
   if (unjoined) unjoinedAt.push(`${isoToKo[iso] || iso}(${unjoined})`);
 }
 

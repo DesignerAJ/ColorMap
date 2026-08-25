@@ -1,5 +1,5 @@
 const TOKEN_FUNCTION_URL = 'https://asia-northeast3-manage-dev-tokens.cloudfunctions.net/getMapboxToken';
-const PANEL_URL = './recorder/panel.html?v=3.4.1';   // index.html 의 ?v= 와 같은 값으로 유지할 것
+const PANEL_URL = './recorder/panel.html?v=3.4.2';   // index.html 의 ?v= 와 같은 값으로 유지할 것
 
 let cachedToken = null;
 let statusHideTimer = null;

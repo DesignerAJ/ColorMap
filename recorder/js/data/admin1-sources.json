@@ -44,8 +44,7 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10,
-  "clipped": true
+  "zoom": 10
  },
  "CHE": {
   "source": "OpenStreetMap contributors",
@@ -126,8 +125,7 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10,
-  "clipped": true
+  "zoom": 10
  },
  "BLR": {
   "source": "OpenStreetMap contributors",
@@ -187,8 +185,7 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10,
-  "clipped": true
+  "zoom": 10
  },
  "ARM": {
   "source": "OpenStreetMap contributors",
@@ -337,8 +334,7 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10,
-  "clipped": true
+  "zoom": 10
  },
  "ZAF": {
   "source": "OpenStreetMap contributors",

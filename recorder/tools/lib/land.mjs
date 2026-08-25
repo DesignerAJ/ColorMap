@@ -117,13 +117,19 @@ function coastSlice(from, to, C) {
   return cands.reduce((a, b) => (pathLen(a) <= pathLen(b) ? a : b));
 }
 
-/* 링을 육지로 자른다. 통째로 바다면 null 을 돌려준다(섬이 아니라 영해 조각인 경우). */
+/* 링을 육지로 자른다.
+
+   **꼭짓점이 전부 바다여도 버리면 안 된다.** Natural Earth 10m 에는 작은 섬이 많이 빠져
+   있어서, 실제 섬인데 '전부 바다'로 판정된다. 한 번 버렸다가 덴마크 690개 · 프랑스
+   1,599개 · 이탈리아 435개 폴리곤이 통째로 사라졌다 — 화면에서는 섬이 색칠 안 되는
+   것으로 보인다. 모르는 섬을 지우는 것보다 영해 조각이 남는 편이 낫다.
+   영해는 대개 본토 링에 붙어 있지 따로 떨어진 링이 아니다. */
 export function clipRingToLand(ring, C) {
   const open = ring.slice(0, -1), n = open.length;
   if (n < 3) return { ring, changed: false, unjoined: 0 };
   const land = open.map((p) => isLand(p, C));
   if (land.every(Boolean)) return { ring, changed: false, unjoined: 0 };
-  if (!land.some(Boolean)) return { ring: null, changed: true, unjoined: 0 };
+  if (!land.some(Boolean)) return { ring, changed: false, unjoined: 0, unknownIsland: true };
   const start = land.indexOf(true);
   const out = [];
   let unjoined = 0;
@@ -140,7 +146,7 @@ export function clipRingToLand(ring, C) {
     else { unjoined++; for (let t = 0; t < len; t++) out.push(open[(start + c + t) % n].slice()); }
     c += len - 1;
   }
-  if (out.length < 4) return { ring: null, changed: true, unjoined };
+  if (out.length < 4) return { ring, changed: false, unjoined };   // 다 깎이면 원래 것을 둔다
   out.push(out[0].slice());
   return { ring: out, changed: true, unjoined };
 }
