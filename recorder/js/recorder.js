@@ -2842,6 +2842,65 @@ function initRecorder(map) {
   });
   $('locpin-add').addEventListener('click', () => addLocPin(map.getCenter()));
 
+  /* ── '핀·녹화 경로 설정' 만 처음으로 되돌리기 ──
+
+     이 칸에서 만진 것만 되돌린다. 색칠(국가·구역별 색상)과 녹화 설정은 건드리지 않는다 —
+     색칠은 탭을 바꿔도 남기기로 한 것이고, 녹화 설정은 다른 칸이다.
+
+     **기본값을 코드에 다시 적지 않는다.** 그러면 panel.html 과 조용히 어긋난다.
+     부팅 직후 이 칸의 입력값을 그대로 적어 두고 그 값으로 되돌린 뒤, 각 컨트롤에
+     input·change 를 쏴서 **원래 핸들러가 화면을 맞추게 한다** — 색·두께 표시, 경로선
+     미리보기, 그린 선 안내처럼 값에 딸린 것이 많아 손으로 옮기면 빠뜨린다. */
+  const CAMERA_PANEL_DEFAULTS = new Map();
+
+  function snapshotCameraPanel() {
+    CAMERA_PANEL_DEFAULTS.clear();
+    for (const el of $('camera-settings').querySelectorAll('input[id], select[id]')) {
+      CAMERA_PANEL_DEFAULTS.set(el.id, el.type === 'checkbox' ? el.checked : el.value);
+    }
+  }
+
+  function resetCameraPanel() {
+    // 1) 지도에 얹힌 것부터 걷는다 — 마커를 안 지우면 값만 초기화되고 핀은 남는다
+    for (const which of ['start', 'end']) {
+      if (PIN[which].marker) { PIN[which].marker.remove(); PIN[which].marker = null; }
+      PIN[which].label = '';
+    }
+    startCam = null; endCam = null;
+    waypoints.forEach((w) => { if (w.marker) w.marker.remove(); });
+    waypoints.length = 0;
+    locPins.forEach((p) => { if (p.marker) p.marker.remove(); });
+    locPins.length = 0;
+    drawnStrokes.length = 0; drawCurrent = []; _drawMouse = null;
+    roadCoords = null;
+    setRouteData([], false);
+
+    // 2) 입력값을 부팅 직후 값으로 되돌리고, 핸들러가 나머지를 맞추게 한다
+    for (const [id, v] of CAMERA_PANEL_DEFAULTS) {
+      const el = $(id); if (!el) continue;
+      if (el.type === 'checkbox') el.checked = v; else el.value = v;
+      el.dispatchEvent(new Event('input',  { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 3) 값이 아닌 것들 — 지정됨 표시와 이동 버튼
+    for (const [tag, grab, src, go] of [
+      ['start-tag', 'set-start', 'pin-start', 'go-start'],
+      ['end-tag',   'set-end',   'pin-end',   'go-end'],
+    ]) {
+      $(tag).textContent = '';
+      $(grab).classList.remove('done');
+      $(src).classList.remove('done');
+      $(go).disabled = true;
+    }
+    renderWaypoints(); renderLocPins(); updateLocLabelSides();
+    refreshDrawPreview(); updateDrawNudge(); updatePinGhost();
+    setStatus('핀·경로 설정을 처음으로 되돌렸습니다.', 'done');
+  }
+
+  snapshotCameraPanel();
+  $('camera-reset').addEventListener('click', resetCameraPanel);
+
   // ── 라벨 폰트 ──
   // 팀 공용 기본 폰트: assets/fonts 의 파일을 받아서 자동 적용. 교체하려면 아래 url 만 바꾸면 됨.
   const EMBEDDED_LABEL_FONT = { name: '기본', url: '' };  // 라이선스가 확인된 팀 폰트만 연결할 것
@@ -4090,7 +4149,7 @@ function initRecorder(map) {
     el.hidden = !msg || msg === '대기 중';
   }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','label-on','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','label-on','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear','camera-reset']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){

@@ -73,6 +73,7 @@ export function boot({
     { pretendToBeVisual: true, runScripts: 'outside-only' });
   const { window } = dom;
   const calls = [];
+  const markers = new Set();       // 지도에 살아 있는 마커
   const warns = [];
 
   const ctx2d = new Proxy({}, { get: (t, k) =>
@@ -181,8 +182,12 @@ export function boot({
 
   window.mapboxgl = {
     accessToken: 'pk.test', maxParallelImageRequests: 16,
+    /* 지도에 얹힌 핀이 정말 걷혔는지 봐야 해서 살아 있는 마커를 센다 —
+       값만 초기화하고 마커를 안 지우면 화면에 핀이 그대로 남는다. */
     Marker: class {
-      setLngLat() { return this; } addTo() { return this; } on() {} remove() {}
+      constructor() { markers.add(this); }
+      setLngLat() { return this; } addTo() { return this; } on() {}
+      remove() { markers.delete(this); }
       getElement() { return window.document.createElement('div'); }
       getLngLat() { return { lng: 0, lat: 0 }; }
     },
@@ -246,7 +251,7 @@ export function boot({
 
   const doc = window.document;
   return {
-    window, doc, map, calls, warns, paint, layout, layers, sources, filters, run,
+    window, doc, map, calls, warns, paint, layout, layers, sources, filters, run, markers,
     $: (id) => doc.getElementById(id),
     click: (id) => doc.getElementById(id).dispatchEvent(new window.Event('click', { bubbles: true })),
     type: (id, v) => { const i = doc.getElementById(id); i.value = v; i.dispatchEvent(new window.Event('change', { bubbles: true })); },

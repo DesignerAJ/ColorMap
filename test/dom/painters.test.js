@@ -401,3 +401,73 @@ test('경로선 모양은 아크가 기본이고, 직선이 선택지에 있다'
   assert.equal(sel.value, 'arc', '기본값이 아크가 아니다');
   assert.deepEqual([...vals].sort(), ['arc', 'line', 'road'], '경로 모양 선택지가 바뀌었다');
 });
+
+/* ── '핀·녹화 경로 설정' 만 되돌리기 ──
+   이 칸에서 만진 것만 처음으로 돌린다. 색칠과 녹화 설정은 다른 칸이라 건드리지 않는다.
+   값만 되돌리고 지도에 얹힌 마커를 안 걷으면 핀이 그대로 남는다. */
+const click = (e, id) => e.$(id).dispatchEvent(new e.window.Event('click', { bubbles: true }));
+const setVal = (e, id, v) => {
+  const el = e.$(id);
+  if (el.type === 'checkbox') el.checked = v; else el.value = v;
+  el.dispatchEvent(new e.window.Event('input',  { bubbles: true }));
+  el.dispatchEvent(new e.window.Event('change', { bubbles: true }));
+};
+
+test('되돌리기: 이 칸의 값이 처음 값으로 돌아온다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  const before = ['route-shape', 'route-dash', 'route-color', 'route-width', 'locpin-text-size']
+    .map((id) => e.$(id).value);
+
+  setVal(e, 'route-on', true);
+  setVal(e, 'route-shape', 'road');
+  setVal(e, 'route-dash', 'dash');
+  setVal(e, 'route-color', '#ff0000');
+  setVal(e, 'route-width', '9');
+  setVal(e, 'locpin-text-size', '77');
+  setVal(e, 'label-start', '서울');
+
+  click(e, 'camera-reset');
+
+  assert.deepEqual(
+    ['route-shape', 'route-dash', 'route-color', 'route-width', 'locpin-text-size'].map((id) => e.$(id).value),
+    before, '값이 처음으로 안 돌아왔다');
+  assert.equal(e.$('route-on').checked, false);
+  assert.equal(e.$('label-start').value, '');
+  assert.equal(e.$('route-opts').style.display, 'none', '경로선 옵션이 펼쳐진 채로 남았다');
+  assert.equal(e.$('route-w-val').textContent, before[3], '두께 표시가 값과 어긋난다');
+});
+
+test('되돌리기: 지도에 얹힌 핀도 걷는다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  click(e, 'set-start');
+  click(e, 'set-end');
+  click(e, 'add-waypoint');
+  click(e, 'locpin-add');
+  assert.ok(e.markers.size >= 3, `핀이 안 찍혔다 (${e.markers.size}개)`);
+
+  click(e, 'camera-reset');
+  assert.equal(e.markers.size, 0, '값만 되돌리고 지도의 핀은 남겼다');
+  assert.equal(e.$('start-tag').textContent, '', "'지정됨' 표시가 남았다");
+  assert.equal(e.$('go-start').disabled, true, '출발로 버튼이 열린 채로 남았다');
+  assert.equal(e.$('waypoint-list').innerHTML, '', '경유지 목록이 남았다');
+  assert.equal(e.$('locpin-list').innerHTML, '', '위치 핀 목록이 남았다');
+});
+
+test('되돌리기: 색칠과 녹화 설정은 건드리지 않는다', async () => {
+  /* 다른 칸이다. 색칠은 탭을 바꿔도 남기기로 한 것이라 여기서 지우면 안 된다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  setVal(e, 'duration', '7');
+  setVal(e, 'fly-dip', '3');
+  setVal(e, 'country-color', '#123456');
+
+  click(e, 'camera-reset');
+
+  assert.equal(e.$('duration').value, '7', '녹화 설정까지 되돌렸다');
+  assert.equal(e.$('fly-dip').value, '3', '녹화 설정까지 되돌렸다');
+  assert.equal(e.$('country-color').value, '#123456', '색칠 설정까지 되돌렸다');
+});
