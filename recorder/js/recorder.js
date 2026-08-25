@@ -1789,6 +1789,23 @@ function initRecorder(map) {
     for (let i = 1; i < pts.length; i++) out.push([unwrapLng(out[i-1][0], pts[i][0]), pts[i][1]]);
     return out;
   }
+  /* 거점을 곧게 잇는다. 아크와 달리 제어점을 띄우지 않을 뿐 나머지는 같다 —
+     날짜변경선을 넘을 수 있으므로 감기지 않은 좌표계에서 잇고, 카메라가 따라갈 수 있게
+     조밀하게 찍는다(두 점만 두면 카메라가 그 사이를 어떻게 갈지 알 수 없다). */
+  function linePathCoords(segments = 48) {
+    const pts = unwrapSeq(routeWaypointCoords());
+    if (pts.length < 2) return pts;
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i-1], b = pts[i];
+      for (let k = 1; k <= segments; k++) {
+        const t = k / segments;
+        out.push([a[0] + (b[0]-a[0]) * t, a[1] + (b[1]-a[1]) * t]);
+      }
+    }
+    return out;
+  }
+
   // 거점들을 아크로 이어 하나의 조밀한 경로로
   function arcPathCoords() {
     const pts = unwrapSeq(routeWaypointCoords());
@@ -2046,6 +2063,7 @@ function initRecorder(map) {
   async function resolvePathCoords() {
     const shape = $('route-shape').value;
     if (shape === 'arc')  { roadCoords = null; return arcPathCoords(); }
+    if (shape === 'line') { roadCoords = null; return linePathCoords(); }
     // road
     try { if (!roadCoords) await fetchRoadRoute(); } catch (_) { roadCoords = null; }
     return roadCoords || arcPathCoords();   // 도로 실패 시 아크로 폴백
@@ -2055,9 +2073,9 @@ function initRecorder(map) {
     if (!$('route-on').checked) return;
     addRouteLayer(); applyRouteStyle();
     const shape = $('route-shape').value;
-    if (shape === 'arc') {
-      const coords = trimArcEnd(arcPathCoords());
-      if (coords.length >= 2) { setRouteFull(coords); setStatus('아크 경로 준비됨 ✓', 'done'); }
+    if (shape === 'arc' || shape === 'line') {
+      const coords = trimArcEnd(shape === 'arc' ? arcPathCoords() : linePathCoords());
+      if (coords.length >= 2) { setRouteFull(coords); setStatus(`${shape === 'arc' ? '아크' : '직선'} 경로 준비됨 ✓`, 'done'); }
       else { setStatus('출발·도착을 먼저 지정하세요.', ''); }
     } else {
       try {

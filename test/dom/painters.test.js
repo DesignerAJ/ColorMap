@@ -388,3 +388,16 @@ test('name_ko 로 글자를 찍는 스타일은 name 으로 바꿔 준다', asyn
   setLabels(e, false);
   assert.equal(tf(), '["to-string",["get","name_ko"]]', '끄면 원래 값으로 돌려놔야 한다');
 });
+
+/* ── 경로선 모양 ──
+   요청서 7-3·7-4. 아크가 기본이고 직선이 선택지에 있어야 한다.
+   뉴스 그래픽은 도로 경로보다 아크·직선을 훨씬 자주 쓴다. */
+test('경로선 모양은 아크가 기본이고, 직선이 선택지에 있다', async () => {
+  const e = boot();
+  await e.tick();
+  const sel = e.$('route-shape');
+  const vals = [...sel.options].map((o) => o.value);
+
+  assert.equal(sel.value, 'arc', '기본값이 아크가 아니다');
+  assert.deepEqual([...vals].sort(), ['arc', 'line', 'road'], '경로 모양 선택지가 바뀌었다');
+});
