@@ -116,7 +116,7 @@ test("'없음'은 정말 0 이다 (0.5 단계도 남으면 도로·지명이 빠
    놔도 이 모드에서만 아무 반응이 없었다. */
 const F = extract('recorder/js/recorder.js', ['lerp', 'lerpAngle', 'CLAMP_LAT', 'mercX', 'mercY',
   'unmercX', 'unmercY', 'FLY_CURVES', 'flightPath', 'interpCam', 'flyCurveNow',
-  'STRAIGHT_DIPS', 'DIP_EDGE', 'dipBell', 'straightDepth', 'dipPath']);
+  'STRAIGHT_DIPS', 'DIP_DOWN', 'DIP_UP', 'dipBell', 'straightDepth', 'dipPath']);
 
 const SEOUL = { center: [127.0, 37.55], zoom: 8, bearing: 0, pitch: 0 };
 const BUSAN = { center: [129.08, 35.18], zoom: 8, bearing: 0, pitch: 0 };
@@ -329,6 +329,7 @@ const lowOf = (p, from = SEOUL) => {
   return from.zoom - lo;
 };
 const LONDON = { center: [-0.13, 51.51], zoom: 8, bearing: 0, pitch: 0 };
+const easeInOut = (t) => (t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2);   // recorder.js 와 같은 것
 
 test("'없음'이면 직선 이동은 예전처럼 선형 보간", () => {
   assert.equal(easePath('0', BUSAN), null, "'없음' 인데 궤적을 세웠다");
@@ -372,14 +373,29 @@ test('바닥이 평평하다 — 절반을 지나자마자 줌인이 시작되�
   assert.ok(within / 1001 > 0.45, `바닥권 체류가 ${(within / 1001 * 100).toFixed(1)}% 뿐이다`);
 });
 
-test('종 모양은 양 끝에서 0 이고 가운데서 1 이다', () => {
+test('줌인은 도착 즈음에 들어온다 (좌우 대칭이 아니다)', () => {
+  /* 대칭으로 두면 절반을 지나자마자 줌인이 시작되는 것처럼 보인다. 도착 즈음에
+     들어와야 어디에 도착하는지가 눈에 남는다. 구간 시간에는 easeInOut 이 한 번 더
+     걸리므로 재생 시간 기준으로 봐야 한다. */
+  const p = easePath('1', LONDON);
+  const lo = 8 - lowOf(p);
+  let start = 1;
+  for (let k = 1000; k >= 0; k--) {                  // 마지막으로 바닥권에 있던 시점
+    if (p(easeInOut(k / 1000)).zoom < lo + 0.5) { start = k / 1000; break; }
+  }
+  assert.ok(start > 0.65, `줌인이 재생 ${(start * 100).toFixed(0)}% 지점에 벌써 시작된다`);
+  assert.ok(start < 0.92, `줌인이 재생 ${(start * 100).toFixed(0)}% 에야 시작돼 도착에서 튄다`);
+  assert.ok(F.DIP_UP < F.DIP_DOWN, '올라오는 구간이 내려가는 구간보다 짧아야 늦게 들어온다');
+});
+
+test('종 모양은 양 끝에서 0 이고 가운데는 1 로 평평하다', () => {
   assert.equal(F.dipBell(0), 0);
   assert.equal(F.dipBell(1), 0);
-  assert.equal(F.dipBell(0.5), 1);
-  assert.equal(F.dipBell(F.DIP_EDGE), 1, '가장자리에서 바로 바닥이어야 평평한 구간이 생긴다');
-  for (let k = 0; k <= 100; k++) {
-    const t = k / 100;
-    assert.ok(Math.abs(F.dipBell(t) - F.dipBell(1 - t)) < 1e-12, `좌우가 안 맞는다 (t=${t})`);
+  assert.equal(F.dipBell(F.DIP_DOWN), 1, '내려간 자리에서 바로 바닥이어야 평평한 구간이 생긴다');
+  assert.equal(F.dipBell(1 - F.DIP_UP), 1);
+  for (let k = 0; k <= 100; k++) {                   // 가운데는 통째로 바닥이다
+    const t = F.DIP_DOWN + (1 - F.DIP_UP - F.DIP_DOWN) * (k / 100);
+    assert.equal(F.dipBell(t), 1, `가운데가 평평하지 않다 (t=${t})`);
   }
 });
 
