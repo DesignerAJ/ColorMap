@@ -51,6 +51,10 @@ const STYLE_LAYERS = [
   { id: 'country-border-dot', type: 'line', 'source-layer': 'admin', layout: OFF },
   { id: 'dispute-boundaries', type: 'line', 'source-layer': 'admin' },
   { id: 'poi-label', type: 'symbol' },
+  /* 방송용 스타일은 라벨을 **일부러 꺼둔** 것이 많다 — 단색지형·단색·위성사진·지형도는
+     하나뿐인 심볼이 꺼져 있고 모노톤은 18개 중 15개가 꺼져 있다. '글자 켜기'가 그것까지
+     켜버리면 안 된다. */
+  { id: 'label-for-check', type: 'symbol', layout: OFF },
 ];
 
 export function boot({

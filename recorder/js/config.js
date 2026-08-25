@@ -18,14 +18,7 @@ const STYLES = {
   // 지명 참고용 — Mapbox 기본 제공 스타일. 지명·도로명이 전부 나와서 위치 확인에 씀.
   // 방송용이 아니라 "여기가 어디인지" 확인하는 용도. 이 스타일에서만 라벨을 한국어로 바꾼다.
   placenames:   'mapbox://styles/mapbox/streets-v12',                // 지명 참고용
-  /* 같은 스타일을 **라벨만 끄고** 쓴다. 지명·도로명을 우리가 따로 얹을 때 바탕으로 쓴다.
-     Studio 에 스타일을 새로 만들 필요가 없다 — 심볼 레이어를 숨기면 그만이다.
-     URL 이 위와 같으므로 둘 사이를 오갈 때 setStyle 을 부르면 안 된다 (아래 참고). */
-  bare:         'mapbox://styles/mapbox/streets-v12',                // 글자 없음
 };
-
-/* 라벨(심볼 레이어)을 끄고 쓸 스타일. */
-const NO_LABEL_STYLES = new Set(['bare']);
 
 // 라벨을 한국어로 표시할 스타일. 나머지(방송용)는 원본 디자인의 라벨을 그대로 둔다.
 const KO_LABEL_STYLES = new Set(['placenames']);

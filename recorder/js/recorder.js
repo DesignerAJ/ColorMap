@@ -117,23 +117,37 @@ function initRecorder(map) {
   }
   map.on('style.load', applyStyleLanguage);
 
-  /* ── 글자 없는 지도 ──
-     '글자 없음'은 '지명 참고용'과 **같은 스타일**을 쓰고 라벨만 끈 것이다. Studio 에
-     스타일을 새로 만들 필요가 없다 — 심볼 레이어를 숨기면 그만이다.
+  /* ── 지도 글자(지명·도로명) 켜고 끄기 ──
 
-     **우리가 만든 심볼 레이어는 건드리면 안 된다.** 경로선 화살표와 캡처용 핀이 심볼이라,
-     싸잡아 숨기면 화살표와 핀까지 사라진다. 그 둘은 이름으로 뺀다.
-     (스타일이 바뀌면 우리 레이어는 다시 붙으므로, style.load 시점에 없을 수도 있다.
-      그래서 '숨긴다'가 아니라 '스타일이 준 심볼만 숨긴다'로 판단한다) */
+     방송용 스타일은 라벨을 **일부러 꺼둔** 것이 많다 — 단색지형·단색·위성사진·지형도는
+     하나뿐인 심볼 레이어가 꺼져 있고, 모노톤은 18개 중 15개가 꺼져 있다.
+     그래서 '켜기'를 visibility:'visible' 로 밀어 넣으면 안 된다. 디자이너가 안 보이게 해둔
+     라벨까지 전부 튀어나온다 — 위성 스타일의 landColor·water 를 건드리면 안 되는 것과 같다.
+
+     스타일이 올라온 **직후에 원래 값을 적어 두고**, 끌 때는 숨기고 켤 때는 그 값으로
+     되돌린다. 그러면 원래 꺼져 있던 것은 계속 꺼진 채로 남는다.
+
+     **우리가 만든 심볼 레이어는 건드리지 않는다** — 경로선 화살표와 캡처용 핀이 심볼이라
+     싸잡아 숨기면 그 둘까지 사라진다. */
   const OUR_SYMBOL_LAYERS = new Set(['route-arrow-layer', 'capture-pins-layer']);
-  function applyLabelVisibility() {
-    const hide = typeof NO_LABEL_STYLES !== 'undefined' && NO_LABEL_STYLES.has($('style-select').value);
+  const _labelSaved = new Map();                     // 레이어 id → 스타일이 준 원래 visibility
+
+  function snapshotLabels() {
+    _labelSaved.clear();
     for (const l of map.getStyle()?.layers || []) {
       if (l.type !== 'symbol' || OUR_SYMBOL_LAYERS.has(l.id)) continue;
-      try { map.setLayoutProperty(l.id, 'visibility', hide ? 'none' : 'visible'); } catch (_) {}
+      _labelSaved.set(l.id, (l.layout && l.layout.visibility) || 'visible');
     }
   }
-  map.on('style.load', applyLabelVisibility);
+  function applyLabelVisibility() {
+    const on = $('label-on').checked;
+    for (const [id, original] of _labelSaved) {
+      try { map.setLayoutProperty(id, 'visibility', on ? original : 'none'); } catch (_) {}
+    }
+  }
+  map.on('style.load', () => { snapshotLabels(); applyLabelVisibility(); });
+  $('label-on').addEventListener('change', applyLabelVisibility);
+
 
   /* 투영은 스타일에도 저장돼 있고, setStyle 은 그 값을 그대로 따라간다.
      '모노톤'만 globe 로 저장돼 있어서, 그 스타일로 바꾸면 지도는 3D 로 튀는데
@@ -154,16 +168,9 @@ function initRecorder(map) {
   let styleReady = false;
   map.on('style.load', () => { styleReady = true; });
 
-  /* '지명 참고용' 과 '글자 없음' 은 URL 이 같다. 같은 URL 로 setStyle 을 부르면 mapbox 가
-     아무 일도 안 하고 style.load 도 안 와서, 라벨을 켜고 끄는 처리가 영영 안 돌아간다.
-     그래서 URL 이 그대로면 스타일을 갈지 않고 라벨만 토글한다. */
-  let _styleURL = STYLES.mono_terrain;
   $('style-select').addEventListener('change', (e) => {
-    const url = STYLES[e.target.value];
-    if (url === _styleURL) { applyLabelVisibility(); applyStyleLanguage(); return; }
-    _styleURL = url;
     styleReady = false;                     // 교체 시작 — style.load 가 올 때까지는 레이어를 못 붙인다
-    map.setStyle(url);
+    map.setStyle(STYLES[e.target.value]);
     applyStyleColors();
   });
   $('proj-select').addEventListener('change', (e) => map.setProjection(e.target.value));
@@ -3927,7 +3934,7 @@ function initRecorder(map) {
     el.hidden = !msg || msg === '대기 중';
   }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','label-on','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){
