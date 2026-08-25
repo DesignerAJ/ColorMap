@@ -67,35 +67,95 @@ node tools/serve.mjs          # 또는  python -m http.server 5500
 **Natural Earth 10m**(퍼블릭 도메인)으로 올립니다 — 구역당 중앙값 73 → 166점.
 출처: Natural Earth (naturalearthdata.com), 퍼블릭 도메인.
 
-유럽 주요국 21곳은 한 단계 더 올렸습니다 — `node recorder/tools/build-admin1-hires.mjs` 가
+주요국 66곳은 한 단계 더 올렸습니다 — `node recorder/tools/build-admin1-hires.mjs` 가
 **geoBoundaries**(gbOpen)에서 각국 공식 기관 데이터를 받아 갈아끼웁니다.
-프랑스 227 → 3,000점대, 독일 903 → 5,800점대가 됩니다. 원본은 너무 커서
-(프랑스 전송 26MB) **줌 10 에서 0.125px 를 넘지 않는 선**까지 줄입니다 — 그 줌까지는
-화면상 원본과 같습니다. `build-admin1-split.mjs` 뒤에 돌려야 합니다(같은 파일을 덮어씁니다).
+스웨덴 2,986 → 265,122점처럼 수십 배가 됩니다. 원본은 너무 커서(프랑스 전송 26MB)
+**정해둔 줌에서 0.125px 를 넘지 않는 선**까지 줄입니다 — 그 줌까지는 화면상 원본과 같습니다.
+나라당 전송 1.5MB 를 넘으면 기준 줌을 한 단계씩 낮춥니다.
+`build-admin1-split.mjs` 뒤에 돌려야 하고, **연달아 두 번 돌리면 안 됩니다**
+(자기 출력을 다시 읽습니다). 다시 만들려면 split 부터.
 
-라이선스가 나라마다 다릅니다. 출처는 다음과 같습니다.
+라이선스가 나라마다 다릅니다. 아래 30개국은 **ODbL**, 3개국은 **CC BY-SA** 라
+우리가 배포하는 그 데이터 파일도 같은 조건으로 공개해야 합니다 — 이 저장소가
+공개이고 OSM(ODbL) 데이터를 이미 쓰고 있으므로 조건은 충족됩니다.
 
-- 프랑스: Institut national de l'information géographique et forestière (IGN-F) (Etalab Open License 2.0)
-- 독일: Federal Agency for Cartography and Geodesy (Data license Germany - Attribution - Version 2.0)
-- 영국: Office for National Statistics Open Geography Portal (Open Government Licence v3.0)
-- 이탈리아: ISTAT, National Institute of Statistics (Creative Commons Attribution 3.0 License)
-- 스페인: El Instituto Nacional de Estadstica (National Institute of Statistics (INE) Data License)
-- 폴란드: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
-- 네덜란드: National Georegister (CC0 1.0 Universal (CC0 1.0) Public Domain Dedication)
-- 벨기에: Statistics Belgium (Open Data Commons Open Database License 1.0)
-- 스위스: Federal Office of Topography swisstopo (Federal Office of Topography swisstopo License)
-- 오스트리아: geoBoundaries, Federal Office for Metrology and Survey, Austria (Creative Commons Attribution-ShareAlike 2.0)
-- 스웨덴: geoBoundaries, Erik Frohne (Creative Commons Attribution 3.0 License)
-- 덴마크: geoBoundaries, Web Vectors Map (Creative Commons Attribution 4.0 International (CC BY 4.0))
-- 핀란드: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
-- 포르투갈: DG Territory (Open Data Commons Open Database License 1.0)
-- 그리스: EuroGeoGraphics, Regional IM Working Group - Europe (Creative Commons Attribution 4.0 International (CC BY 4.0))
-- 체코: Czech Office for Surveying (Creative Commons Attribution 4.0 International (CC BY 4.0))
-- 루마니아: World Bank (Creative Commons Attribution 4.0 International (CC BY 4.0))
-- 세르비아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
-- 크로아티아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
-- 슬로바키아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
-- 불가리아: geoBoundaries, Wikimedia (Public Domain)
+**ODbL 1.0 (동일조건 배포)** — 30개국
+
+  - 폴란드: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 벨기에: Statistics Belgium (Open Data Commons Open Database License 1.0)
+  - 핀란드: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 포르투갈: DG Territory (Open Data Commons Open Database License 1.0)
+  - 세르비아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 크로아티아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 슬로바키아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 리투아니아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 에스토니아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 슬로베니아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 아이슬란드: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 몬테네그로: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 키프로스: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 인도네시아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 태국: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 말레이시아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 싱가포르: Urban Redevelopment Authority, derived from ADM 3 (Open Data Commons Open Database License 1.0)
+  - 캄보디아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 라오스: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 몽골: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 카자흐스탄: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 우즈베키스탄: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 스리랑카: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 사우디아라비아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 아랍에미리트: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 이집트: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 쿠웨이트: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 알제리: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 콜롬비아: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+  - 쿠바: OpenStreetMap, Wambacher (Open Data Commons Open Database License 1.0)
+
+**CC BY-SA (동일조건 배포)** — 3개국
+
+  - 오스트리아: geoBoundaries, Federal Office for Metrology and Survey, Austria (Creative Commons Attribution-ShareAlike 2.0)
+  - 아제르바이잔: Wikipedia (Creative Commons Attribution-ShareAlike 3.0 Unported)
+  - 튀르키예: Open Street Map (Creative Commons Attribution-ShareAlike 2.0)
+
+**출처 표기** — 29개국
+
+  - 프랑스: Institut national de l'information géographique et forestière (IGN-F) (Etalab Open License 2.0)
+  - 독일: Federal Agency for Cartography and Geodesy (Data license Germany - Attribution - Version 2.0)
+  - 이탈리아: ISTAT, National Institute of Statistics (Creative Commons Attribution 3.0 License)
+  - 스페인: El Instituto Nacional de Estadstica (National Institute of Statistics (INE) Data License)
+  - 스위스: Federal Office of Topography swisstopo (Federal Office of Topography swisstopo License)
+  - 스웨덴: geoBoundaries, Erik Frohne (Creative Commons Attribution 3.0 License)
+  - 덴마크: geoBoundaries, Web Vectors Map (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 그리스: EuroGeoGraphics, Regional IM Working Group - Europe (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 체코: Czech Office for Surveying (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 루마니아: World Bank (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 벨라루스: geoBoundaries, CIESIN (Creative Commons Attribution 3.0 License)
+  - 몰도바: UNHCR, OCHA FISS (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+  - 북마케도니아: EuroGeographics, Regional IM Working Group - Europe (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 조지아: geoBoundaries, Wikimedia (Creative Commons Attribution 3.0 License)
+  - 아르메니아: geoBoundaries, Wikimedia (Creative Commons Attribution 2.5 Generic)
+  - 인도: DataMeet India community, Election Commission of India (Creative Commons Attribution 2.5 India (CC BY 2.5 IN))
+  - 미얀마: Myanmar Analytics Project, geoBoundaries (Creative Commons Attribution 4.0 (CC BY 4.0))
+  - 시리아: United Nations Cartographic Section (UNCS) and United Nations Office for the Coordination of Humanitarian Affairs (UNOCHA), OCHA ROSC (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+  - 카타르: geoBoundaries, Qatar Open Data Portal (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 요르단: geoBoundaries, Wikimedia (Creative Commons Attribution 2.5 Generic)
+  - 남아프리카 공화국: OCHA ROSEA, South African Municipal Demarcation Board (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+  - 나이지리아: GRID3 (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 에티오피아: Open Africa, Code for Ethiopia (Creative Commons Attribution 4.0 (CC BY 4.0))
+  - 멕시코: Instituto Nacional de Estadística y Geografía (INEGI) (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+  - 브라질: geoBoundaries, Wikimedia Commons (Creative Commons Attribution 2.5 Generic)
+  - 칠레: La Biblioteca del Congreso Nacional de Chile (BCN), OCHA ROLAC (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+  - 베네수엘라: OCHA Venezuela, Instituto Nacional de Estadística (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+  - 오스트레일리아: Australian Bureau of Statistics (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 파푸아뉴기니: Papua New Guinea National Statistics Office, OCHA ROAP (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+
+**퍼블릭 도메인** — 4개국
+
+  - 네덜란드: National Georegister (CC0 1.0 Universal (CC0 1.0) Public Domain Dedication)
+  - 불가리아: geoBoundaries, Wikimedia (Public Domain)
+  - 베트남: geoBoundaries, Wikipedia (Public Domain)
+  - 이스라엘: geoBoundaries, Wikimedia (Public Domain)
 
 북한 1급 행정구역(`admin1.json` 안의 '북한' 13개)은 OpenStreetMap 에서 받아
 `node recorder/tools/build-nk-admin1.mjs` 로 만듭니다. 원래 들어 있던 경계는 도당
