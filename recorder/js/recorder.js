@@ -2998,9 +2998,14 @@ function initRecorder(map) {
       const animateTo = async (cam) => {
         const t0 = performance.now();
         let raf = 0;
-        const grow = (legT) => {
-          const ct = (legDone + easeInOut(legT)) / totalLegs;   // 카메라 시간 진행
-          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, easeInOut(legT), totalLegs)));   // 경로선: 거리 동기화
+        /* prog 는 카메라가 구간 안에서 나아간 **거리 비율**이다. 카메라를 경로에 태울 때는
+           선도 그 잣대로 자라야 끝의 화살표가 카메라와 같은 자리에 있다. 시간으로 자라게
+           두면 서울→런던에서 비행은 2,598km, 직선은 722km 까지 벌어진다.
+           경로를 안 따라갈 때(도로 경로)는 예전처럼 시간으로 자란다. */
+        const grow = (legT, prog) => {
+          const e = easeInOut(legT);
+          const ct = (legDone + e) / totalLegs;   // 카메라 시간 진행
+          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, prog == null ? e : prog, totalLegs)));   // 경로선: 거리 동기화
           if (drawLinesOn) setDrawData(ct);   // 직접 그린 선: 카메라 시간 기준
         };
 
@@ -3011,7 +3016,7 @@ function initRecorder(map) {
             const step = () => {
               const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
               const t = easeInOut(legT);
-              grow(legT);
+              grow(legT, follow ? (flight ? flight(t).d : t) : null);
               map.jumpTo(legT >= 1 ? cam : interpCam(from, cam, t, flight, follow));
               if (legT < 1) requestAnimationFrame(step); else resolve();
             };
@@ -3631,8 +3636,10 @@ function initRecorder(map) {
         const { from, to, hold, path, follow } = legs[L];
         for (let f = 1; f <= legFrames; f++) {
           const t = easeInOut(f / legFrames);
+          // 카메라를 경로에 태웠으면 선도 카메라가 나아간 거리로 자란다 (위 grow 참고)
+          const prog = follow ? (path ? path(t).d : t) : t;
           if (showPins) map.getSource('capture-pins').setData(capPinFC(gFrame));   // 핀 사이즈 갱신
-          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(L, t, totalLegs)));
+          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(L, prog, totalLegs)));
           if (drawLinesOn) setDrawData((L + t) / totalLegs);
           await renderFrame(interpCam(from, to, t, path, follow));   // setData 반영된 프레임 캡처
           await encodeFrame(f === 1);

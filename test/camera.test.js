@@ -451,3 +451,21 @@ test('비행은 예전 그대로다 — 직선용 궤적이 끼어들지 않는�
     assert.ok(Math.abs(flyP(t).d - ref(t).d) < 1e-12, '비행의 완급이 사라졌다');
   }
 });
+
+/* ── 선과 카메라가 같은 잣대로 간다 ──
+   선은 거리 비율로 자라고 카메라는 곡선이 정한 진행도로 간다. 두 잣대가 다르면
+   선 끝의 화살표가 카메라 중앙에서 벗어난다 — 서울→런던에서 비행은 2,598km,
+   직선은 722km 까지 벌어졌다. 경로를 따라갈 때는 선도 카메라의 진행도로 자란다. */
+test('경로를 따라갈 때는 선 성장에 카메라의 진행도를 넘긴다', () => {
+  const src = readSrc('recorder/js/recorder.js');
+
+  // 실시간 녹화: grow 에 진행도를 넘기는가
+  assert.match(src, /grow\(legT, follow \? \(flight \? flight\(t\)\.d : t\) : null\)/,
+    '실시간 녹화가 선을 시간으로만 자라게 한다');
+
+  // 부드럽게 녹화: legFrac 에 넘기는 값이 카메라 진행도인가
+  assert.match(src, /const prog = follow \? \(path \? path\(t\)\.d : t\) : t;/,
+    '부드럽게 녹화가 선을 시간으로만 자라게 한다');
+  assert.match(src, /setRouteData\(partialPath\(pathCoords, legFrac\(L, prog, totalLegs\)\)\)/,
+    '계산해 놓고 안 쓴다');
+});
