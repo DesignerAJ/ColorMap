@@ -582,16 +582,15 @@ function initRecorder(map) {
      입력창을 누르기만 해도 17개 시도가 34줄로 펼쳐졌다 — '충북'과 '충청북도'가 나란히 떠서
      고르는 데 방해만 됐다.
 
-     그렇다고 정식명으로 못 찾으면 안 된다. datalist 는 사용자가 친 글자를 **value 와
-     label 양쪽**에서 찾아 거르므로, value 에 약칭을 두고 label 에 정식명을 적으면
-     '충청'을 쳐도 '충북' 줄이 남는다. 목록은 17줄, 검색은 양쪽 — 둘 다 된다.
-     (해석은 resolveByMeta 가 별칭까지 보므로 원래 양쪽 다 됐다) */
+     정식명을 label 로 붙여 두면 '충청'만 쳐도 '충북' 줄이 남지만(datalist 는 value 와 label
+     양쪽에서 거른다), 목록에 정식명이 회색으로 따라붙어 지저분하다. 그래서 안 붙인다.
+     정식명을 **끝까지 친 뒤** 고르는 건 그대로 된다 — resolveByMeta 가 별칭까지 보므로
+     '충청북도' 를 쳐도 해석된다. 중간까지만(‘충청’) 치면 후보가 안 뜬다는 것이 맞바꾼 값이다. */
   (function fillSidoList() {
     const dl = $('sido-list');
     SIDO_META.forEach(s => {
       const opt = document.createElement('option');
-      opt.value = s.s;                                 // 화면에 보이고, 골랐을 때 입력창에 들어가는 값
-      if (s.n !== s.s) opt.label = s.n;                // 정식명 — 검색에 걸리고 설명으로 보인다
+      opt.value = s.s;
       dl.appendChild(opt);
     });
   })();

@@ -219,22 +219,18 @@ test('지리 데이터 소스는 반올림 격자보다 큰 값으로 단순화�
 /* ── 시도 검색 목록 ──
    입력창을 누르기만 해도 후보가 펼쳐지는데, 예전에는 약칭과 정식명을 각각 option 으로
    넣어서 17개 시도가 34줄로 떴다 — '충북'과 '충청북도'가 나란히 놓여 고르는 데 방해였다.
-   목록은 약칭만, 검색은 양쪽 다 되어야 한다. datalist 는 value 와 label 양쪽에서 거르므로
-   value 에 약칭·label 에 정식명을 두면 둘 다 만족한다. */
-test('시도 목록은 약칭만 올리고 정식명은 label 로 붙인다', () => {
+   목록은 약칭만 보이는 게 맞다. 정식명은 label 로 붙이면 검색에 걸리지만 목록에 회색으로
+   따라붙어 지저분해서 안 붙인다 — 정식명을 끝까지 치면 resolveByMeta 가 해석한다. */
+test('시도 목록은 약칭 17줄뿐이고 군더더기가 없다', () => {
   const e = boot();
   const opts = [...e.doc.querySelectorAll('#sido-list option')];
-  assert.equal(opts.length, 17, `${opts.length}줄 — 시도는 17개다 (약칭·정식명을 둘 다 올리면 34줄이 된다)`);
+  assert.equal(opts.length, 17, `${opts.length}줄 — 시도는 17개다 (정식명을 따로 올리면 34줄이 된다)`);
 
   const values = opts.map((o) => o.value);
   assert.ok(values.includes('충북'), '약칭이 없다');
   assert.ok(!values.includes('충청북도'), '정식명이 별도 줄로 올라가 있다 — 중복이다');
+  assert.equal(new Set(values).size, 17, '같은 값이 두 번 올라가 있다');
 
-  // 정식명은 label 에 있어야 '충청' 을 쳐도 걸린다
-  const chungbuk = opts.find((o) => o.value === '충북');
-  assert.equal(chungbuk.label, '충청북도', '정식명이 label 에 없으면 정식명으로 검색이 안 된다');
-
-  // 약칭과 정식명이 같은 곳(세종 등)은 label 을 비워 둔다 — 같은 말을 두 번 보일 이유가 없다
-  const same = opts.filter((o) => o.label === o.value);
-  assert.deepEqual(same.map((o) => o.value), [], '약칭과 정식명이 같은데 label 을 붙였다');
+  const labelled = opts.filter((o) => o.label);
+  assert.deepEqual(labelled.map((o) => o.value), [], 'label 이 붙어 목록에 군더더기가 보인다');
 });
