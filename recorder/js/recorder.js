@@ -79,7 +79,7 @@ function initRecorder(map) {
     const straight = mode !== 'fly';
     if (follow || (flight && straight)) {
       const out = [];
-      for (let i = 1; i <= maxSamples; i++) out.push(interpCam(from, to, easeInOut(i / (maxSamples + 1)), flight, follow, straight));
+      for (let i = 1; i <= maxSamples; i++) out.push(interpCam(from, to, easeInOut(i / (maxSamples + 1)), flight, follow));
       return out;
     }
     map.jumpTo(from);
@@ -2986,10 +2986,9 @@ function initRecorder(map) {
          도로 경로는 여기 해당 없다 — 잘게 꺾여 따라가면 카메라가 흔들린다(요청서 7-2). */
       const followRoute = drawRoute && pathCoords.length >= 2 && $('route-shape').value !== 'road';
       const followW0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
-      const followCurve = flyCurveNow(mode);
       const straight = mode !== 'fly';
       /* 직선 이동에 줌아웃을 걸면 easeTo 로는 낼 수 없는 궤적이라 여기서도 프레임을 직접 몬다. */
-      const driveFrames = followRoute || (straight && !!followCurve);
+      const driveFrames = followRoute || (straight && $('fly-dip').value !== '0');
 
       // 정수 줌에 걸터앉으면 줌아웃이 없어도 타일이 깜빡인다 (위 detailSafeZoom 참고)
       const hasDip = $('fly-dip').value !== '0';
@@ -3013,7 +3012,7 @@ function initRecorder(map) {
               const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
               const t = easeInOut(legT);
               grow(legT);
-              map.jumpTo(legT >= 1 ? cam : interpCam(from, cam, t, flight, follow, straight));
+              map.jumpTo(legT >= 1 ? cam : interpCam(from, cam, t, flight, follow));
               if (legT < 1) requestAnimationFrame(step); else resolve();
             };
             requestAnimationFrame(step);
@@ -3051,7 +3050,7 @@ function initRecorder(map) {
       {
         const whole = followRoute ? pathFollower(camPath) : null;
         legPaths = camSeq.slice(0, -1).map((from, i) => {
-          const flight = followCurve ? flightPath(from, camSeq[i + 1], followCurve, followW0) : null;
+          const flight = dipPath(mode, from, camSeq[i + 1], followW0);
           if (!whole) return { path: flight, follow: null };
           const a = legFrac(i, 0, totalLegs), b = legFrac(i, 1, totalLegs);
           return { path: flight, follow: (k) => whole(a + (b - a) * k) };
@@ -3211,14 +3210,55 @@ function initRecorder(map) {
   const unmercY = (y) => (2 * Math.atan(Math.exp((0.5 - y) * 2 * Math.PI)) - Math.PI / 2) * 180 / Math.PI;
 
   /* 이 이동에 쓸 곡선 세기. 녹화(record)의 moveOpts 와 같은 값을 봐야 두 모드가 같은 그림을 낸다. */
-  /* 이동 방식이 '직선' 이어도 줌아웃은 걸 수 있다. 줌 오르내림은 비행 곡선이 만들고,
-     **중심 진행만** 곧게 간다(interpCam 의 straight). 곡선에서 진행도까지 가져오면
-     완급이 붙어 비행과 구별이 없어진다 — 두 모드가 다른 그림을 내야 한다.
-     '없음' 은 곡선이 없다: 비행은 0.01(사실상 직선), 직선은 아예 선형 보간이다. */
   function flyCurveNow(mode) {
+    if (mode !== 'fly') return null;                 // 직선은 비행 곡선을 쓰지 않는다 (아래 dipPath)
     const dip = $('fly-dip').value;
-    if (dip === '0') return mode === 'fly' ? 0.01 : null;
+    if (dip === '0') return 0.01;
     return FLY_CURVES[dip] || 1.42;                  // 'auto' = mapbox 기본
+  }
+
+  /* ── 직선 이동의 줌아웃 ──
+
+     비행 곡선을 그대로 빌려 쓰면 안 된다. 그 곡선은 **경로 전체가 화면에 들어오게**
+     만드는 것이라 거리가 멀수록 깊고 V 자로 뾰족해진다. 실측(서울→런던, 양 끝 z8):
+     '조금' 인데 5.87단계나 내려가 최저 z2.13 이고, 바닥권(최저+0.5)에 머무는 구간이
+     18.5% 뿐이라 절반을 지나자마자 줌인이 시작되는 것처럼 보인다 — 서울→부산은 69.2% 다.
+     비행은 카메라가 실제로 그 경로를 훑으니 그래야 맞지만, **직선은 중심이 등속으로 곧게
+     가므로 경로를 담을 이유가 없다.**
+
+     그래서 폭과 모양을 직접 만든다.
+       폭  — 라벨의 뜻(1·2·3.5단계)에서 출발해 거리에 따라 자라되 **최대 2배**까지만.
+             거리의 잣대는 '경로 전체가 들어오는 데 필요한 폭'(기본 곡선의 깊이)을 쓴다.
+       모양 — 바닥이 평평한 종. 앞뒤 35% 에 내려갔다 올라오고 가운데 30% 는 유지한다. */
+  const STRAIGHT_DIPS = { auto: 0.6, 1: 1, 2: 2, 3: 3.5 };
+  const DIP_EDGE = 0.35;
+
+  function dipBell(t) {
+    const u = t <= DIP_EDGE ? t / DIP_EDGE
+            : t >= 1 - DIP_EDGE ? (1 - t) / DIP_EDGE
+            : 1;
+    return u * u * (3 - 2 * u);                      // smoothstep — 양 끝에서 기울기가 0
+  }
+
+  function straightDepth(dip, from, to, w0) {
+    const base = STRAIGHT_DIPS[dip];
+    if (!base) return 0;
+    const fit = flightPath(from, to, 1.42, w0);      // 경로 전체가 들어오는 깊이 = 거리의 잣대
+    let low = from.zoom;
+    if (fit) for (let k = 0; k <= 32; k++) low = Math.min(low, fit(k / 32).zoom);
+    return base * (1 + Math.min(1, (from.zoom - low) / 6));
+  }
+
+  /* 이동 방식에 맞는 줌 궤적. interpCam 이 쓰는 모양(t → {zoom, d})은 비행 곡선과 같다.
+     직선은 d 를 t 그대로 돌려주므로 중심이 완급 없이 등속으로 간다. */
+  function dipPath(mode, from, to, w0) {
+    if (mode === 'fly') {
+      const curve = flyCurveNow(mode);
+      return curve ? flightPath(from, to, curve, w0) : null;
+    }
+    const depth = straightDepth($('fly-dip').value, from, to, w0);
+    if (!(depth > 0)) return null;                   // '없음' — 선형 보간 그대로
+    return (t) => ({ zoom: lerp(from.zoom, to.zoom, t) - depth * dipBell(t), d: t });
   }
 
   /* from → to 의 비행 곡선. t(0~1) 를 카메라로 바꾸는 함수를 돌려준다.
@@ -3301,12 +3341,10 @@ function initRecorder(map) {
   }
   const detailSafeCam = (c, dip) => ({ ...c, zoom: detailSafeZoom(c.zoom, dip) });
 
-  function interpCam(from, to, t, path, follow, straight) {
+  function interpCam(from, to, t, path, follow) {
     const p = path && path(t);
-    /* 중심은 투영 좌표에서 섞는다 (flyTo 와 같은 방식). 곡선이 있으면 진행도만 d 로 바꾼다.
-       straight 면 줌만 곡선에서 가져오고 진행도는 t 그대로다 — '직선' 이동에 줌아웃만
-       얹는 자리다. 진행도까지 곡선을 따르면 완급이 붙어 비행과 같아진다. */
-    const k = (p && !straight) ? p.d : t;
+    // 중심은 투영 좌표에서 섞는다 (flyTo 와 같은 방식). 곡선이 있으면 진행도만 d 로 바꾼다.
+    const k = p ? p.d : t;
     /* 따라갈 경로가 있으면 그 위의 점을 쓴다. 진행도(k)는 비행 곡선이 정한 그대로다 —
        그래야 줌아웃·줌인 타이밍과 중심 이동이 어긋나지 않는다. */
     const onPath = follow && follow(k);
@@ -3391,15 +3429,13 @@ function initRecorder(map) {
          내면 안 된다 — 예전에는 이 모드만 직선 보간이라 줌아웃 설정이 통째로 무시됐다.
          곡선 깊이는 화면 크기에 따라 달라지므로 실제 캔버스 긴 변을 넘긴다. */
       const smoothMode = $('mode').value;
-      const curve = flyCurveNow(smoothMode);
       const w0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
-      const smoothStraight = smoothMode !== 'fly';
       const hasDip = $('fly-dip').value !== '0';   // 위 detailSafeZoom 참고
       const seq = [startCam, ...stops.map((w) => w.cam), endCam].map((c) => detailSafeCam(c, hasDip));
       const legs = [];
       for (let i = 0; i < seq.length - 1; i++) legs.push({ from: seq[i], to: seq[i+1], hold: stops[i] ? stops[i].hold : 0 });
       legs.forEach((lg) => {
-        lg.path = curve ? flightPath(lg.from, lg.to, curve, w0) : null;
+        lg.path = dipPath(smoothMode, lg.from, lg.to, w0);
       });
       const totalLegs = legs.length;
       /* 아크를 그렸으면 카메라도 그 위를 지난다. 도로는 그러지 않는다 —
@@ -3433,7 +3469,7 @@ function initRecorder(map) {
         for (let li = 0; li < legs.length; li++) {
           const lg = legs[li];
           for (let s = 1; s <= N; s++) {
-            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1)), lg.path, lg.follow, smoothStraight));
+            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1)), lg.path, lg.follow));
             await tilesSettled();
             setStatus(`경로 타일 프리로드 중… (구간 ${li+1}/${legs.length} · ${s}/${N})`,'busy');
           }
@@ -3570,7 +3606,7 @@ function initRecorder(map) {
           if (showPins) map.getSource('capture-pins').setData(capPinFC(gFrame));   // 핀 사이즈 갱신
           if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(L, t, totalLegs)));
           if (drawLinesOn) setDrawData((L + t) / totalLegs);
-          await renderFrame(interpCam(from, to, t, path, follow, smoothStraight));   // setData 반영된 프레임 캡처
+          await renderFrame(interpCam(from, to, t, path, follow));   // setData 반영된 프레임 캡처
           await encodeFrame(f === 1);
           gFrame++;
           if (f % 3 === 0) setStatus(`부드럽게 · 구간 ${L+1}/${legs.length} (${Math.round(f/legFrames*100)}%)`,'busy');
