@@ -129,7 +129,13 @@ test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다
   const base = e.window.fetch;
   e.window.fetch = (u, o) => {
     const s = String(u);
-    if (s.includes('admin1.json')) return Promise.resolve({ ok: true, json: async () => geo('오사카부') });
+    /* 행정구역은 셋으로 나뉘어 온다 — 속성만 담은 meta, 자주 쓰는 8개국 core,
+       그리고 나라별 파일. 여기서는 core 에 들어 있는 나라 하나로 충분하다. */
+    if (s.includes('admin1-meta.json')) {
+      const m = geo('오사카부');
+      return Promise.resolve({ ok: true, json: async () => ({ ...m, index: {}, features: m.features.map((f) => ({ ...f, geometry: null })) }) });
+    }
+    if (s.includes('admin1-core.json')) return Promise.resolve({ ok: true, json: async () => geo('오사카부') });
     if (s.includes('sigungu.json')) return Promise.resolve({ ok: true, json: async () => geo('서울특별시 강남구') });
     if (s.includes('sido-hires')) return Promise.resolve({ ok: true, json: async () => geo('서울특별시') });
     return base(u, o);

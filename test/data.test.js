@@ -3,7 +3,9 @@
    생성기를 고칠 때마다 여기서 걸리게 해 둔다 — 눈으로는 안 보이는 문제들이다. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readJSON } from './helpers/extract.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { readJSON, ROOT } from './helpers/extract.js';
 
 const hires = readJSON('recorder/js/data/sido-hires.json');
 const border = readJSON('recorder/js/data/korea-border.json');
@@ -666,4 +668,69 @@ test('북한 경계에 없던 긴 직선이 끼어들지 않는다', () => {
     }
   }
   assert.deepEqual(bad.slice(0, 3), [], `10km 넘는 변 ${bad.length}개`);
+});
+
+/* ── 나라별로 쪼갠 행정구역 데이터 ──
+   전 세계 1급 행정구역을 한 파일(전송 10.7MB)로 받던 것을 셋으로 나눴다.
+   meta 는 속성만, core 는 자주 쓰는 8개국, 나머지는 나라별 파일이다.
+   나누는 과정에서 구역이 하나라도 새면 검색에는 뜨는데 색칠이 안 되는 상태가 된다 —
+   화면에서는 "왜 이 지역만 안 칠해지지" 로만 보이고 원인을 짚기 어렵다. */
+test('쪼갠 행정구역 데이터에서 새는 구역이 없다', () => {
+  const meta = readJSON('recorder/js/data/admin1-meta.json');
+  const core = readJSON('recorder/js/data/admin1-core.json');
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+
+  assert.equal(meta.features.length, admin1.features.length,
+    'meta 의 구역 수가 admin1.json 과 다르다');
+
+  // 지오메트리를 가진 구역을 전부 모은다 (core + 나라별 파일)
+  const have = new Set();
+  const add = (fc, where) => fc.features.forEach((f) => {
+    assert.ok(f.geometry, `${where}: 지오메트리가 없는 구역 ${f.properties.name}`);
+    assert.ok(!have.has(f.properties.name), `${where}: ${f.properties.name} 이 두 번 들어 있다`);
+    have.add(f.properties.name);
+  });
+  add(core, 'core');
+  for (const f of files) add(readJSON('recorder/js/data/admin1/' + f), f);
+
+  const missing = meta.features.map((f) => f.properties.name).filter((n) => !have.has(n));
+  assert.deepEqual(missing.slice(0, 5), [], `지오메트리가 없는 구역 ${missing.length}개`);
+
+  // 나라 → 파일 이름표가 실제 파일을 가리켜야 한다
+  const bad = Object.entries(meta.index).filter(([, code]) => !files.includes(code + '.json'));
+  assert.deepEqual(bad.slice(0, 5), [], '이름표가 가리키는 파일이 없다');
+
+  /* core 에 든 나라는 이름표에 없어야 한다 — 있으면 이미 가진 걸 또 받고,
+     같은 구역이 소스에 두 번 들어가 색칠이 겹친다. */
+  const coreCountries = new Set(core.features.map((f) => f.properties.country));
+  const overlap = [...coreCountries].filter((c) => meta.index[c]);
+  assert.deepEqual(overlap, [], 'core 국가가 이름표에도 있다 — 두 번 받는다');
+
+  /* meta 의 모든 나라는 core 이거나 이름표에 있어야 한다. 둘 다 아니면 받을 길이 없다. */
+  const reach = meta.features.map((f) => f.properties.country)
+    .filter((c) => !coreCountries.has(c) && !(c in meta.index));
+  assert.deepEqual([...new Set(reach)].slice(0, 5), [], '받을 길이 없는 나라가 있다');
+});
+
+test('쪼갠 뒤에도 정밀도가 떨어진 나라가 없다', () => {
+  /* Natural Earth 로 갈아끼우면서 나라별로 '더 나은 쪽'을 고른다. 방향을 잘못 잡으면
+     이미 정밀했던 나라(일본 5,284점·러시아 6,921점)가 조용히 거칠어진다. */
+  const core = readJSON('recorder/js/data/admin1-core.json');
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const pts = (f) => ringsOf(f.geometry).flat().reduce((s, r) => s + r.length, 0);
+  const agg = (feats, into) => feats.forEach((f) => {
+    const c = f.properties.country;
+    into.set(c, (into.get(c) || 0) + pts(f));
+  });
+  const before = new Map(), after = new Map();
+  agg(admin1.features, before);
+  agg(core.features, after);
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.json'))) {
+    agg(readJSON('recorder/js/data/admin1/' + f).features, after);
+  }
+  const worse = [...before.entries()]
+    .filter(([c, b]) => (after.get(c) || 0) < b * 0.95)
+    .map(([c, b]) => `${c || '(이름 없음)'} ${b} → ${after.get(c) || 0}`);
+  assert.deepEqual(worse.slice(0, 5), [], `정밀도가 떨어진 나라 ${worse.length}개`);
 });

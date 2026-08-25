@@ -61,6 +61,12 @@ node tools/serve.mjs          # 또는  python -m http.server 5500
 다시 만들려면 `MAPBOX_TOKEN=... node recorder/tools/build-korea-border.mjs`
 (`npm i @mapbox/vector-tile pbf` 필요).
 
+행정구역 데이터는 나라별로 나눠 받습니다. `node recorder/tools/build-admin1-split.mjs` 가
+`admin1.json` 을 `admin1-meta.json`(속성) · `admin1-core.json`(자주 쓰는 8개국) ·
+`admin1/<ISO3>.json`(나머지)으로 쪼갭니다. 이때 거친 나라 224곳의 경계를
+**Natural Earth 10m**(퍼블릭 도메인)으로 올립니다 — 구역당 중앙값 73 → 166점.
+출처: Natural Earth (naturalearthdata.com), 퍼블릭 도메인.
+
 북한 1급 행정구역(`admin1.json` 안의 '북한' 13개)은 OpenStreetMap 에서 받아
 `node recorder/tools/build-nk-admin1.mjs` 로 만듭니다. 원래 들어 있던 경계는 도당
 100~220점짜리라 도당 1.6만점인 우리 시도 옆에서 눈에 띄게 각졌고, 군사분계선 구간이

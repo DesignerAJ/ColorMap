@@ -449,6 +449,9 @@ function initRecorder(map) {
       const existing = entries.find(e => e.key === key);
       if (existing) { existing.color = color; existing.opacity = opacity; }   // 이미 있으면 색만 갱신
       else { entries.push({ key, color, opacity }); syncDefaultColor(); }     // 새로 추가하면 다음 기본색으로
+      /* 지오메트리가 아직 없는 나라면 지금 받는다. 칩과 색은 곧바로 반영되고,
+         도착하면 setData 가 색칠을 채운다 — 기다리게 하지 않는다. */
+      if (cfg.ensure) cfg.ensure(key);
       applyColors(); renderChips();
       const t = cfg.target(key);                                              // 추가한 곳으로 이동
       if (t && t.center) map.flyTo({ center: t.center, zoom: t.zoom, duration: 1200, essential: true });
@@ -612,6 +615,69 @@ function initRecorder(map) {
     return meta;
   }
 
+  /* ── 행정구역 데이터: 나라별 온디맨드 ──
+
+     예전에는 전 세계 1급 행정구역이 admin1.json 한 파일(전송 10.7MB)에 들어 있었고,
+     '행정구역' 탭을 처음 열 때 통째로 받았다. 한 번에 칠하는 건 보통 한두 나라인데
+     235개국을 다 받고 기다린 것이다.
+
+     이제 셋으로 나눠 받는다 (`build-admin1-split.mjs` 가 만든다):
+       admin1-meta.json    전체 4,592 구역의 **속성만** (전송 0.11MB)
+                           검색·자동완성·카메라 목표가 여기서 나온다. 지오메트리는 없다.
+       admin1-core.json    자주 쓰는 8개국 (전송 7.2MB) — 고를 때 기다리지 않게 미리 받는다
+       admin1/<ISO3>.json  나머지 227개국 (중앙값 14KB) — 그 나라를 고를 때 받는다
+     첫 로드가 10.7MB → 7.3MB 로 줄고, 나머지는 고를 때 한 번씩 온다.
+
+     **받은 건 버리지 않는다.** 227개국을 전부 받아도 합쳐 6.7MB 라, 지금까지 늘 받던
+     10.7MB 보다 적다. LRU 로 쫓아낼 이유가 없다 — 쫓아내면 이미 칠한 구역이 사라지는
+     문제를 따로 막아야 하는데, 그 복잡함을 살 이유가 없다. */
+  const ADMIN1_DIR = './recorder/js/data/admin1/';
+  let ADMIN1_INDEX = null;                          // 나라 이름 → 파일 코드 (코어 8개국은 없다)
+  const admin1Have = new Set();                     // 이미 받은 나라
+  const admin1Coming = new Map();                   // 받는 중인 나라 → Promise
+
+  /* 이 구역을 그리려면 어느 나라 파일이 필요한가. 코어에 있거나 이미 받았으면 곧장 끝난다. */
+  function ensureAdmin1(name) {
+    const country = admin1Meta[name] && admin1Meta[name].q;
+    const code = country && ADMIN1_INDEX && ADMIN1_INDEX[country];
+    if (!code || admin1Have.has(country) || !ADMIN1_GEO) return Promise.resolve();
+    if (admin1Coming.has(country)) return admin1Coming.get(country);
+    const p = fetchGeo(dataURL(ADMIN1_DIR + code + '.json'))
+      .then((geo) => {
+        admin1Have.add(country);
+        ADMIN1_GEO.features.push(...geo.features);
+        // 소스가 이미 깔려 있으면 갈아끼운다. 아직이면 addLayer 가 ADMIN1_GEO 를 그대로 쓴다.
+        try { map.getSource('admin1-boundaries')?.setData(ADMIN1_GEO); } catch (_) {}
+      })
+      .catch(() => {})                              // 못 받으면 색칠만 안 보인다 — 칩과 검색은 그대로 동작
+      .finally(() => admin1Coming.delete(country));
+    admin1Coming.set(country, p);
+    return p;
+  }
+
+  /* 녹화·내보내기 전에 부른다. 받는 중인 나라가 있으면 기다린다 —
+     칠하자마자 녹화를 누르면 그 나라 지오메트리가 아직 안 왔을 수 있다. */
+  const admin1Settled = () => Promise.all([...admin1Coming.values()]);
+
+  /* 메타 먼저, 코어는 그 다음. 메타만 오면 검색·목록이 곧바로 열린다. */
+  function loadAdmin1(setText) {
+    setText('행정구역 목록을 불러오는 중…');
+    return fetchGeo(dataURL('./recorder/js/data/admin1-meta.json'))
+      .then((meta) => {
+        ADMIN1_INDEX = meta.index || {};
+        Object.assign(admin1Meta, tuneKoreanAdmin1(buildMeta(meta, 'country', 6)));
+        setText('경계 데이터를 불러오는 중…');
+        return fetchGeo(dataURL('./recorder/js/data/admin1-core.json'));
+      })
+      .then((core) => { ADMIN1_GEO = core; setText(''); return true; })
+      .catch((e) => {
+        setText(e.message === '404'
+          ? '경계 데이터 파일이 없습니다 (js/data/admin1-meta.json). node recorder/tools/build-admin1-split.mjs 로 만드세요.'
+          : '경계 데이터를 불러오지 못했습니다: ' + e.message);
+        return false;
+      });
+  }
+
   const PAINTERS = [
     createRegionPainter({
       id: 'country', source: 'country-boundaries', layer: 'country-color-fill', prop: 'iso_3166_1_alpha_3',
@@ -637,8 +703,8 @@ function initRecorder(map) {
       label:     (n) => (admin1Meta[n] && admin1Meta[n].s) || n,
       qualifier: (n) => (admin1Meta[n] && admin1Meta[n].q) || '',
       target:    (n) => admin1Meta[n] && { center: admin1Meta[n].c, zoom: admin1Meta[n].z },
-      load: lazyGeoLoad(dataURL('./recorder/js/data/admin1.json'), 'js/data/admin1.json',
-        (geo) => { ADMIN1_GEO = geo; Object.assign(admin1Meta, tuneKoreanAdmin1(buildMeta(geo, 'country', 6))); }),
+      ensure:    ensureAdmin1,                      // 그 나라 지오메트리를 그때 받는다
+      load:      loadAdmin1,
     }),
     createRegionPainter({
       id: 'sido', source: 'sido-boundaries', layer: 'sido-color-fill', prop: 'name',
@@ -2719,6 +2785,9 @@ function initRecorder(map) {
     if (busy) { console.log('[REC] busy 상태라 중단'); return; }
     if (!startCam || !endCam) { console.log('[REC] 출발/도착 미지정 → 중단'); setStatus('출발·도착 지점을 모두 지정하세요.',''); return; }
     busy = true; setUI(false);
+    /* 행정구역 지오메트리는 나라별로 늦게 온다. 칠하자마자 녹화를 누르면 아직 안 왔을 수
+       있고, 그러면 그 나라만 색이 빠진 영상이 나온다. 여기서 한 번 기다린다 (보통 즉시). */
+    await admin1Settled();
     const durSec  = Math.max(0.5, parseFloat($('duration').value) || 4);
     const leadSec = Math.max(0,   parseFloat($('lead').value)     || 0);
     const tailSec = Math.max(0,   parseFloat($('tail').value)     || 0);
@@ -3024,6 +3093,9 @@ function initRecorder(map) {
       return;
     }
     busy = true; setUI(false);
+    /* 행정구역 지오메트리는 나라별로 늦게 온다. 칠하자마자 녹화를 누르면 아직 안 왔을 수
+       있고, 그러면 그 나라만 색이 빠진 영상이 나온다. 여기서 한 번 기다린다 (보통 즉시). */
+    await admin1Settled();
     const durSec  = Math.max(0.5, parseFloat($('duration').value) || 4);
     const leadSec = Math.max(0,   parseFloat($('lead').value)     || 0);
     const tailSec = Math.max(0,   parseFloat($('tail').value)     || 0);
@@ -3445,6 +3517,7 @@ function initRecorder(map) {
   $('capture-psd').addEventListener('click', async () => {
     if (busy) return;
     busy = true; setUI(false);
+    await admin1Settled();                          // 아직 안 온 행정구역이 있으면 기다린다
     const showPath = $('pin-in-video').checked, showLoc = $('locpin-in-video').checked;
     const showPins = showPath || showLoc;
     const pinEls = [PIN.start.marker, PIN.end.marker, ...waypoints.map(w => w.marker), ...locPins.map(p => p.marker)]
