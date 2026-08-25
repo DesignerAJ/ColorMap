@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { readJSON, ROOT } from './helpers/extract.js';
+import { readJSON, readSrc, ROOT } from './helpers/extract.js';
 
 const hires = readJSON('recorder/js/data/sido-hires.json');
 const border = readJSON('recorder/js/data/korea-border.json');
@@ -729,8 +729,39 @@ test('쪼갠 뒤에도 정밀도가 떨어진 나라가 없다', () => {
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.json'))) {
     agg(readJSON('recorder/js/data/admin1/' + f).features, after);
   }
+  /* 줄어들어도 되는 경우가 하나 있다 — 나라당 전송 1.5MB 상한에 걸려 기준 줌을 낮춘 때다.
+     그건 의도한 맞바꿈이고, 그 줌까지는 화면상 원본과 같다. 어느 나라가 왜 낮아졌는지는
+     admin1-sources.json 에 적혀 있으므로 그걸 근거로 본다 — '줄었으니 통과'가 아니라
+     '줄어든 이유가 적혀 있으니 통과'다. 이유 없이 줄면 여전히 걸린다(ISO 코드를 잘못 써서
+     엉뚱한 나라를 받은 적이 있는데, 그런 게 조용히 지나가면 안 된다). */
+  const sources = readJSON('recorder/js/data/admin1-sources.json');
+  const isoOf = {};
+  for (const [iso, v] of Object.entries(sources)) isoOf[iso] = v;
+  const koToIso = {};
+  {
+    const src = readSrc('recorder/js/data/regions.js');
+    const CO = new Function(src.match(/const COUNTRIES = \[[\s\S]*?\];/)[0] + '\nreturn COUNTRIES;')();
+    CO.forEach((c) => { koToIso[c.n.replace(/\s*#[^#]*#\s*/g, '').trim()] = c.i; });
+  }
   const worse = [...before.entries()]
     .filter(([c, b]) => (after.get(c) || 0) < b * 0.95)
+    .filter(([c]) => { const s = isoOf[koToIso[c]]; return !(s && s.zoom && s.zoom < 10); })
     .map(([c, b]) => `${c || '(이름 없음)'} ${b} → ${after.get(c) || 0}`);
-  assert.deepEqual(worse.slice(0, 5), [], `정밀도가 떨어진 나라 ${worse.length}개`);
+  assert.deepEqual(worse.slice(0, 5), [], `이유 없이 정밀도가 떨어진 나라 ${worse.length}개`);
+});
+
+test('출처 대장이 나라별 파일과 맞는다', () => {
+  /* 어느 나라 경계가 어디서 왔는지는 실행 순서에만 암묵적으로 남아 있었다 —
+     split 이 Natural Earth 를 깔고, hires 가 geoBoundaries 로 덮고, osm 이 다시 덮는다.
+     그래서 README 의 출처 목록이 실제와 어긋나기 쉬웠다. 방송 이미지에 따라붙는
+     표기 의무라 어긋나면 곤란하다. admin1-sources.json 이 그 대장이다. */
+  const sources = readJSON('recorder/js/data/admin1-sources.json');
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+    .map((f) => f.replace('.json', ''));
+  const missing = files.filter((iso) => !sources[iso]);
+  assert.deepEqual(missing.slice(0, 5), [], `대장에 없는 나라 ${missing.length}개`);
+  for (const [iso, v] of Object.entries(sources)) {
+    assert.ok(v.source && v.license, `${iso}: 출처나 라이선스가 비었다`);
+  }
 });

@@ -1,0 +1,1198 @@
+{
+ "FRA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 9
+ },
+ "DEU": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "ITA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "ESP": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "POL": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "NLD": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "BEL": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "CHE": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "AUT": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "SWE": {
+  "source": "geoBoundaries, Erik Frohne",
+  "license": "Creative Commons Attribution 3.0 License",
+  "via": "geoBoundaries",
+  "zoom": 10
+ },
+ "DNK": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "FIN": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "PRT": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "GRC": {
+  "source": "EuroGeoGraphics, Regional IM Working Group - Europe (Creative Commons Attribution 4.0 International",
+  "license": "CC BY 4.0)",
+  "via": "geoBoundaries",
+  "zoom": 10
+ },
+ "CZE": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "ROU": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "SRB": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "HRV": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "SVK": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "BGR": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "BLR": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "LTU": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "EST": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "SVN": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "ISL": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "MDA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "MKD": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "MNE": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "CYP": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "GEO": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "ARM": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "AZE": {
+  "source": "Wikipedia",
+  "license": "Creative Commons Attribution-ShareAlike 3.0 Unported",
+  "via": "geoBoundaries",
+  "zoom": 10
+ },
+ "IND": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 8
+ },
+ "IDN": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 8
+ },
+ "VNM": {
+  "source": "geoBoundaries, Wikipedia",
+  "license": "Public Domain",
+  "via": "geoBoundaries",
+  "zoom": 10
+ },
+ "THA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "MYS": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "SGP": {
+  "source": "Urban Redevelopment Authority, derived from ADM 3",
+  "license": "Open Data Commons Open Database License 1.0",
+  "via": "geoBoundaries",
+  "zoom": 10
+ },
+ "MMR": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "KHM": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "LAO": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "MNG": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "KAZ": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "UZB": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "LKA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "TUR": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "ISR": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "SAU": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "ARE": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "EGY": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "SYR": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "QAT": {
+  "source": "geoBoundaries, Qatar Open Data Portal (Creative Commons Attribution 4.0 International",
+  "license": "CC BY 4.0)",
+  "via": "geoBoundaries",
+  "zoom": 10
+ },
+ "KWT": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "JOR": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "ZAF": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "NGA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "ETH": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "DZA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "MEX": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 9
+ },
+ "BRA": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 9
+ },
+ "CHL": {
+  "source": "La Biblioteca del Congreso Nacional de Chile (BCN), OCHA ROLAC (Creative Commons Attribution 3.0 Intergovernmental Organisations",
+  "license": "CC BY 3.0 IGO)",
+  "via": "geoBoundaries",
+  "zoom": 7
+ },
+ "COL": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "VEN": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM",
+  "zoom": 10
+ },
+ "CUB": {
+  "source": "OpenStreetMap contributors",
+  "license": "ODbL 1.0",
+  "via": "OSM(geoBoundaries 경유)",
+  "zoom": 10
+ },
+ "AUS": {
+  "source": "Australian Bureau of Statistics (Creative Commons Attribution 4.0 International",
+  "license": "CC BY 4.0)",
+  "via": "geoBoundaries",
+  "zoom": 8
+ },
+ "PNG": {
+  "source": "Papua New Guinea National Statistics Office, OCHA ROAP (Creative Commons Attribution 3.0 Intergovernmental Organisations",
+  "license": "CC BY 3.0 IGO)",
+  "via": "geoBoundaries",
+  "zoom": 10
+ },
+ "ABW": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "AFG": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "AGO": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "AIA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ALB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "AND": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ARG": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ASM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ATA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ATF": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ATG": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BDI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BEN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BFA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BGD": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BHR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BHS": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BIH": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BLM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BLZ": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BMU": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BOL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BRB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BRN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BTN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "BWA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CAF": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CAN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CIV": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CMR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "COD": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "COG": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "COK": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "COM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CPV": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CRI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CUW": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "CYM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "DJI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "DMA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "DOM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ECU": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ERI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "FJI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "FLK": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "FRO": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "FSM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GAB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GBR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GGY": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GHA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GIB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GIN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GMB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GNB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GNQ": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GRD": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GRL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GTM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GUM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "GUY": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "HKG": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "HMD": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "HND": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "HTI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "HUN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "IMN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "IOT": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "IRL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "IRN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "IRQ": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "JAM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "JEY": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "KEN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "KGZ": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "KIR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "KNA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LBN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LBR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LBY": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LCA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LIE": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LSO": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LUX": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "LVA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MAC": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MAF": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MAR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MCO": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MDG": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MDV": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MHL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MLI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MLT": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MNP": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MOZ": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MRT": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MSR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MUS": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "MWI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NAM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NCL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NER": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NFK": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NIC": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NIU": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NOR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NPL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NRU": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "NZL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "OMN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PAK": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PAN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PCN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PER": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PHL": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PLW": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PRI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PRY": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "PYF": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "RWA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SDN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SEN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SGS": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SHN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SLB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SLE": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SLV": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SMR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SOM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SPM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "STP": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SUR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SWZ": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SXM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "SYC": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TCA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TCD": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TGO": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TJK": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TKM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TLS": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TON": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TTO": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TUN": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TUV": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "TZA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "UGA": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "UMI": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "URY": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "VAT": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "VCT": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "VGB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "VIR": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "VUT": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "WLF": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "WSM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "YEM": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ZMB": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ },
+ "ZWE": {
+  "source": "Natural Earth",
+  "license": "Public Domain",
+  "via": "NE"
+ }
+}

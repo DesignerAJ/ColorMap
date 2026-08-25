@@ -182,7 +182,11 @@ files.forEach((f) => { index[f.ko] = f.code; });
 const metaSize = write(R + 'admin1-meta.json', { type: 'FeatureCollection', index, features: meta });
 const coreSize = write(R + 'admin1-core.json', { type: 'FeatureCollection', features: coreFeats });
 let restSize = 0;
-for (const f of files) restSize += write(OUT_DIR + f.code + '.json', { type: 'FeatureCollection', features: f.feats });
+for (const f of files) {
+  restSize += write(OUT_DIR + f.code + '.json', { type: 'FeatureCollection', features: f.feats });
+  /* split 은 맨 처음 단계다 — 여기서 깐 것을 hires·osm 이 덮어쓰며 대장을 갱신한다. */
+  setSource(f.code, { source: 'Natural Earth', license: 'Public Domain', via: 'NE' });
+}
 
 console.log(`\n  그대로 둔 나라 ${KEEP.length}개 · 구역 ${coreFeats.length}`);
 console.log(`  Natural Earth 로 올린 나라 ${upgradedCountries}개 · 구역 ${upgraded}`);

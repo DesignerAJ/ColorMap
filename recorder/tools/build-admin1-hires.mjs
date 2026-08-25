@@ -34,6 +34,7 @@
 */
 import fs from 'node:fs';
 import zlib from 'node:zlib';
+import { setSource } from './lib/sources.mjs';
 
 const R = 'recorder/js/data/';
 const OUT = R + 'admin1/';
@@ -240,6 +241,8 @@ for (const iso of TARGETS) {
     skipped++; continue;
   }
   fs.writeFileSync(file, body);
+  setSource(iso, { source: pick.o.boundarySourceFullName || pick.o.boundarySource || '?',
+                   license: pick.o.boundaryLicense || '?', via: 'geoBoundaries', zoom: usedZoom });
   const kb = (fs.statSync(file).size / 1024).toFixed(0);
   console.log(`  ${iso} ${(isoToKo[iso] || '').padEnd(8)} ${pick.lvl} · ${matched}/${ours.features.length}구역 · ` +
               `${Math.round(before)} → ${Math.round(after)}점 · ${kb}KB · z${usedZoom}` + (matched < ours.features.length ? ` · ${ours.features.length - matched}개는 그대로` : ''));
