@@ -97,6 +97,7 @@ node recorder/tools/build-admin1-firstlevel.mjs   # 프랑스·이탈리아·스
 node recorder/tools/build-admin1-split.mjs        # 나라별로 쪼개고 Natural Earth 로 올린다
 node recorder/tools/build-admin1-hires.mjs        # 각국 공식기관 데이터로 올린다
 node recorder/tools/build-admin1-osm.mjs          # 개별 표기가 필요한 나라를 OSM 으로 바꾼다
+node recorder/tools/build-admin1-clip.mjs         # 영해를 육지로 잘라낸다 (Overpass 를 다시 안 부른다)
 ```
 
 `build-admin1-hires.mjs` 와 `-osm.mjs` 는 **연달아 두 번 돌리면 안 됩니다** — 덮어쓴 자기

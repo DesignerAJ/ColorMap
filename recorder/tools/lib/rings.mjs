@@ -118,9 +118,15 @@ export function nudgeTouchingHoles(poly, round = (v) => v) {
     if (!out.slice(1).some((h, i) => h.some((p) => seen[i].has(key(p))))) return out;
     const step = 2e-5 * Math.pow(2, attempt);             // 약 2m 에서 시작해 배로 키운다
     out = [out[0], ...out.slice(1).map((hole, hi) => {
-      const xs = hole.map((p) => p[0]), ys = hole.map((p) => p[1]);
-      const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-      const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+      /* 스프레드(Math.min(...xs))로 최소·최대를 구하면 링이 크면 스택이 터진다 —
+         육지로 자른 뒤 십만 점짜리 링이 들어오면서 실제로 터졌다. 훑어서 구한다. */
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of hole) {
+        if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+        if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+      }
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      const span = Math.max(x1 - x0, y1 - y0);
       const d = Math.min(step, span / 8);
       let hit = false;
       const moved = hole.map((p) => {

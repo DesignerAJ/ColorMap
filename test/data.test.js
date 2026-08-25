@@ -745,7 +745,13 @@ test('쪼갠 뒤에도 정밀도가 떨어진 나라가 없다', () => {
   }
   const worse = [...before.entries()]
     .filter(([c, b]) => (after.get(c) || 0) < b * 0.95)
-    .filter(([c]) => { const s = isoOf[koToIso[c]]; return !(s && s.zoom && s.zoom < 10); })
+    .filter(([c]) => {
+      const s = isoOf[koToIso[c]];
+      if (!s) return true;
+      if (s.zoom && s.zoom < 10) return false;          // 전송 상한에 걸려 줌을 낮춘 나라
+      if (s.clipped) return false;                      // 영해를 잘라낸 나라 — 줄어드는 게 정상이다
+      return true;
+    })
     .map(([c, b]) => `${c || '(이름 없음)'} ${b} → ${after.get(c) || 0}`);
   assert.deepEqual(worse.slice(0, 5), [], `이유 없이 정밀도가 떨어진 나라 ${worse.length}개`);
 });

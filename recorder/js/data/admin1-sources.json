@@ -3,25 +3,29 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 9
+  "zoom": 9,
+  "clipped": true
  },
  "DEU": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "ITA": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "ESP": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "POL": {
   "source": "OpenStreetMap contributors",
@@ -33,13 +37,15 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "BEL": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "CHE": {
   "source": "OpenStreetMap contributors",
@@ -63,7 +69,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "FIN": {
   "source": "OpenStreetMap contributors",
@@ -75,7 +82,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "GRC": {
   "source": "EuroGeoGraphics, Regional IM Working Group - Europe (Creative Commons Attribution 4.0 International",
@@ -93,7 +101,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "SRB": {
   "source": "OpenStreetMap contributors",
@@ -117,7 +126,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "BLR": {
   "source": "OpenStreetMap contributors",
@@ -177,7 +187,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "ARM": {
   "source": "OpenStreetMap contributors",
@@ -195,7 +206,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 8
+  "zoom": 8,
+  "clipped": true
  },
  "IDN": {
   "source": "OpenStreetMap contributors",
@@ -231,7 +243,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "KHM": {
   "source": "OpenStreetMap contributors",
@@ -273,13 +286,15 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "ISR": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "SAU": {
   "source": "OpenStreetMap contributors",
@@ -303,7 +318,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "QAT": {
   "source": "geoBoundaries, Qatar Open Data Portal (Creative Commons Attribution 4.0 International",
@@ -321,19 +337,22 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "ZAF": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "NGA": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "ETH": {
   "source": "OpenStreetMap contributors",
@@ -351,13 +370,15 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 9
+  "zoom": 9,
+  "clipped": true
  },
  "BRA": {
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 9
+  "zoom": 9,
+  "clipped": true
  },
  "CHL": {
   "source": "La Biblioteca del Congreso Nacional de Chile (BCN), OCHA ROLAC (Creative Commons Attribution 3.0 Intergovernmental Organisations",
@@ -375,7 +396,8 @@
   "source": "OpenStreetMap contributors",
   "license": "ODbL 1.0",
   "via": "OSM",
-  "zoom": 10
+  "zoom": 10,
+  "clipped": true
  },
  "CUB": {
   "source": "OpenStreetMap contributors",
