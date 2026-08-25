@@ -2913,7 +2913,7 @@ function initRecorder(map) {
         });
       }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
-      for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
+      for (let k = 0; k < stops.length; k++) { map.jumpTo(camSeq[k + 1]); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
 
       // 1-b) 이동 '중간' 타일까지 프리로드.
       //      여기까지는 출발·경유지·도착만 데워져 있어서, 그 사이를 지나갈 때는
@@ -3007,7 +3007,7 @@ function initRecorder(map) {
       // 4) 경유지 순회: 줌 → 홀드
       for (let k = 0; k < stops.length; k++) {
         setStatus(`녹화 중 · 경유지 ${k+1} 줌…`,'busy');
-        await animateTo(stops[k].cam);
+        await animateTo(camSeq[k + 1]);   // 원본 cam 을 쓰면 떼어낸 줌이 무시돼 홀드에서 타일이 바뀐다
         if (showPins) triggerCapPin('wp'+k, performance.now());   // 도착 시 경유지 핀 팝업
         setStatus(`녹화 중 · 경유지 ${k+1} 홀드 ${stops[k].hold}s…`,'busy');
         await sleep(stops[k].hold*1000);
@@ -3261,7 +3261,7 @@ function initRecorder(map) {
       setRasterFade(0);                              // 녹화 중 타일 크로스페이드 끔 → 페이드 도중 캡처로 생기는 줄무늬/밴딩 방지
       setLabelFade(0);                               // 라벨 페이드인 끔 → 프레임에 글자가 흐리게 잡히는 것 방지
       setStatus('타일 프리로드 중…','busy');
-      map.jumpTo(endCam); await tilesSettled();
+      map.jumpTo(seq[seq.length - 1]); await tilesSettled();   // 떼어낸 줌으로 데워야 실제로 쓸 타일이 온다
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
       const smoothCamPath = pathCoords.slice();     // 카메라는 자르기 전 경로를 따른다
       if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
@@ -3273,7 +3273,7 @@ function initRecorder(map) {
         });
       }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
-      for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
+      for (let k = 0; k < stops.length; k++) { map.jumpTo(seq[k + 1]); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
       // 경로 타일 미리 데우기 — 각 구간 중간 시점을 훑어 타일 캐시에 올림 → 인코딩 중 프레임별 타일 로딩 대기 ↓ (화질 손실 없음)
       // 프레임 카메라와 **같은 곡선**으로 표본을 뽑아야 궤적이 정확히 일치한다 (안 그러면 엉뚱한 타일을 데운다).
       setStatus('경로 타일 프리로드 중…','busy');
@@ -3434,7 +3434,7 @@ function initRecorder(map) {
       }
 
       // 뒤 정지
-      await holdEnc(endCam, tailFrames, '부드럽게 · 뒤 정지');
+      await holdEnc(seq[seq.length - 1], tailFrames, '부드럽게 · 뒤 정지');   // 원본 endCam 을 쓰면 마지막 이동 프레임과 타일 칸이 달라져 튄다
 
       // 마무리: 인코더 비우고 mp4 완성
       setStatus('인코딩 마무리 중…','busy');

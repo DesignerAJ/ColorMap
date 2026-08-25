@@ -12,7 +12,7 @@
         1 번만으로는 '자동보다 큰가'를 알 수 없다. 뒤집혔던 게 바로 그 부분이다. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extract } from './helpers/extract.js';
+import { extract, readSrc } from './helpers/extract.js';
 
 const R = extract('recorder/js/recorder.js', ['FLY_CURVES', 'moveOpts']);
 
@@ -278,4 +278,31 @@ test('카메라의 나머지 값은 그대로 둔다', () => {
   assert.deepEqual(out.center, cam.center);
   assert.equal(out.bearing, 30);
   assert.equal(out.pitch, 45);
+});
+
+/* ── 녹화가 쓰는 카메라는 전부 떼어낸 것이어야 한다 ──
+   출발·도착·경유지 중 하나라도 원본 카메라를 그대로 쓰면 그 지점에서 타일 칸이 달라져
+   튄다. 실제로 뒤 정지(holdEnc)와 경유지 두 곳이 원본을 쓰고 있어서 도착에서만 튀었다.
+   이 검사는 소스를 읽어 '녹화 흐름 안에서 원본 카메라를 쓰는 곳'을 찾는다 —
+   함수를 꺼내 돌리는 것으로는 이런 배선 실수를 못 잡는다. */
+test('녹화 흐름에서 원본 카메라를 쓰지 않는다', () => {
+  const src = readSrc('recorder/js/recorder.js');
+  /* 카메라를 실제로 쓰는 자리들. '출발/도착으로 이동' 버튼(go-start·go-end)은
+     녹화와 무관하므로 제외한다. */
+  const bad = [];
+  const lines = src.split('\n');
+  lines.forEach((line, i) => {
+    if (/go-(start|end)/.test(line)) return;                  // 이동 버튼 — 원본이 맞다
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;              // 주석
+    for (const call of ['animateTo(', 'holdEnc(', 'renderFrame(', 'jumpTo(']) {
+      const at = line.indexOf(call);
+      if (at < 0) continue;
+      const arg = line.slice(at + call.length, at + call.length + 20);
+      if (/^(startCam|endCam|stops\[[^\]]+\]\.cam|w\.cam)/.test(arg)) {
+        bad.push(`${i + 1}: ${line.trim().slice(0, 80)}`);
+      }
+    }
+  });
+  assert.deepEqual(bad.slice(0, 3), [],
+    `원본 카메라를 쓰는 곳 ${bad.length}군데 — 그 지점에서 타일 칸이 달라져 튄다`);
 });
