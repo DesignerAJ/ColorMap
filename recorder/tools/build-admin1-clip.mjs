@@ -22,6 +22,7 @@
 import fs from 'node:fs';
 import { loadLand, clipRingToLand } from './lib/land.mjs';
 import { nudgeTouchingHoles } from './lib/rings.mjs';
+import { cleanRing } from './lib/clean.mjs';
 import { setSource, readSources } from './lib/sources.mjs';
 
 const R = 'recorder/js/data/';
@@ -70,10 +71,14 @@ console.log(`육지 링 ${C.lines.length} · 변 ${C.segs.length.toLocaleString(
 
 const sources = JSON.parse(fs.readFileSync(R + 'admin1-sources.json', 'utf8'));
 const only = process.argv.slice(2).filter((a) => /^[A-Z]{3}$/.test(a));
-/* OSM 에서 직접 받은 나라만 본다. geoBoundaries·Natural Earth 는 이미 육지만이라
-   손댈 이유가 없고, 괜히 자르면 해안선이 두 데이터 사이에서 미세하게 갈린다. */
+/* **자르기와 복구는 대상이 다르다.**
+   자르는 건 OSM 에서 직접 받은 나라뿐이다 — geoBoundaries·Natural Earth 는 이미 육지만이라
+   손댈 이유가 없고, 괜히 자르면 해안선이 두 데이터 사이에서 미세하게 갈린다.
+   복구(핀치·자기교차)는 **전부** 한다. 출처를 가릴 이유가 없고, 실제로 Natural Earth 쪽에도
+   800곳 가까이 있었다 — 그 나라들도 같은 이유로 일부가 안 그려지고 있었다. */
+const CLIP = new Set(Object.entries(sources).filter(([, v]) => v.via === 'OSM').map(([k]) => k));
 const list = only.length ? only
-  : Object.entries(sources).filter(([, v]) => v.via === 'OSM').map(([k]) => k).sort();
+  : fs.readdirSync(OUT).filter((f) => f.endsWith('.json')).map((f) => f.replace('.json', '')).sort();
 
 const regions = fs.readFileSync(R + 'regions.js', 'utf8');
 const COUNTRIES = new Function(regions.match(/const COUNTRIES = \[[\s\S]*?\];/)[0] + '\nreturn COUNTRIES;')();
@@ -86,51 +91,83 @@ for (const iso of list) {
   const file = OUT + iso + '.json';
   if (!fs.existsSync(file)) continue;
   const fc = JSON.parse(fs.readFileSync(file, 'utf8'));
-  let before = 0, after = 0, cutRegions = 0, unjoined = 0, refused = 0, islands = 0;
+  let before = 0, after = 0, cutRegions = 0, fixedRegions = 0, unjoined = 0, refused = 0, islands = 0;
 
+  /* **자르기와 복구는 따로 판정한다.**
+     자르기는 넓이 문턱으로 걸러야 한다(NE 해안선이 거칠어 잡음이 섞인다). 복구는 그럴 게
+     없다 — 핀치와 자기교차는 언제나 없애는 게 맞다. 한동안 둘을 같이 묶었더니,
+     자를 것이 없는 나라(스위스·오스트리아·체코)의 복구가 넓이 문턱에 걸려 버려졌다. */
   const feats = fc.features.map((f) => {
     const polys = ringsOf(f.geometry);
     const b = polys.reduce((s, p) => s + areaOf(p), 0);
     before += b;
-    let changed = false, pending = 0, unknown = 0;
+    let didClip = false, didClean = false, pending = 0, unknown = 0;
+    const clipped = [], cleaned = [];
 
-    /* **폴리곤 구조를 그대로 둔다.** 링을 전부 모아 buildPolygons 로 다시 나누면,
-       자른 본토 링이 만을 가로지르면서 그 안의 섬을 감싸고 — 중첩 깊이로 보면 그 섬이
-       구멍이 된다. 화면에서는 섬이 색칠 안 되는 것으로 보인다. 실제로 덴마크에서
-       폴리곤 83개, 이탈리아 61개가 그렇게 구멍이 됐다.
-       바깥 링만 자르고, 구멍(호수)은 건드리지 않는다 — 호수는 원래 물이라 자를 것이 없다. */
-    const outPolys = [];
     for (const poly of polys) {
-      const cut = clipRingToLand(poly[0], C);
+      /* 구멍도 복구한다. 자르는 건 바깥 링만이지만(호수는 원래 물이라 자를 게 없다)
+         핀치·자기교차는 구멍에도 생긴다 — 칠레 아이센의 교차 4곳이 전부 구멍에 있었다.
+         복구하면 구멍 하나가 여럿으로 나뉠 수 있으므로 나온 것을 전부 구멍으로 쓴다. */
+      const holes = poly.slice(1).flatMap((h) => {
+        const rounded = h.map((p) => [round(p[0]), round(p[1])]);
+        const fixed = cleanRing(rounded);
+        if (fixed.length !== 1 || fixed[0].length !== rounded.length) didClean = true;
+        return fixed.length ? fixed : [rounded];
+      });
+      const orig = poly[0].map((p) => [round(p[0]), round(p[1])]);
+      const cut = CLIP.has(iso) ? clipRingToLand(poly[0], C) : { ring: null, changed: false, unjoined: 0 };
       pending += cut.unjoined;
       if (cut.unknownIsland) unknown++;
-      if (cut.changed) changed = true;
-      const outer = (cut.ring || poly[0]).map((p) => [round(p[0]), round(p[1])]);
-      const holes = poly.slice(1).map((h) => h.map((p) => [round(p[0]), round(p[1])]));
-      outPolys.push(wind([outer, ...holes]));
+      if (cut.changed) didClip = true;
+
+      /* 링 하나가 여럿으로 나뉠 수 있다. 구멍은 가장 큰 조각에 붙인다
+         (구멍이 있는 폴리곤이 여럿으로 나뉜 적은 없다). */
+      const emit = (ring, into) => {
+        const pieces = cleanRing(ring);
+        if (!pieces.length) { into.push(wind([ring, ...holes])); return false; }
+        if (pieces.length !== 1 || pieces[0].length !== ring.length) {
+          const big = pieces.reduce((x, y) => (Math.abs(areaOf([x])) >= Math.abs(areaOf([y])) ? x : y));
+          for (const p of pieces) into.push(wind(p === big ? [p, ...holes] : [p]));
+          return true;
+        }
+        into.push(wind([pieces[0], ...holes]));
+        return false;
+      };
+      if (emit(orig, cleaned)) didClean = true;
+      emit(cut.changed ? (cut.ring || poly[0]).map((p) => [round(p[0]), round(p[1])]) : orig, clipped);
     }
-    if (!changed) { after += b; return f; }
-    const a = outPolys.reduce((s, p) => s + areaOf(p), 0);
-    if (b > 0 && a < b * (1 - MAX_LOSS)) { refused++; after += b; return f; }
-    if (b > 0 && a > b * (1 - MIN_LOSS)) { after += b; return f; }   // 잡음 — 원래 것을 둔다
-    after += a; cutRegions++; unjoined += pending; islands += unknown;
-    return { type: 'Feature', properties: f.properties,
-             geometry: { type: 'MultiPolygon', coordinates: outPolys.map((p) => nudgeTouchingHoles(p, round)) } };
+
+    const finish = (out) => ({ type: 'Feature', properties: f.properties,
+      geometry: { type: 'MultiPolygon', coordinates: out.map((p) => nudgeTouchingHoles(p, round)) } });
+
+    if (didClip) {
+      const a = clipped.reduce((s, p) => s + areaOf(p), 0);
+      const tooMuch = b > 0 && a < b * (1 - MAX_LOSS);
+      const tooLittle = b > 0 && a > b * (1 - MIN_LOSS);
+      if (tooMuch) refused++;
+      if (!tooMuch && !tooLittle) {
+        after += a; cutRegions++; unjoined += pending; islands += unknown;
+        return finish(clipped);
+      }
+    }
+    after += b;
+    if (didClean) { fixedRegions++; return finish(cleaned); }   // 자르진 않아도 고칠 건 고친다
+    return f;
   });
 
-  if (!cutRegions) { clean++; continue; }
+  if (!cutRegions && !fixedRegions) { clean++; continue; }   // 자를 것도 고칠 것도 없었다
   fs.writeFileSync(file, JSON.stringify({ type: 'FeatureCollection', features: feats }));
   /* 잘라내면 꼭짓점이 줄어든다. 정밀도 검사가 '이유 없이 줄었다'로 오해하지 않게 적어 둔다. */
   const prev = readSources()[iso] || {};
   setSource(iso, { ...prev, clipped: true });
   touched++;
   const pct = before > 0 ? ((1 - after / before) * 100).toFixed(1) : '0.0';
-  console.log(`  ${iso} ${(isoToKo[iso] || '').padEnd(10)} 구역 ${cutRegions}/${fc.features.length} 잘림 · 넓이 ${pct}% 줄어듦` +
+  console.log(`  ${iso} ${(isoToKo[iso] || '').padEnd(10)} 구역 ${cutRegions}/${fc.features.length} 잘림 · 넓이 ${pct}% 줄어듦` + (fixedRegions ? ` · 핀치·교차 고친 구역 ${fixedRegions}` : '') +
     (unjoined ? ` · 못 이은 구간 ${unjoined}` : '') + (islands ? ` · NE 에 없는 섬 ${islands}개는 그대로` : '') + (refused ? ` · 너무 많이 줄어 되돌린 구역 ${refused}` : ''));
   if (unjoined) unjoinedAt.push(`${isoToKo[iso] || iso}(${unjoined})`);
 }
 
-console.log(`\n자른 나라 ${touched} · 이미 육지만이던 나라 ${clean}`);
+console.log(`\n손댄 나라 ${touched} · 손댈 것 없던 나라 ${clean}`);
 if (unjoinedAt.length) {
   console.log(`\n해안선으로 이을 수 없어 원래 경계를 남긴 곳이 있는 나라: ${unjoinedAt.join(', ')}`);
   console.log('강 하구가 대부분이다. 바다가 조금 남을 수 있으니 눈으로 확인할 것.');

@@ -28,6 +28,7 @@
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { buildPolygons } from './lib/rings.mjs';
+import { cleanRing } from './lib/clean.mjs';
 import { setSource } from './lib/sources.mjs';
 
 const R = 'recorder/js/data/';
@@ -239,7 +240,10 @@ out geom;`);
   } catch (e) { console.log(`  ${iso}  건너뜀 — 내려받기 실패: ${e.message}`); skipped++; continue; }
 
   const built = (data.elements || []).map((e) => {
-    const rings = stitch(e.members || []);
+    /* 조립한 링에는 핀치와 자기교차가 남는다 — OSM 조각을 이어 붙이는 과정에서 생긴다.
+       그대로 두면 mapbox-gl 의 삼각분할이 깨져 일부가 아예 안 그려진다(브라질 마라냥에서
+       섬이 색칠 안 되는 것으로 보였다). 시도 데이터에서 85곳을 고친 처리를 그대로 쓴다. */
+    const rings = stitch(e.members || []).flatMap(cleanRing);
     if (!rings.length) return null;
     return { type: 'Feature', properties: { name: (e.tags && (e.tags['name:ko'] || e.tags.name)) || '?' },
              geometry: { type: 'MultiPolygon', coordinates: buildPolygons(rings) } };

@@ -771,3 +771,47 @@ test('출처 대장이 나라별 파일과 맞는다', () => {
     assert.ok(v.source && v.license, `${iso}: 출처나 라이선스가 비었다`);
   }
 });
+
+/* ── 나라별 행정구역 파일에도 핀치·자기교차가 없어야 한다 ──
+   위쪽 검사들은 sido-hires · korea-countries · admin1 의 북한만 본다. 나라별로 쪼갠
+   admin1/<ISO3>.json 은 아무도 안 보고 있었고, 그래서 OSM 에서 받아온 프랑스가
+   핀치 64 · 자기교차 132 를 그대로 달고 들어왔다. 영해를 잘라내면서 더 늘기도 했다.
+   증상은 늘 같다 — mapbox-gl 의 삼각분할이 깨져 **일부가 아예 안 그려진다.**
+   브라질 마라냥에서 섬이 색칠 안 되는 것으로 보였던 게 이것이다. */
+test('나라별 행정구역 파일에 핀치·자기교차가 없다', () => {
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  const o = (a, b, c) => { const v = (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]); return v > 0 ? 1 : v < 0 ? -1 : 0; };
+  const crosses = (p1, p2, p3, p4) => {
+    if (same(p1,p3) || same(p1,p4) || same(p2,p3) || same(p2,p4)) return false;
+    const d1 = o(p3,p4,p1), d2 = o(p3,p4,p2), d3 = o(p1,p2,p3), d4 = o(p1,p2,p4);
+    return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
+  };
+  const bad = [];
+  for (const file of files) {
+    const fc = readJSON('recorder/js/data/admin1/' + file);
+    for (const f of fc.features) for (const poly of ringsOf(f.geometry)) for (const r of poly) {
+      const seen = new Set();
+      for (let i = 0; i < r.length - 1; i++) {
+        const k = r[i][0] + ',' + r[i][1];
+        if (seen.has(k)) bad.push(`핀치 ${file} ${f.properties.short} @ ${k}`); else seen.add(k);
+      }
+      if (r.length < 5) continue;
+      const C = 0.01, grid = new Map();                   // 전수 비교는 느리다 — 격자로 후보만
+      for (let i = 0; i < r.length - 1; i++)
+        for (let x = Math.floor(Math.min(r[i][0],r[i+1][0])/C); x <= Math.floor(Math.max(r[i][0],r[i+1][0])/C); x++)
+          for (let y = Math.floor(Math.min(r[i][1],r[i+1][1])/C); y <= Math.floor(Math.max(r[i][1],r[i+1][1])/C); y++) {
+            const k = x + ':' + y;
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push(i);
+          }
+      for (const arr of grid.values()) for (let a = 0; a < arr.length; a++) for (let b = a + 1; b < arr.length; b++) {
+        const i = Math.min(arr[a], arr[b]), j = Math.max(arr[a], arr[b]);
+        if (j - i < 2) continue;
+        if (crosses(r[i], r[i+1], r[j], r[j+1])) bad.push(`교차 ${file} ${f.properties.short} @ ${r[i]}`);
+      }
+    }
+  }
+  assert.deepEqual(bad.slice(0, 3), [], `핀치·자기교차 ${bad.length}곳`);
+});
