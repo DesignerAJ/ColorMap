@@ -1664,6 +1664,23 @@ function initRecorder(map) {
     for (let i = 1; i < pts.length; i++) out.push([unwrapLng(out[i-1][0], pts[i][0]), pts[i][1]]);
     return out;
   }
+  /* 거점을 곧게 잇는다. 아크와 달리 제어점을 띄우지 않을 뿐 나머지는 같다 —
+     날짜변경선을 넘을 수 있으므로 감기지 않은 좌표계에서 잇고, 카메라가 따라갈 수 있게
+     조밀하게 찍는다(두 점만 두면 카메라가 그 사이를 어떻게 갈지 알 수 없다). */
+  function linePathCoords(segments = 48) {
+    const pts = unwrapSeq(routeWaypointCoords());
+    if (pts.length < 2) return pts;
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i-1], b = pts[i];
+      for (let k = 1; k <= segments; k++) {
+        const t = k / segments;
+        out.push([a[0] + (b[0]-a[0]) * t, a[1] + (b[1]-a[1]) * t]);
+      }
+    }
+    return out;
+  }
+
   // 거점들을 아크로 이어 하나의 조밀한 경로로
   function arcPathCoords() {
     const pts = unwrapSeq(routeWaypointCoords());
@@ -1798,7 +1815,7 @@ function initRecorder(map) {
     const src = map.getSource('route-line');
     const aSrc = map.getSource('route-arrow');
     const dSrc = map.getSource('route-dots');
-    const isArc = $('route-shape').value === 'arc';
+    const isArc = $('route-shape').value !== 'road';   // 아크·직선 모두 우리가 만든 경로다
     const isDash = $('route-dash').value === 'dash';
 
     let drawCoords = coords || [], arrowFeat = null;
@@ -1916,7 +1933,8 @@ function initRecorder(map) {
   // 현재 선택된 경로 모양에 따른 좌표 (도로는 비동기 fetch 필요)
   async function resolvePathCoords() {
     const shape = $('route-shape').value;
-    if (shape === 'arc') { roadCoords = null; return arcPathCoords(); }
+    if (shape === 'arc')  { roadCoords = null; return arcPathCoords(); }
+    if (shape === 'line') { roadCoords = null; return linePathCoords(); }
     // road
     try { if (!roadCoords) await fetchRoadRoute(); } catch (_) { roadCoords = null; }
     return roadCoords || arcPathCoords();   // 도로 실패 시 아크로 폴백
@@ -1926,9 +1944,9 @@ function initRecorder(map) {
     if (!$('route-on').checked) return;
     addRouteLayer(); applyRouteStyle();
     const shape = $('route-shape').value;
-    if (shape === 'arc') {
-      const coords = trimArcEnd(arcPathCoords());
-      if (coords.length >= 2) { setRouteFull(coords); setStatus('직선(아크) 경로 준비됨 ✓', 'done'); }
+    if (shape === 'arc' || shape === 'line') {
+      const coords = trimArcEnd(shape === 'arc' ? arcPathCoords() : linePathCoords());
+      if (coords.length >= 2) { setRouteFull(coords); setStatus(`${shape === 'arc' ? '아크' : '직선'} 경로 준비됨 ✓`, 'done'); }
       else { setStatus('출발·도착을 먼저 지정하세요.', ''); }
     } else {
       try {
@@ -2832,23 +2850,53 @@ function initRecorder(map) {
       const totalLegs = stops.length + 1;
       let legDone = 0;   // 완료된 카메라 이동 수
 
+      /* 아크·직선을 그렸으면 카메라도 그 위를 지나게 한다.
+         flyTo 는 자기 곡선으로만 움직여서 임의의 경로를 따라갈 수 없다 — 그래서 그때만
+         프레임 단위로 직접 몬다(부드럽게 녹화가 늘 하는 방식). 줌 곡선은 그대로 쓴다.
+         도로 경로는 여기 해당 없다 — 잘게 꺾여 따라가면 카메라가 흔들린다(요청서 7-2). */
+      const followRoute = drawRoute && pathCoords.length >= 2 && $('route-shape').value !== 'road';
+      const followW0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
+      const followCurve = flyCurveNow(mode);
+
       const animateTo = async (cam) => {
-        const opts = moveOpts(cam, mode, durSec);   // 비행 곡선의 줌아웃 깊이도 여기서 결정됨
         const t0 = performance.now();
         let raf = 0;
-        if ((drawRoute && pathCoords.length) || drawLinesOn) {
-          const grow = () => {
-            const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
-            const ct = (legDone + easeInOut(legT)) / totalLegs;   // 카메라 시간 진행
-            if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, easeInOut(legT), totalLegs)));   // 경로선: 거리 동기화
-            if (drawLinesOn) setDrawData(ct);   // 직접 그린 선: 카메라 시간 기준
-            if (legT < 1) raf = requestAnimationFrame(grow);
-          };
-          raf = requestAnimationFrame(grow);
+        const grow = (legT) => {
+          const ct = (legDone + easeInOut(legT)) / totalLegs;   // 카메라 시간 진행
+          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, easeInOut(legT), totalLegs)));   // 경로선: 거리 동기화
+          if (drawLinesOn) setDrawData(ct);   // 직접 그린 선: 카메라 시간 기준
+        };
+
+        if (followRoute) {
+          const from = grabCam();
+          const flight = followCurve ? flightPath(from, cam, followCurve, followW0) : null;
+          const a = legFrac(legDone, 0, totalLegs), b = legFrac(legDone, 1, totalLegs);
+          const whole = pathFollower(pathCoords);
+          const follow = whole ? (k) => whole(a + (b - a) * k) : null;
+          await new Promise((resolve) => {
+            const step = () => {
+              const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
+              const t = easeInOut(legT);
+              grow(legT);
+              map.jumpTo(legT >= 1 ? cam : interpCam(from, cam, t, flight, follow));
+              if (legT < 1) requestAnimationFrame(step); else resolve();
+            };
+            requestAnimationFrame(step);
+          });
+        } else {
+          const opts = moveOpts(cam, mode, durSec);   // 비행 곡선의 줌아웃 깊이도 여기서 결정됨
+          if ((drawRoute && pathCoords.length) || drawLinesOn) {
+            const tick = () => {
+              const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
+              grow(legT);
+              if (legT < 1) raf = requestAnimationFrame(tick);
+            };
+            raf = requestAnimationFrame(tick);
+          }
+          (mode === 'fly' ? map.flyTo(opts) : map.easeTo(opts));
+          await new Promise((resolve) => { let d=false; const fn=()=>{ if(!d){d=true;resolve();} }; map.once('moveend', fn); setTimeout(fn, durSec*1000+400); });
+          if (raf) cancelAnimationFrame(raf);
         }
-        (mode === 'fly' ? map.flyTo(opts) : map.easeTo(opts));
-        await new Promise((resolve) => { let d=false; const f=()=>{ if(!d){d=true;resolve();} }; map.once('moveend', f); setTimeout(f, durSec*1000+400); });
-        if (raf) cancelAnimationFrame(raf);
         legDone++;
         if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, 0, totalLegs)));
         if (drawLinesOn) setDrawData(legDone / totalLegs);
@@ -2860,7 +2908,7 @@ function initRecorder(map) {
       setStatus('타일 프리로드 중…','busy');
       map.jumpTo(endCam); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
-      if (drawRoute && $('route-shape').value === 'arc' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
       for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
 
@@ -3049,14 +3097,45 @@ function initRecorder(map) {
     };
   }
 
-  function interpCam(from, to, t, path) {
+  /* ── 경로를 따라가는 카메라 ──
+
+     경로선을 아크로 그려 놓고 카메라는 최단거리로 가면, 화면에 그린 화살표가 밖으로
+     벗어난다. 서울→런던에서 실제로 그랬다.
+
+     줌은 비행 곡선 그대로 두고 **중심만 경로 위를 지나게** 한다. 곡선이 주는 진행도 d 를
+     '직선을 따라 얼마나 갔나' 대신 '경로를 따라 얼마나 갔나'로 읽는 것뿐이다.
+     그래서 중간에 줌아웃했다 도착에서 다시 들어오는 움직임은 그대로 살아 있다.
+
+     도로 경로는 이렇게 하지 않는다 — 도로는 잘게 꺾여서 따라가면 카메라가 심하게 흔들린다.
+     (요청서 7-2) 그건 최단거리로 가고 선만 도로를 그린다. */
+  function pathFollower(coords) {
+    if (!coords || coords.length < 2) return null;
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i-1] + geoDist(coords[i-1], coords[i]));
+    const total = cum.at(-1);
+    if (!(total > 0)) return null;
+    return (frac) => {
+      const want = Math.max(0, Math.min(1, frac)) * total;
+      let lo = 0, hi = cum.length - 1;
+      while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= want) lo = mid; else hi = mid; }
+      const span = cum[hi] - cum[lo];
+      const u = span > 0 ? (want - cum[lo]) / span : 0;
+      const a = coords[lo], b = coords[hi];
+      return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+    };
+  }
+
+  function interpCam(from, to, t, path, follow) {
     const p = path && path(t);
     // 중심은 투영 좌표에서 섞는다 (flyTo 와 같은 방식). 곡선이 있으면 진행도만 d 로 바꾼다.
     const k = p ? p.d : t;
+    /* 따라갈 경로가 있으면 그 위의 점을 쓴다. 진행도(k)는 비행 곡선이 정한 그대로다 —
+       그래야 줌아웃·줌인 타이밍과 중심 이동이 어긋나지 않는다. */
+    const onPath = follow && follow(k);
     const x = lerp(mercX(from.center[0]), mercX(to.center[0]), k);
     const y = lerp(mercY(from.center[1]), mercY(to.center[1]), k);
     return {
-      center: [unmercX(x), unmercY(y)],
+      center: onPath || [unmercX(x), unmercY(y)],
       zoom: p ? p.zoom : lerp(from.zoom, to.zoom, t),
       bearing: lerpAngle(from.bearing || 0, to.bearing || 0, t),
       pitch: lerp(from.pitch || 0, to.pitch || 0, t),
@@ -3142,6 +3221,14 @@ function initRecorder(map) {
       legs.push({ from: prev, to: endCam, hold: 0 });
       legs.forEach((lg) => { lg.path = curve ? flightPath(lg.from, lg.to, curve, w0) : null; });
       const totalLegs = legs.length;
+      /* 아크·직선을 그렸으면 카메라도 그 위를 지난다. 도로는 그러지 않는다 —
+         잘게 꺾여서 따라가면 카메라가 심하게 흔들린다(요청서 7-2). */
+      const followRoute = drawRoute && pathCoords.length >= 2 && $('route-shape').value !== 'road';
+      if (followRoute) legs.forEach((lg, L) => {
+        const a = legFrac(L, 0, totalLegs), b = legFrac(L, 1, totalLegs);
+        const whole = pathFollower(pathCoords);
+        lg.follow = whole ? (k) => whole(a + (b - a) * k) : null;   // 구간별 진행도를 전체 경로 위치로
+      });
 
       // 프리로드
       setRasterFade(0);                              // 녹화 중 타일 크로스페이드 끔 → 페이드 도중 캡처로 생기는 줄무늬/밴딩 방지
@@ -3149,7 +3236,7 @@ function initRecorder(map) {
       setStatus('타일 프리로드 중…','busy');
       map.jumpTo(endCam); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
-      if (drawRoute && $('route-shape').value === 'arc' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
       for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
       // 경로 타일 미리 데우기 — 각 구간 중간 시점을 훑어 타일 캐시에 올림 → 인코딩 중 프레임별 타일 로딩 대기 ↓ (화질 손실 없음)
@@ -3160,7 +3247,7 @@ function initRecorder(map) {
         for (let li = 0; li < legs.length; li++) {
           const lg = legs[li];
           for (let s = 1; s <= N; s++) {
-            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1)), lg.path));
+            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1)), lg.path, lg.follow));
             await tilesSettled();
             setStatus(`경로 타일 프리로드 중… (구간 ${li+1}/${legs.length} · ${s}/${N})`,'busy');
           }
@@ -3291,13 +3378,13 @@ function initRecorder(map) {
 
       // 구간 보간
       for (let L = 0; L < legs.length; L++) {
-        const { from, to, hold, path } = legs[L];
+        const { from, to, hold, path, follow } = legs[L];
         for (let f = 1; f <= legFrames; f++) {
           const t = easeInOut(f / legFrames);
           if (showPins) map.getSource('capture-pins').setData(capPinFC(gFrame));   // 핀 사이즈 갱신
           if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(L, t, totalLegs)));
           if (drawLinesOn) setDrawData((L + t) / totalLegs);
-          await renderFrame(interpCam(from, to, t, path));      // setData 반영된 프레임 캡처
+          await renderFrame(interpCam(from, to, t, path, follow));   // setData 반영된 프레임 캡처
           await encodeFrame(f === 1);
           gFrame++;
           if (f % 3 === 0) setStatus(`부드럽게 · 구간 ${L+1}/${legs.length} (${Math.round(f/legFrames*100)}%)`,'busy');

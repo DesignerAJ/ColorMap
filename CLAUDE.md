@@ -305,7 +305,7 @@ Enter 의 **기본 동작이 끝난 뒤에야** 입력창에 들어온다 — �
 
 ```bash
 node tools/serve.mjs                  # http://127.0.0.1:5500
-node --test test/*.test.js            # 79개, 설치 불필요
+node --test test/*.test.js            # 87개, 설치 불필요
 npm install && node --test test/dom/*.test.js   # 46개, jsdom 필요
 ```
 

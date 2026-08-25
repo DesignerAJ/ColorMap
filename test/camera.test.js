@@ -168,3 +168,68 @@ test('곡선이 없으면(직선 이동) 예전처럼 선형 보간', () => {
 test('제자리 이동은 곡선을 세우지 않는다 (0 으로 나눈다)', () => {
   assert.equal(F.flightPath(SEOUL, { ...SEOUL, zoom: 12 }, 2.8, 1600), null);
 });
+
+/* ── 경로를 따라가는 카메라 ──
+   경로선을 아크로 그려 놓고 카메라는 최단거리로 가면, 화면에 그린 화살표가 밖으로 벗어난다.
+   서울→런던에서 실제로 그랬다. 줌 곡선은 그대로 두고 중심만 경로 위를 지나게 한다. */
+const P = extract('recorder/js/recorder.js', ['geoDist', 'pathFollower']);
+
+const arc = (from, to, bend = 0.18, n = 48) => {
+  const mid = [(from[0]+to[0])/2, (from[1]+to[1])/2];
+  const dx = to[0]-from[0], dy = to[1]-from[1];
+  const c = [mid[0] - dy*bend, mid[1] + dx*bend];
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = i/n, u = 1-t;
+    return [u*u*from[0] + 2*u*t*c[0] + t*t*to[0], u*u*from[1] + 2*u*t*c[1] + t*t*to[1]];
+  });
+};
+
+test('경로 따라가기: 양 끝이 경로의 끝과 맞는다', () => {
+  const coords = arc([127.0, 37.55], [-0.13, 51.51]);
+  const at = P.pathFollower(coords);
+  assert.ok(at, '경로를 못 세웠다');
+  for (const [t, want, label] of [[0, coords[0], '출발'], [1, coords.at(-1), '도착']]) {
+    const got = at(t);
+    assert.ok(Math.abs(got[0]-want[0]) < 1e-6 && Math.abs(got[1]-want[1]) < 1e-6,
+      `${label}이 경로 끝과 다르다: ${got} vs ${want}`);
+  }
+});
+
+test('경로 따라가기: 중간에 실제로 아크 위에 있다 (직선이 아니다)', () => {
+  const from = [127.0, 37.55], to = [-0.13, 51.51];
+  const coords = arc(from, to);
+  const at = P.pathFollower(coords);
+  const mid = at(0.5);
+  const straight = [(from[0]+to[0])/2, (from[1]+to[1])/2];
+  const off = Math.hypot(mid[0]-straight[0], mid[1]-straight[1]);
+  assert.ok(off > 1, `아크 중간이 직선 중간과 ${off.toFixed(2)}° 밖에 안 떨어졌다 — 안 따라가고 있다`);
+  /* 그리고 그 점은 경로 **위**에 있어야 한다. 꼭짓점까지의 거리로 재면 안 된다 —
+     아크는 가운데가 성겨서 꼭짓점 간격이 2.6° 나 되고, 선분 한가운데면 당연히 멀다.
+     선분까지의 거리로 재야 '경로 위인가'를 묻는 것이 된다. */
+  let near = Infinity;
+  for (let i = 1; i < coords.length; i++) {
+    const [ax, ay] = coords[i-1], [bx, by] = coords[i];
+    const dx = bx-ax, dy = by-ay, L = dx*dx + dy*dy;
+    let u = L ? ((mid[0]-ax)*dx + (mid[1]-ay)*dy) / L : 0;
+    u = u < 0 ? 0 : u > 1 ? 1 : u;
+    near = Math.min(near, Math.hypot(mid[0]-ax-u*dx, mid[1]-ay-u*dy));
+  }
+  assert.ok(near < 1e-9, `경로에서 ${near.toExponential(2)}° 떨어져 있다 — 경로 위가 아니다`);
+});
+
+test('경로 따라가기: 거리에 비례해 나아간다 (꼭짓점 간격이 고르지 않아도)', () => {
+  /* 아크는 양 끝이 촘촘하고 가운데가 성기다. 꼭짓점 번호로 나누면 속도가 들쭉날쭉해진다 —
+     거리 기준이어야 화살표가 일정하게 자란다. */
+  const coords = arc([127.0, 37.55], [-0.13, 51.51]);
+  const at = P.pathFollower(coords);
+  const seg = [];
+  for (let i = 1; i <= 10; i++) seg.push(P.geoDist(at((i-1)/10), at(i/10)));
+  const min = Math.min(...seg), max = Math.max(...seg);
+  assert.ok(max / min < 1.2, `구간 길이가 ${(max/min).toFixed(2)} 배까지 벌어진다 — 거리 기준이 아니다`);
+});
+
+test('경로 따라가기: 점이 모자라면 세우지 않는다', () => {
+  assert.equal(P.pathFollower([]), null);
+  assert.equal(P.pathFollower([[127, 37]]), null);
+  assert.equal(P.pathFollower([[127, 37], [127, 37]]), null);   // 길이 0
+});
