@@ -67,34 +67,6 @@ function initRecorder(map) {
     return o;
   }
 
-  /* ── 이동 중에 지도가 단순해지지 않게 ──
-
-     비행 곡선은 중간에 줌아웃한다. 그런데 스타일 레이어에는 `minzoom` 이 걸려 있어서 —
-     지형도 18개, 모노톤 54개 — 줌이 그 아래로 내려가면 **스타일이 스스로 숨긴다.**
-     도로·지형 음영·등고선이 그렇게 빠진다. 출발·도착 화면은 멀쩡한데 이동 중에만
-     지도가 단순해 보이는 게 이것이다. 타일 로딩과는 무관해서 프리로드로는 안 고쳐진다.
-
-     그래서 녹화 동안만 문턱을 내린다. **양 끝에서 보이던 레이어만** 내린다 —
-     원래 안 보이던 레이어까지 켜면 이동 중에 없던 것이 나타나 오히려 더 튄다.
-     끝나면 원래 값으로 되돌린다. */
-  const _detailHold = { saved: null };   // 한 줄 const 라야 테스트가 꺼내 쓸 수 있다
-  function holdDetail(lowest, endpointZoom) {
-    if (_detailHold.saved) return;                     // 두 번 걸면 원래 값을 잃는다
-    _detailHold.saved = [];
-    for (const l of map.getStyle()?.layers || []) {
-      const mz = l.minzoom;
-      if (typeof mz !== 'number' || mz <= lowest) continue;
-      if (mz > endpointZoom) continue;                 // 양 끝에서도 안 보이던 레이어는 그대로 둔다
-      try { map.setLayerZoomRange(l.id, lowest, l.maxzoom ?? 24); _detailHold.saved.push([l.id, mz, l.maxzoom]); } catch (_) {}
-    }
-    if (_detailHold.saved.length) console.log(`[REC] 이동 중 디테일 유지: 레이어 ${_detailHold.saved.length}개의 minzoom 을 ${lowest.toFixed(1)} 로 내림`);
-  }
-  function restoreDetail() {
-    if (!_detailHold.saved) return;
-    for (const [id, mz, xz] of _detailHold.saved) { try { map.setLayerZoomRange(id, mz, xz ?? 24); } catch (_) {} }
-    _detailHold.saved = null;
-  }
-
   /* ── 실제 카메라 경로 표본 뽑기 (리허설) ──
      flyTo 는 중간에 줌이 낮아지는 곡선 궤적이라 출발↔도착을 선형 보간해도
      실제로 지나가는 화면과 다르다 = 엉뚱한 타일을 미리 받게 된다.
@@ -2874,7 +2846,10 @@ function initRecorder(map) {
       const followW0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
       const followCurve = flyCurveNow(mode);
 
-      const camSeq = [startCam, ...stops.map((s) => s.cam), endCam];
+      // 줌아웃이 있으면 정지 화면과 첫 이동 프레임이 같은 타일 칸에 놓이게 한다 (위 참고)
+      const keepDetail = mode === 'fly' && $('fly-dip').value !== '0';
+      const camSeq = (keepDetail ? [startCam, ...stops.map((s) => s.cam), endCam].map(detailSafeCam)
+                                 : [startCam, ...stops.map((s) => s.cam), endCam]);
       let legPaths = camSeq.slice(0, -1).map(() => ({ path: null, follow: null }));
 
       const animateTo = async (cam) => {
@@ -2922,7 +2897,7 @@ function initRecorder(map) {
       setRasterFade(0);                              // 녹화 중 타일 크로스페이드 끔 → 페이드 도중 캡처로 생기는 줄무늬/밴딩 방지
       setLabelFade(0);                               // 라벨 페이드인 끔 → 이동 중 글자가 흐리게 잡히는 것 방지
       setStatus('타일 프리로드 중…','busy');
-      map.jumpTo(endCam); await tilesSettled();
+      map.jumpTo(camSeq[camSeq.length - 1]); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
       /* 카메라가 따라갈 경로는 **자르기 전** 것이다. trimArcEnd 는 선을 도착핀 앞에서
          멈추려는 것이지 카메라를 멈추려는 게 아니다 — 잘린 끝까지만 따라가면 마지막
@@ -2944,20 +2919,9 @@ function initRecorder(map) {
       // 1-b) 이동 '중간' 타일까지 프리로드.
       //      여기까지는 출발·경유지·도착만 데워져 있어서, 그 사이를 지나갈 때는
       //      아직 안 받은 타일 대신 저해상도 부모 타일이 그려진다 (= 화면이 단순해 보이는 원인).
-      /* 이동 중 가장 낮게 내려가는 줌을 구해 그때까지 디테일이 안 빠지게 한다.
-         프리로드보다 **먼저** 걸어야 그 상태의 타일을 데운다. */
-      {
-        let lowest = Infinity, endpointZoom = 0;
-        camSeq.forEach((c) => { endpointZoom = Math.max(endpointZoom, c.zoom); });
-        legPaths.forEach((lg, i) => {
-          if (!lg.path) { lowest = Math.min(lowest, camSeq[i].zoom, camSeq[i+1].zoom); return; }
-          for (let k = 0; k <= 40; k++) lowest = Math.min(lowest, lg.path(k / 40).zoom);
-        });
-        if (isFinite(lowest)) holdDetail(Math.max(0, lowest - 0.2), endpointZoom);
-      }
       if ($('prewarm-path').checked) await prewarmPath(camSeq, mode, durSec, legPaths);
 
-      map.jumpTo(startCam); await tilesSettled();
+      map.jumpTo(camSeq[0]); await tilesSettled();
       if (showPath) bakeCapPin('start');            // 출발 핀 라벨 (출발 화면 기준)
       if (showLoc && locFirst) bakeLocPins();       // 첫 컷: 위치 핀 라벨 (출발 화면 기준)
       await sleep(250);
@@ -3052,7 +3016,7 @@ function initRecorder(map) {
 
       // 5) 도착으로 줌
       setStatus('녹화 중 · 도착 줌…','busy');
-      await animateTo(endCam);
+      await animateTo(camSeq[camSeq.length - 1]);
       if (showPins) { const now = performance.now(); triggerCapPin('end', now); if (!locFirst) triggerLocPins(now); }   // 마지막 컷이면 위치 핀이 도착 컷에 등장
 
       // 6) 뒤 정지 (도착 화면 유지)
@@ -3071,7 +3035,7 @@ function initRecorder(map) {
       // 캡처 트랙을 반드시 정리 — 안 끊으면 녹화할 때마다 살아있는 캔버스 캡처 트랙이 쌓여 다음 녹화가 불안정해진다
       try { if (recStream) recStream.getTracks().forEach(t => t.stop()); } catch (_) {}
       recStream = null;
-      restoreDetail(); busy = false; setUI(true); if (pinRAF) cancelAnimationFrame(pinRAF); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
+      busy = false; setUI(true); if (pinRAF) cancelAnimationFrame(pinRAF); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
     }
   }
   /* ── 부드럽게 녹화 (오프라인: 프레임 단위 렌더 → 캡처) ── */
@@ -3109,6 +3073,9 @@ function initRecorder(map) {
     if (dip === '0') return 0.01;
     return FLY_CURVES[dip] || 1.42;                  // 'auto' = mapbox 기본
   }
+
+  // 경계에 붙은 줌만 살짝 내린다 (아래 detailSafeZoom 참고)
+  const detailSafeCam = (c) => ({ ...c, zoom: detailSafeZoom(c.zoom) });
 
   /* from → to 의 비행 곡선. t(0~1) 를 카메라로 바꾸는 함수를 돌려준다.
      곡선을 못 세우면(거리 0 등) null — 부르는 쪽이 직선 보간으로 넘어간다. */
@@ -3164,6 +3131,23 @@ function initRecorder(map) {
       return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
     };
   }
+
+  /* ── 정지 화면과 첫 이동 프레임이 튀지 않게 ──
+
+     mapbox 는 **정수 줌마다 다른 타일**을 쓴다. 줌 6.0 은 z6 타일, 5.99 는 z5 타일이고,
+     z5 타일에는 애초에 이면도로가 없고 지형 음영 등급도 거칠다. 그래서 줌아웃이 정수
+     경계를 넘는 순간 지도 디테일이 한 프레임 사이에 바뀐다.
+
+     이동 **중**에 넘는 건 문제가 안 된다 — 카메라가 움직이고 있어서 눈에 안 띈다.
+     문제는 **정지 화면과 첫 이동 프레임 사이**다. 출발 줌이 정수면 출발하자마자 경계를
+     넘어서, 멈춰 있던 화면과 다음 프레임의 디테일이 확 달라진다. 도착도 같다.
+
+     그래서 줌아웃이 있을 때는 출발·도착 줌을 **경계 바로 아래로 살짝 내려**서 시작한다
+     (6.0 → 5.99). 배율로 0.7% 라 구도는 사실상 그대로이고, 정지 화면과 이동 프레임이
+     같은 타일 칸에 놓인다. 줌아웃이 '없음'이면 넘을 경계가 없으므로 내리지 않는다 —
+     괜히 내리면 정지 화면만 한 단계 거칠어진다. */
+  const DETAIL_EDGE = 0.01;
+  const detailSafeZoom = (z) => (z - Math.floor(z) < 0.05 ? Math.floor(z) - DETAIL_EDGE : z);
 
   function interpCam(from, to, t, path, follow) {
     const p = path && path(t);
@@ -3255,11 +3239,14 @@ function initRecorder(map) {
       const smoothMode = $('mode').value;
       const curve = flyCurveNow(smoothMode);
       const w0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
+      const keepDetail = smoothMode === 'fly' && $('fly-dip').value !== '0';   // 위 detailSafeZoom 참고
+      const seq = (keepDetail ? [startCam, ...stops.map((w) => w.cam), endCam].map(detailSafeCam)
+                              : [startCam, ...stops.map((w) => w.cam), endCam]);
       const legs = [];
-      let prev = startCam;
-      for (const w of stops) { legs.push({ from: prev, to: w.cam, hold: w.hold }); prev = w.cam; }
-      legs.push({ from: prev, to: endCam, hold: 0 });
-      legs.forEach((lg) => { lg.path = curve ? flightPath(lg.from, lg.to, curve, w0) : null; });
+      for (let i = 0; i < seq.length - 1; i++) legs.push({ from: seq[i], to: seq[i+1], hold: stops[i] ? stops[i].hold : 0 });
+      legs.forEach((lg) => {
+        lg.path = curve ? flightPath(lg.from, lg.to, curve, w0) : null;
+      });
       const totalLegs = legs.length;
       /* 아크를 그렸으면 카메라도 그 위를 지난다. 도로는 그러지 않는다 —
          잘게 꺾여서 따라가면 카메라가 심하게 흔들린다(요청서 7-2).
@@ -3284,15 +3271,6 @@ function initRecorder(map) {
       }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
       for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
-      {   // 이동 중 디테일 유지 — 프리로드보다 먼저 걸어야 그 상태의 타일을 데운다
-        let lowest = Infinity, endpointZoom = 0;
-        legs.forEach((lg) => {
-          endpointZoom = Math.max(endpointZoom, lg.from.zoom, lg.to.zoom);
-          if (!lg.path) { lowest = Math.min(lowest, lg.from.zoom, lg.to.zoom); return; }
-          for (let k = 0; k <= 40; k++) lowest = Math.min(lowest, lg.path(k / 40).zoom);
-        });
-        if (isFinite(lowest)) holdDetail(Math.max(0, lowest - 0.2), endpointZoom);
-      }
       // 경로 타일 미리 데우기 — 각 구간 중간 시점을 훑어 타일 캐시에 올림 → 인코딩 중 프레임별 타일 로딩 대기 ↓ (화질 손실 없음)
       // 프레임 카메라와 **같은 곡선**으로 표본을 뽑아야 궤적이 정확히 일치한다 (안 그러면 엉뚱한 타일을 데운다).
       setStatus('경로 타일 프리로드 중…','busy');
@@ -3307,7 +3285,7 @@ function initRecorder(map) {
           }
         }
       }
-      await renderFrame(startCam);
+      await renderFrame(seq[0]);
       if (showPath) bakeCapPin('start');            // 출발 핀 라벨 (출발 화면 기준)
       if (showLoc && locFirst) bakeLocPins();       // 첫 컷: 위치 핀 라벨 (출발 화면 기준)
       await sleep(200);
@@ -3428,7 +3406,7 @@ function initRecorder(map) {
 
       // 앞 정지 — 출발 핀 팝업 (gFrame=0 부터)
       if (showPins) { triggerCapPin('start', gFrame); if (locFirst) triggerLocPins(gFrame); }   // 첫 컷이면 위치 핀도 앞 정지에 등장
-      await holdEnc(startCam, leadFrames, '부드럽게 · 앞 정지');
+      await holdEnc(seq[0], leadFrames, '부드럽게 · 앞 정지');
 
       // 구간 보간
       for (let L = 0; L < legs.length; L++) {
@@ -3476,7 +3454,7 @@ function initRecorder(map) {
       console.error(err); setStatus('오류: ' + err.message, '');
       try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch (_) {}
     } finally {
-      restoreDetail(); busy = false; setUI(true); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
+      busy = false; setUI(true); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
     }
   }
   // MP4는 프레임 단위 경로 렌더링을 기본으로 사용한다. WebM 선택 시 기존 실시간 녹화를 유지한다.
@@ -3788,7 +3766,7 @@ function initRecorder(map) {
       removePsdBackdrop();   // 실패해도 임시 배경 레이어는 반드시 걷어낸다
       Object.keys(saved).forEach(id => setVis(id, saved[id]));
       if (showPins) { hideCapturePins(); pinEls.forEach(el => el.style.display = ''); }
-      restoreDetail(); busy = false; setUI(true);
+      busy = false; setUI(true);
       map.triggerRepaint();
     }
   });

@@ -234,51 +234,37 @@ test('경로 따라가기: 점이 모자라면 세우지 않는다', () => {
   assert.equal(P.pathFollower([[127, 37], [127, 37]]), null);   // 길이 0
 });
 
-/* ── 이동 중 지도가 단순해지지 않게 ──
-   비행 곡선은 중간에 줌아웃하는데, 스타일 레이어에 minzoom 이 걸려 있어서 줌이 그 아래로
-   내려가면 스타일이 스스로 숨긴다 — 지형도 18개, 모노톤 54개 레이어가 그렇다.
-   도로·지형 음영·등고선이 그렇게 빠진다. 출발·도착 화면은 멀쩡한데 이동 중에만 지도가
-   단순해 보이는 게 이것이고, 타일 로딩과 무관해서 프리로드로는 안 고쳐진다. */
-const D = extract('recorder/js/recorder.js', ['_detailHold', 'holdDetail', 'restoreDetail']);
+/* ── 정지 화면과 첫 이동 프레임이 튀지 않게 ──
+   mapbox 는 정수 줌마다 다른 타일을 쓴다. 줌 6.0 은 z6, 5.99 는 z5 이고 z5 타일에는
+   이면도로가 없다. 이동 중에 경계를 넘는 건 카메라가 움직여서 눈에 안 띄지만,
+   **멈춰 있던 화면과 다음 프레임 사이**에서 넘으면 확 튄다. 출발 줌이 정수면 그 일이 난다. */
+const Z = extract('recorder/js/recorder.js', ['DETAIL_EDGE', 'detailSafeZoom', 'detailSafeCam']);
 
-const withLayers = (layers, fn) => {
-  const prev = globalThis.map;
-  globalThis.map = {
-    getStyle: () => ({ layers }),
-    setLayerZoomRange: (id, mn, mx) => {
-      const L = layers.find((l) => l.id === id);
-      if (L) { L.minzoom = mn; L.maxzoom = mx; }
-    },
-  };
-  try { return fn(); } finally { globalThis.map = prev; }
-};
-
-test('줌아웃 구간에서도 디테일 레이어가 남는다', () => {
-  const layers = [
-    { id: 'road', minzoom: 9 },            // 양 끝에서는 보이고 이동 중에 빠진다 → 내려야 한다
-    { id: 'hillshade', minzoom: 5 },       // 이미 더 낮다 → 건드릴 것 없다
-    { id: 'building', minzoom: 15 },       // 양 끝에서도 안 보인다 → 켜면 안 된다
-    { id: 'water' },                       // minzoom 없음
-  ];
-  withLayers(layers, () => {
-    D.holdDetail(6.5, 10);                 // 이동 중 최저 6.5, 양 끝 줌 10
-    assert.equal(layers[0].minzoom, 6.5, '도로가 이동 중에 빠진다');
-    assert.equal(layers[1].minzoom, 5, '원래 더 낮던 레이어를 건드렸다');
-    assert.equal(layers[2].minzoom, 15,
-      '양 끝에서도 안 보이던 레이어를 켜면 이동 중에 없던 것이 나타나 더 튄다');
-    assert.equal(layers[3].minzoom, undefined, 'minzoom 없는 레이어를 건드렸다');
-    D.restoreDetail();
-    assert.equal(layers[0].minzoom, 9, '녹화가 끝나면 원래대로 돌려놔야 한다');
-  });
+test('경계에 붙은 줌만 살짝 내린다', () => {
+  for (const [z, want] of [[6, 5.99], [8, 7.99], [10, 9.99], [6.02, 5.99]]) {
+    assert.ok(Math.abs(Z.detailSafeZoom(z) - want) < 1e-9,
+      `${z} → ${Z.detailSafeZoom(z)} (${want} 이어야 한다)`);
+  }
 });
 
-test('디테일 유지는 두 번 걸어도 원래 값을 잃지 않는다', () => {
-  const layers = [{ id: 'road', minzoom: 9 }];
-  withLayers(layers, () => {
-    D.holdDetail(6, 10);
-    D.holdDetail(4, 10);                   // 두 번째는 무시돼야 한다 — 안 그러면 6 이 '원래 값'이 된다
-    assert.equal(layers[0].minzoom, 6);
-    D.restoreDetail();
-    assert.equal(layers[0].minzoom, 9, '원래 값을 잃었다');
-  });
+test('여유가 있는 줌은 건드리지 않는다', () => {
+  /* 이미 칸 안쪽에 있으면 내릴 이유가 없다 — 내리면 구도만 바뀐다. */
+  for (const z of [6.5, 7.2, 8.6, 9.99]) {
+    assert.equal(Z.detailSafeZoom(z), z, `${z} 를 건드렸다`);
+  }
+});
+
+test('내려도 타일 칸이 한 단계만 내려간다 (구도는 그대로)', () => {
+  const z = 8, moved = Z.detailSafeZoom(z);
+  assert.equal(Math.floor(moved), Math.floor(z) - 1, '타일 칸이 안 바뀌면 튐이 그대로다');
+  assert.ok(Math.abs(moved - z) <= 0.05, `구도가 ${(moved - z).toFixed(2)} 단계나 달라진다`);
+});
+
+test('카메라의 나머지 값은 그대로 둔다', () => {
+  const cam = { center: [127, 37.5], zoom: 8, bearing: 30, pitch: 45 };
+  const out = Z.detailSafeCam(cam);
+  assert.deepEqual(out.center, cam.center);
+  assert.equal(out.bearing, 30);
+  assert.equal(out.pitch, 45);
+  assert.ok(out.zoom < 8, '줌이 안 내려갔다');
 });
