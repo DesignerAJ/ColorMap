@@ -262,32 +262,37 @@ test('입력을 지우면 다시 약칭만 남는다', () => {
 });
 
 /* ── 지도 글자(지명·도로명) 켜고 끄기 ──
-   방송용 스타일은 라벨을 일부러 꺼둔 것이 많다. 그래서 '켜기'를 visibility:'visible' 로
-   밀어 넣으면 안 된다 — 디자이너가 안 보이게 해둔 라벨까지 전부 튀어나온다.
-   실제로 그렇게 만들었다가 모든 스타일에 지명이 쏟아졌다.
-   스타일이 올라온 직후의 값을 적어 두고, 켤 때는 그 값으로 되돌린다. */
-const visOf = (e, id) => (e.layers.get(id)?.layout || {}).visibility;
+   스타일이 올라올 때는 라벨을 건드리지 않는다 — 방송용 스타일은 라벨을 일부러 꺼둔 것이
+   많아서, 올라오자마자 켜면 모든 스타일에 지명이 쏟아진다(실제로 그렇게 만들었다).
+   체크박스를 만졌을 때만 다 켜거나 다 끈다. 그건 시킨 일이다. */
+const visOf = (e, id) => (e.layers.get(id)?.layout || {}).visibility || 'visible';
 const setLabels = (e, on) => {
   const c = e.$('label-on');
   c.checked = on;
   c.dispatchEvent(new e.window.Event('change', { bubbles: true }));
 };
 
-test('글자를 꺼도 켜도, 원래 꺼져 있던 라벨은 계속 꺼져 있다', async () => {
+test('스타일이 올라올 때는 라벨을 그대로 둔다', async () => {
   const e = boot();
   await e.tick(); e.styleLoad(); await e.tick();
 
   assert.equal(visOf(e, 'poi-label'), 'visible', '원래 켜져 있던 라벨이 꺼졌다');
-  assert.equal(visOf(e, 'label-for-check'), 'none', '원래 꺼져 있던 라벨이 켜졌다');
+  assert.equal(visOf(e, 'label-for-check'), 'none',
+    '디자이너가 꺼둔 라벨을 켰다 — 모든 스타일에 지명이 쏟아진다');
+});
+
+test('체크박스를 켜면 꺼져 있던 라벨까지 켜진다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
 
   setLabels(e, false);
   assert.equal(visOf(e, 'poi-label'), 'none', '글자를 껐는데 라벨이 남았다');
   assert.equal(visOf(e, 'label-for-check'), 'none');
 
   setLabels(e, true);
-  assert.equal(visOf(e, 'poi-label'), 'visible', '글자를 켰는데 라벨이 안 돌아왔다');
-  assert.equal(visOf(e, 'label-for-check'), 'none',
-    '디자이너가 꺼둔 라벨까지 켰다 — 모든 스타일에 지명이 쏟아진다');
+  assert.equal(visOf(e, 'poi-label'), 'visible');
+  assert.equal(visOf(e, 'label-for-check'), 'visible',
+    '글자를 켰는데 안 켜졌다 — 라벨 없는 스타일에서는 이 체크박스가 유일한 수단이다');
 });
 
 test('글자를 꺼도 우리 심볼(화살표·핀)은 남는다', async () => {
@@ -298,13 +303,17 @@ test('글자를 꺼도 우리 심볼(화살표·핀)은 남는다', async () => 
   assert.notEqual(visOf(e, 'route-arrow-layer'), 'none', '경로선 화살표까지 숨겼다');
 });
 
-test('스타일을 바꾸면 그 스타일의 원래 값을 다시 적는다', async () => {
-  /* 스타일마다 어떤 라벨을 꺼뒀는지가 다르다. 예전 스타일의 값을 들고 있으면
-     되돌릴 때 엉뚱한 것을 켜거나 끈다. */
+test('체크 상태는 그 스타일이 원래 글자를 보여주는지를 따라간다', async () => {
+  /* 스타일마다 라벨을 꺼둔 정도가 다르다. 체크박스가 화면과 어긋나 있으면
+     한 번 눌러야 비로소 맞는 상태가 된다. */
   const e = boot();
   await e.tick(); e.styleLoad(); await e.tick();
-  setLabels(e, false);
-  e.styleLoad(); await e.tick();                 // 스타일 교체
-  setLabels(e, true);
-  assert.equal(visOf(e, 'label-for-check'), 'none', '교체 뒤에도 꺼둔 라벨은 꺼져 있어야 한다');
+  assert.equal(e.$('label-on').checked, true, '보이는 라벨이 있는데 체크가 풀려 있다');
+
+  // 라벨을 전부 꺼둔 스타일로 갈아탄 셈 치고
+  for (const l of e.map.getStyle().layers) {
+    if (l.type === 'symbol') l.layout = { visibility: 'none' };
+  }
+  e.styleLoad(); await e.tick();
+  assert.equal(e.$('label-on').checked, false, '보이는 라벨이 없는데 체크가 남아 있다');
 });

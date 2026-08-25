@@ -119,33 +119,36 @@ function initRecorder(map) {
 
   /* ── 지도 글자(지명·도로명) 켜고 끄기 ──
 
-     방송용 스타일은 라벨을 **일부러 꺼둔** 것이 많다 — 단색지형·단색·위성사진·지형도는
-     하나뿐인 심볼 레이어가 꺼져 있고, 모노톤은 18개 중 15개가 꺼져 있다.
-     그래서 '켜기'를 visibility:'visible' 로 밀어 넣으면 안 된다. 디자이너가 안 보이게 해둔
-     라벨까지 전부 튀어나온다 — 위성 스타일의 landColor·water 를 건드리면 안 되는 것과 같다.
+     사용자가 체크박스를 만지면 그때는 스타일 안의 글자를 **다 켜거나 다 끈다.** 시킨 일이다.
 
-     스타일이 올라온 **직후에 원래 값을 적어 두고**, 끌 때는 숨기고 켤 때는 그 값으로
-     되돌린다. 그러면 원래 꺼져 있던 것은 계속 꺼진 채로 남는다.
+     스타일이 올라올 때는 **아무것도 안 한다.** 방송용 스타일은 라벨을 일부러 꺼둔 것이
+     많아서 — 단색지형·단색·위성사진·지형도는 하나뿐인 심볼이 꺼져 있고, 모노톤은 18개 중
+     15개가 꺼져 있다 — 올라오자마자 켜면 지명이 저절로 쏟아진다. 실제로 그렇게 만들었다가
+     모든 스타일에 지명이 생겼다. 대신 체크 상태만 그 스타일이 원래 글자를 보여주던
+     스타일인지에 맞춰 둔다. 그래야 체크박스가 화면과 어긋나 보이지 않는다.
 
      **우리가 만든 심볼 레이어는 건드리지 않는다** — 경로선 화살표와 캡처용 핀이 심볼이라
      싸잡아 숨기면 그 둘까지 사라진다. */
   const OUR_SYMBOL_LAYERS = new Set(['route-arrow-layer', 'capture-pins-layer']);
-  const _labelSaved = new Map();                     // 레이어 id → 스타일이 준 원래 visibility
+  const _labelIds = new Set();
 
   function snapshotLabels() {
-    _labelSaved.clear();
+    _labelIds.clear();
+    let anyOn = false;
     for (const l of map.getStyle()?.layers || []) {
       if (l.type !== 'symbol' || OUR_SYMBOL_LAYERS.has(l.id)) continue;
-      _labelSaved.set(l.id, (l.layout && l.layout.visibility) || 'visible');
+      _labelIds.add(l.id);
+      if (((l.layout && l.layout.visibility) || 'visible') !== 'none') anyOn = true;
     }
+    $('label-on').checked = anyOn;                 // 화면에 보이는 대로만 맞춘다 — 켜지 않는다
   }
   function applyLabelVisibility() {
-    const on = $('label-on').checked;
-    for (const [id, original] of _labelSaved) {
-      try { map.setLayoutProperty(id, 'visibility', on ? original : 'none'); } catch (_) {}
+    const vis = $('label-on').checked ? 'visible' : 'none';
+    for (const id of _labelIds) {
+      try { map.setLayoutProperty(id, 'visibility', vis); } catch (_) {}
     }
   }
-  map.on('style.load', () => { snapshotLabels(); applyLabelVisibility(); });
+  map.on('style.load', snapshotLabels);
   $('label-on').addEventListener('change', applyLabelVisibility);
 
 
