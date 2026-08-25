@@ -371,3 +371,20 @@ test('한 번 고른 뒤에는 스타일을 바꿔도 그 선택이 따라간다
   assert.equal(e.calls.filter((c) => c.api === 'setLanguage').at(-1).v, 'ko',
     '스타일을 바꾸니 다시 영어로 돌아갔다');
 });
+
+test('name_ko 로 글자를 찍는 스타일은 name 으로 바꿔 준다', async () => {
+  /* language=ko 를 걸면 Mapbox 가 name 을 한국어로 채우고 name_xx 필드를 전부 뺀다.
+     그러면 to-string(get name_ko) 가 빈 문자열이 되어 글자가 아예 안 그려진다 —
+     단색지형·단색·위성사진·지형도가 그랬다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  // jsdom 안에서 만들어진 배열이라 realm 이 달라 deepEqual 이 안 통한다
+  const tf = () => JSON.stringify((e.layers.get('label-for-check')?.layout || {})['text-field']);
+
+  setLabels(e, true);
+  assert.equal(tf(), '["to-string",["get","name"]]',
+    'name_ko 를 그대로 뒀다 — 켜도 글자가 안 나온다');
+
+  setLabels(e, false);
+  assert.equal(tf(), '["to-string",["get","name_ko"]]', '끄면 원래 값으로 돌려놔야 한다');
+});

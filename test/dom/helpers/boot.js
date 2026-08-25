@@ -54,7 +54,10 @@ const STYLE_LAYERS = [
   /* 방송용 스타일은 라벨을 **일부러 꺼둔** 것이 많다 — 단색지형·단색·위성사진·지형도는
      하나뿐인 심볼이 꺼져 있고 모노톤은 18개 중 15개가 꺼져 있다. '글자 켜기'가 그것까지
      켜버리면 안 된다. */
-  { id: 'label-for-check', type: 'symbol', layout: OFF },
+  /* 방송용 스타일 넷은 라벨의 text-field 가 `to-string(get name_ko)` 이다.
+     language=ko 를 걸면 그 필드가 타일에서 사라져 글자가 빈 문자열이 된다. */
+  { id: 'label-for-check', type: 'symbol',
+    layout: { visibility: 'none', 'text-field': ['to-string', ['get', 'name_ko']] } },
 ];
 
 export function boot({

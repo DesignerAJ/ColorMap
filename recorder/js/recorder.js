@@ -144,27 +144,51 @@ function initRecorder(map) {
   const LABEL_ZOOM = 14;
 
   let _labelChoice = null;                         // 사용자가 직접 고른 값. 만지기 전엔 null
+  const _labelText = new Map();                    // name_ko 를 쓰는 레이어 → 원래 text-field
+
+  /* `language=ko` 를 걸면 Mapbox 가 `name` 을 한국어로 채우고 **`name_xx` 필드를 전부 뺀다.**
+     실측: 서울 타일이 145,891B(name_ar … name_ko … 15개) → 125,646B(name, name_local).
+     그런데 단색지형·단색·위성사진·지형도의 라벨 레이어는 text-field 가
+     `["to-string",["get","name_ko"]]` 이라, 필드가 없어져 빈 문자열이 되고 글자가 안 그려진다.
+     모노톤은 `coalesce(name_en, name)` 이라 name 으로 떨어져 혼자 살아남았다.
+     그래서 name_ko 를 참조하는 레이어만 name 으로 바꿔 준다. 끄면 원래대로 돌려놓는다. */
+  const swapNameKo = (v) => (Array.isArray(v)
+    ? (v.length === 2 && v[0] === 'get' && v[1] === 'name_ko' ? ['get', 'name'] : v.map(swapNameKo))
+    : v);
 
   function snapshotLabels() {
     _labelIds.clear();
+    _labelText.clear();
     let anyOn = false;
     for (const l of map.getStyle()?.layers || []) {
       if (l.type !== 'symbol' || OUR_SYMBOL_LAYERS.has(l.id)) continue;
       _labelIds.add(l.id);
+      const tf = l.layout && l.layout['text-field'];
+      if (tf && JSON.stringify(tf).includes('"name_ko"')) _labelText.set(l.id, tf);
       const on = ((l.layout && l.layout.visibility) || 'visible') !== 'none';
       if (on && (l.minzoom || 0) < LABEL_ZOOM) anyOn = true;
     }
     $('label-on').checked = _labelChoice ?? anyOn;
   }
-  function applyLabelVisibility() {
-    const vis = $('label-on').checked ? 'visible' : 'none';
-    for (const id of _labelIds) {
-      try { map.setLayoutProperty(id, 'visibility', vis); } catch (_) {}
+  /* 글자를 켜지 않아도 한국어 설정은 걸릴 수 있으니(원래부터 라벨이 보이는 스타일)
+     text-field 손질은 체크 상태만 보고 따로 건다. */
+  function applyLabelText() {
+    const on = $('label-on').checked;
+    for (const [id, tf] of _labelText) {
+      try { map.setLayoutProperty(id, 'text-field', on ? swapNameKo(tf) : tf); } catch (_) {}
     }
+  }
+  function applyLabelVisibility() {
+    const on = $('label-on').checked;
+    for (const id of _labelIds) {
+      try { map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); } catch (_) {}
+    }
+    applyLabelText();
   }
   map.on('style.load', () => {
     snapshotLabels();
     if (_labelChoice !== null) applyLabelVisibility();   // 고른 값이 있으면 새 스타일에도 건다
+    else applyLabelText();
     applyStyleLanguage();
   });
   $('label-on').addEventListener('change', () => {
