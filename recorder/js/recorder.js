@@ -2846,10 +2846,9 @@ function initRecorder(map) {
       const followW0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
       const followCurve = flyCurveNow(mode);
 
-      // 줌아웃이 있으면 정지 화면과 첫 이동 프레임이 같은 타일 칸에 놓이게 한다 (위 참고)
-      const keepDetail = mode === 'fly' && $('fly-dip').value !== '0';
-      const camSeq = (keepDetail ? [startCam, ...stops.map((s) => s.cam), endCam].map(detailSafeCam)
-                                 : [startCam, ...stops.map((s) => s.cam), endCam]);
+      // 정수 줌에 걸터앉으면 줌아웃이 없어도 타일이 깜빡인다 (위 detailSafeZoom 참고)
+      const hasDip = mode === 'fly' && $('fly-dip').value !== '0';
+      const camSeq = [startCam, ...stops.map((s) => s.cam), endCam].map((c) => detailSafeCam(c, hasDip));
       let legPaths = camSeq.slice(0, -1).map(() => ({ path: null, follow: null }));
 
       const animateTo = async (cam) => {
@@ -3074,9 +3073,6 @@ function initRecorder(map) {
     return FLY_CURVES[dip] || 1.42;                  // 'auto' = mapbox 기본
   }
 
-  // 경계에 붙은 줌만 살짝 내린다 (아래 detailSafeZoom 참고)
-  const detailSafeCam = (c) => ({ ...c, zoom: detailSafeZoom(c.zoom) });
-
   /* from → to 의 비행 곡선. t(0~1) 를 카메라로 바꾸는 함수를 돌려준다.
      곡선을 못 세우면(거리 0 등) null — 부르는 쪽이 직선 보간으로 넘어간다. */
   function flightPath(from, to, curve, w0) {
@@ -3132,22 +3128,30 @@ function initRecorder(map) {
     };
   }
 
-  /* ── 정지 화면과 첫 이동 프레임이 튀지 않게 ──
+  /* ── 정수 줌에 걸터앉지 않게 ──
 
-     mapbox 는 **정수 줌마다 다른 타일**을 쓴다. 줌 6.0 은 z6 타일, 5.99 는 z5 타일이고,
-     z5 타일에는 애초에 이면도로가 없고 지형 음영 등급도 거칠다. 그래서 줌아웃이 정수
-     경계를 넘는 순간 지도 디테일이 한 프레임 사이에 바뀐다.
+     mapbox 는 정수 줌마다 다른 타일을 쓴다 — 줌 6.0 은 z6, 5.99 는 z5 이고 z5 타일에는
+     애초에 이면도로가 없다. 경계를 넘는 순간 지도 디테일이 한 프레임 사이에 바뀐다.
 
-     이동 **중**에 넘는 건 문제가 안 된다 — 카메라가 움직이고 있어서 눈에 안 띈다.
-     문제는 **정지 화면과 첫 이동 프레임 사이**다. 출발 줌이 정수면 출발하자마자 경계를
-     넘어서, 멈춰 있던 화면과 다음 프레임의 디테일이 확 달라진다. 도착도 같다.
+     **줌이 정수에 정확히 걸려 있으면 줌아웃이 없어도 깜빡인다.** 카메라 줌은 곡선 공식으로
+     계산되는데(zoom = 출발줌 + log₂(cosh…)) 그 값이 8 을 미세하게 오르내린다 —
+     실측하면 7.999999999988 이 나온다. Math.floor 가 8 과 7 을 오가며 타일이 통째로
+     바뀌고, 화면은 도로가 있다 없다 한다. 콘솔에 줌을 찍으면 내내 8.000 이라 원인이 안 보인다.
 
-     그래서 줌아웃이 있을 때는 출발·도착 줌을 **경계 바로 아래로 살짝 내려**서 시작한다
-     (6.0 → 5.99). 배율로 0.7% 라 구도는 사실상 그대로이고, 정지 화면과 이동 프레임이
-     같은 타일 칸에 놓인다. 줌아웃이 '없음'이면 넘을 경계가 없으므로 내리지 않는다 —
-     괜히 내리면 정지 화면만 한 단계 거칠어진다. */
+     이동 **중**에 경계를 넘는 건 문제가 안 된다 — 카메라가 움직이고 있어서 눈에 안 띈다.
+     문제는 멈춰 있을 때와 그 직후다.
+
+     그래서 출발·도착 줌이 경계에 붙어 있으면 살짝 떼어 놓는다.
+       줌아웃이 있으면  아래 칸 꼭대기로  (8.0 → 7.99) — 정지 화면과 이동 초반이 같은 칸
+       줌아웃이 없으면  같은 칸 안쪽으로  (8.0 → 8.01) — 칸을 안 바꾸니 디테일이 그대로
+     배율로 1% 안쪽이라 구도는 사실상 그대로다. 이미 칸 안쪽(8.34 등)이면 건드리지 않는다. */
   const DETAIL_EDGE = 0.01;
-  const detailSafeZoom = (z) => (z - Math.floor(z) < 0.05 ? Math.floor(z) - DETAIL_EDGE : z);
+  function detailSafeZoom(z, dip) {
+    const frac = z - Math.floor(z);
+    if (frac >= 0.05) return z;                      // 이미 칸 안쪽 — 뒤집힐 일이 없다
+    return Math.floor(z) + (dip ? -DETAIL_EDGE : DETAIL_EDGE);
+  }
+  const detailSafeCam = (c, dip) => ({ ...c, zoom: detailSafeZoom(c.zoom, dip) });
 
   function interpCam(from, to, t, path, follow) {
     const p = path && path(t);
@@ -3239,9 +3243,8 @@ function initRecorder(map) {
       const smoothMode = $('mode').value;
       const curve = flyCurveNow(smoothMode);
       const w0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
-      const keepDetail = smoothMode === 'fly' && $('fly-dip').value !== '0';   // 위 detailSafeZoom 참고
-      const seq = (keepDetail ? [startCam, ...stops.map((w) => w.cam), endCam].map(detailSafeCam)
-                              : [startCam, ...stops.map((w) => w.cam), endCam]);
+      const hasDip = smoothMode === 'fly' && $('fly-dip').value !== '0';   // 위 detailSafeZoom 참고
+      const seq = [startCam, ...stops.map((w) => w.cam), endCam].map((c) => detailSafeCam(c, hasDip));
       const legs = [];
       for (let i = 0; i < seq.length - 1; i++) legs.push({ from: seq[i], to: seq[i+1], hold: stops[i] ? stops[i].hold : 0 });
       legs.forEach((lg) => {
