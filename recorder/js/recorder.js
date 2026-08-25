@@ -71,7 +71,16 @@ function initRecorder(map) {
      flyTo 는 중간에 줌이 낮아지는 곡선 궤적이라 출발↔도착을 선형 보간해도
      실제로 지나가는 화면과 다르다 = 엉뚱한 타일을 미리 받게 된다.
      그래서 한 번 실제로 이동시켜 보고 지나간 카메라를 그대로 기록한다. */
-  async function samplePath(from, to, mode, durSec, maxSamples = 10) {
+  async function samplePath(from, to, mode, durSec, maxSamples = 10, follow = null, flight = null) {
+    /* 경로를 따라가는 이동은 flyTo 를 흉내내 봐야 소용없다 — 실제로는 아크 위를 지나므로
+       flyTo 의 궤적으로 데우면 **엉뚱한 타일**을 받는다. 그러면 이동 중에 아직 안 받은
+       타일 대신 저해상도 부모 타일이 그려지고, 지도 디테일이 확확 바뀐다.
+       그때는 실제로 쓸 카메라를 그대로 계산해서 뽑는다. */
+    if (follow) {
+      const out = [];
+      for (let i = 1; i <= maxSamples; i++) out.push(interpCam(from, to, easeInOut(i / (maxSamples + 1)), flight, follow));
+      return out;
+    }
     map.jumpTo(from);
     const seen = [];
     const onMove = () => seen.push(grabCam());
@@ -88,20 +97,13 @@ function initRecorder(map) {
     return out;
   }
 
-  // 표본 카메라들을 차례로 방문해 타일을 캐시에 채워 넣는다
-  async function warmCams(cams, label) {
-    for (let i = 0; i < cams.length; i++) {
-      map.jumpTo(cams[i]);
-      await tilesSettled();
-      setStatus(`${label} ${i+1}/${cams.length}`, 'busy');
-    }
-  }
-
-  /* 이동 경로 전체를 미리 데워둔다 (출발·경유지·도착은 호출부에서 이미 처리) */
-  async function prewarmPath(cams, mode, durSec) {
+  /* 표본이 성기면 그 사이 줌에서 아직 안 받은 타일이 나온다 — 이동 중에만 지도가 거칠어
+     보이는 원인이다. 비행 곡선은 줌이 크게 오르내리므로 넉넉히 뽑는다. */
+  async function prewarmPath(cams, mode, durSec, legs = null) {
     for (let i = 0; i < cams.length - 1; i++) {
       setStatus(`이동 경로 타일 프리로드 중… (구간 ${i+1}/${cams.length-1})`, 'busy');
-      const pts = await samplePath(cams[i], cams[i+1], mode, durSec);
+      const lg = legs && legs[i];
+      const pts = await samplePath(cams[i], cams[i+1], mode, durSec, 18, lg && lg.follow, lg && lg.path);
       await warmCams(pts, `이동 경로 타일 ${i+1}/${cams.length-1} ·`);
     }
   }
@@ -1664,23 +1666,6 @@ function initRecorder(map) {
     for (let i = 1; i < pts.length; i++) out.push([unwrapLng(out[i-1][0], pts[i][0]), pts[i][1]]);
     return out;
   }
-  /* 거점을 곧게 잇는다. 아크와 달리 제어점을 띄우지 않을 뿐 나머지는 같다 —
-     날짜변경선을 넘을 수 있으므로 감기지 않은 좌표계에서 잇고, 카메라가 따라갈 수 있게
-     조밀하게 찍는다(두 점만 두면 카메라가 그 사이를 어떻게 갈지 알 수 없다). */
-  function linePathCoords(segments = 48) {
-    const pts = unwrapSeq(routeWaypointCoords());
-    if (pts.length < 2) return pts;
-    const out = [pts[0]];
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i-1], b = pts[i];
-      for (let k = 1; k <= segments; k++) {
-        const t = k / segments;
-        out.push([a[0] + (b[0]-a[0]) * t, a[1] + (b[1]-a[1]) * t]);
-      }
-    }
-    return out;
-  }
-
   // 거점들을 아크로 이어 하나의 조밀한 경로로
   function arcPathCoords() {
     const pts = unwrapSeq(routeWaypointCoords());
@@ -1770,7 +1755,7 @@ function initRecorder(map) {
       paint:{ 'icon-color': $('route-color').value }
     });
   }
-  let _lastRouteCoords = [];
+  let _lastRouteCoords = [], _lastRouteArrow = true;
   let _routeDotStep = 0;                 // 점선용 점 간격 (지리거리, 고정) — 전체 경로 설정 시 1회 계산
   const _EMPTY_FC = { type:'FeatureCollection', features: [] };
   const _EMPTY_LINE = { type:'Feature', geometry:{ type:'LineString', coordinates: [] } };
@@ -1808,10 +1793,14 @@ function initRecorder(map) {
     const GAP = 8;   // 점 간격 목표(px) — 작을수록 촘촘
     return geoLen / Math.max(2, Math.round(scrLen / GAP));
   }
-  function setRouteFull(coords) { _routeDotStep = routeDotStep(coords); setRouteData(coords); }   // 전체 경로(미리보기): 간격 갱신 후 그림
+  /* 전체 경로(미리보기): 간격 갱신 후 그린다. **화살표는 안 그린다** —
+     아직 아무것도 자라지 않았는데 도착지에 삼각형만 떠 있으면 이상하다.
+     화살표는 선이 자라기 시작할 때 그 끝에 따라붙는다. */
+  function setRouteFull(coords) { _routeDotStep = routeDotStep(coords); setRouteData(coords, false); }
 
-  function setRouteData(coords) {
+  function setRouteData(coords, arrow = true) {
     _lastRouteCoords = coords || [];
+    _lastRouteArrow = arrow;
     const src = map.getSource('route-line');
     const aSrc = map.getSource('route-arrow');
     const dSrc = map.getSource('route-dots');
@@ -1819,7 +1808,7 @@ function initRecorder(map) {
     const isDash = $('route-dash').value === 'dash';
 
     let drawCoords = coords || [], arrowFeat = null;
-    if (isArc && coords && coords.length >= 2) {
+    if (arrow && isArc && coords && coords.length >= 2) {
       const w = parseFloat($('route-width').value);
       const size = (3*w) / 64;
       const tip = coords[coords.length-1], prev = coords[coords.length-2];
@@ -1848,7 +1837,7 @@ function initRecorder(map) {
     }
     if (map.getLayer('route-arrow-layer')) map.setPaintProperty('route-arrow-layer', 'icon-color', $('route-color').value);
     // 현재 선 좌표로 화살표/점 갱신 (굵기·색·모드 변경 반영)
-    if (_lastRouteCoords.length) setRouteData(_lastRouteCoords);
+    if (_lastRouteCoords.length) setRouteData(_lastRouteCoords, _lastRouteArrow);
   }
   // 두 점 사이 선형 보간 (t: 0~1)
   const lerpPt = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
@@ -1934,7 +1923,6 @@ function initRecorder(map) {
   async function resolvePathCoords() {
     const shape = $('route-shape').value;
     if (shape === 'arc')  { roadCoords = null; return arcPathCoords(); }
-    if (shape === 'line') { roadCoords = null; return linePathCoords(); }
     // road
     try { if (!roadCoords) await fetchRoadRoute(); } catch (_) { roadCoords = null; }
     return roadCoords || arcPathCoords();   // 도로 실패 시 아크로 폴백
@@ -1944,9 +1932,9 @@ function initRecorder(map) {
     if (!$('route-on').checked) return;
     addRouteLayer(); applyRouteStyle();
     const shape = $('route-shape').value;
-    if (shape === 'arc' || shape === 'line') {
-      const coords = trimArcEnd(shape === 'arc' ? arcPathCoords() : linePathCoords());
-      if (coords.length >= 2) { setRouteFull(coords); setStatus(`${shape === 'arc' ? '아크' : '직선'} 경로 준비됨 ✓`, 'done'); }
+    if (shape === 'arc') {
+      const coords = trimArcEnd(arcPathCoords());
+      if (coords.length >= 2) { setRouteFull(coords); setStatus('아크 경로 준비됨 ✓', 'done'); }
       else { setStatus('출발·도착을 먼저 지정하세요.', ''); }
     } else {
       try {
@@ -2858,6 +2846,9 @@ function initRecorder(map) {
       const followW0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
       const followCurve = flyCurveNow(mode);
 
+      const camSeq = [startCam, ...stops.map((s) => s.cam), endCam];
+      let legPaths = camSeq.slice(0, -1).map(() => ({ path: null, follow: null }));
+
       const animateTo = async (cam) => {
         const t0 = performance.now();
         let raf = 0;
@@ -2868,11 +2859,8 @@ function initRecorder(map) {
         };
 
         if (followRoute) {
-          const from = grabCam();
-          const flight = followCurve ? flightPath(from, cam, followCurve, followW0) : null;
-          const a = legFrac(legDone, 0, totalLegs), b = legFrac(legDone, 1, totalLegs);
-          const whole = pathFollower(pathCoords);
-          const follow = whole ? (k) => whole(a + (b - a) * k) : null;
+          const from = camSeq[legDone];
+          const { path: flight, follow } = legPaths[legDone] || {};
           await new Promise((resolve) => {
             const step = () => {
               const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
@@ -2909,13 +2897,25 @@ function initRecorder(map) {
       map.jumpTo(endCam); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
       if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      /* 구간별 궤적은 **경로를 자른 뒤에** 만든다. 먼저 만들면 카메라가 자르기 전 경로를
+         따라가서 선과 어긋난다. 프리로드도 이걸 그대로 써야 엉뚱한 타일을 안 데운다 —
+         그러면 이동 중에 저해상도 타일이 보인다. */
+      {
+        const whole = followRoute ? pathFollower(pathCoords) : null;
+        legPaths = camSeq.slice(0, -1).map((from, i) => {
+          const flight = followCurve ? flightPath(from, camSeq[i + 1], followCurve, followW0) : null;
+          if (!whole) return { path: flight, follow: null };
+          const a = legFrac(i, 0, totalLegs), b = legFrac(i, 1, totalLegs);
+          return { path: flight, follow: (k) => whole(a + (b - a) * k) };
+        });
+      }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
       for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
 
       // 1-b) 이동 '중간' 타일까지 프리로드.
       //      여기까지는 출발·경유지·도착만 데워져 있어서, 그 사이를 지나갈 때는
       //      아직 안 받은 타일 대신 저해상도 부모 타일이 그려진다 (= 화면이 단순해 보이는 원인).
-      if ($('prewarm-path').checked) await prewarmPath([startCam, ...stops.map(s => s.cam), endCam], mode, durSec);
+      if ($('prewarm-path').checked) await prewarmPath(camSeq, mode, durSec, legPaths);
 
       map.jumpTo(startCam); await tilesSettled();
       if (showPath) bakeCapPin('start');            // 출발 핀 라벨 (출발 화면 기준)
@@ -3221,14 +3221,11 @@ function initRecorder(map) {
       legs.push({ from: prev, to: endCam, hold: 0 });
       legs.forEach((lg) => { lg.path = curve ? flightPath(lg.from, lg.to, curve, w0) : null; });
       const totalLegs = legs.length;
-      /* 아크·직선을 그렸으면 카메라도 그 위를 지난다. 도로는 그러지 않는다 —
-         잘게 꺾여서 따라가면 카메라가 심하게 흔들린다(요청서 7-2). */
+      /* 아크를 그렸으면 카메라도 그 위를 지난다. 도로는 그러지 않는다 —
+         잘게 꺾여서 따라가면 카메라가 심하게 흔들린다(요청서 7-2).
+         경로를 **자른 뒤에** 만들어야 한다(아래 trimArcEnd 참고) — 그래서 여기서는
+         조건만 정하고, 실제 연결은 자르기 다음에 한다. */
       const followRoute = drawRoute && pathCoords.length >= 2 && $('route-shape').value !== 'road';
-      if (followRoute) legs.forEach((lg, L) => {
-        const a = legFrac(L, 0, totalLegs), b = legFrac(L, 1, totalLegs);
-        const whole = pathFollower(pathCoords);
-        lg.follow = whole ? (k) => whole(a + (b - a) * k) : null;   // 구간별 진행도를 전체 경로 위치로
-      });
 
       // 프리로드
       setRasterFade(0);                              // 녹화 중 타일 크로스페이드 끔 → 페이드 도중 캡처로 생기는 줄무늬/밴딩 방지
@@ -3237,6 +3234,13 @@ function initRecorder(map) {
       map.jumpTo(endCam); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
       if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      if (followRoute) {                            // 자른 뒤의 경로로 연결한다
+        const whole = pathFollower(pathCoords);
+        legs.forEach((lg, L) => {
+          const a = legFrac(L, 0, totalLegs), b = legFrac(L, 1, totalLegs);
+          lg.follow = whole ? (k) => whole(a + (b - a) * k) : null;
+        });
+      }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
       for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
       // 경로 타일 미리 데우기 — 각 구간 중간 시점을 훑어 타일 캐시에 올림 → 인코딩 중 프레임별 타일 로딩 대기 ↓ (화질 손실 없음)
