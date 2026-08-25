@@ -4,6 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { boot } from './helpers/boot.js';
+import { extract } from '../helpers/extract.js';
+
+const { GEO_TOLERANCE } = extract('recorder/js/recorder.js', ['GEO_TOLERANCE']);
 
 const ready = async () => { const e = boot({ loadBorder: true }); await e.tick(); e.styleLoad(); await e.tick(); return e; };
 
@@ -12,7 +15,8 @@ test('국경선 레이어가 우리 데이터로 만들어진다', async () => {
   const L = e.layers.get('kr-land-border');
   assert.ok(L, '국경선 레이어가 없다');
   assert.equal(L.type, 'line');
-  assert.equal(e.sources.get('kr-land-border').tolerance, 0, '단순화되면 색칠과 어긋난다');
+  assert.equal(e.sources.get('kr-land-border').tolerance, GEO_TOLERANCE,
+    '선과 색칠이 다르게 단순화되면 어긋난다 — 같은 값이어야 한다');
   const feats = e.sources.get('kr-land-border').data.features;
   assert.ok(feats.length >= 2 && feats.reduce((s, f) => s + f.geometry.coordinates.length, 0) > 5000,
     '국경선 데이터가 비었거나 너무 성기다');

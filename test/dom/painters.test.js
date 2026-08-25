@@ -68,7 +68,7 @@ test('레이어 종류: 국가는 벡터타일, 시도는 GeoJSON', () => {
 
   const ss = e.sources.get('sido-boundaries');
   assert.equal(ss.type, 'geojson');
-  assert.equal(ss.tolerance, 0, 'tolerance 0 이 아니면 화면에서 각져 보인다');
+  assert.ok(ss.tolerance > 0, 'tolerance 0 은 단순화를 끄는 값이다 — 아래 검사 참고');
   assert.ok(!e.layers.get('sido-color-fill')['source-layer']);
 });
 
@@ -182,4 +182,30 @@ test('대한민국 국가 색칠이 시도·시군구 색칠 아래에 깔린다
       assert.ok(kc < i, `${above} 이 국가 색칠에 가려진다`);
     }
   }
+});
+
+/* ── GeoJSON 단순화 세기 ──
+   tolerance: 0 은 단순화를 **끄는** 값이다. 끄면 타일 좌표를 정수로 반올림할 때
+   격자보다 촘촘한 점들이 같은 칸으로 내려앉아 링이 스스로를 훑고, 삼각분할이 튄다 —
+   함경남도에서 화면 밖으로 길게 뻗던 다각형이 이것이었다. 지오메트리는 멀쩡해서
+   데이터 검사에 아무것도 안 걸렸고, SVG 로 뽑으면 멀쩡한데(지오메트리를 직접 그린다)
+   화면·MP4·PSD 에서만 보였다(셋 다 캔버스를 굽는다).
+   단위는 CSS 픽셀이고 반올림 격자는 0.0625 px 다. 그보다 커야 뭉치지 않는다. */
+test('지리 데이터 소스는 반올림 격자보다 큰 값으로 단순화한다', async () => {
+  const e = boot({ loadBorder: true, loadCountries: true });
+  await e.tick(); e.styleLoad(); await e.tick(40);
+  const GRID_PX = 1 / 16;                                // 타일 1칸 = extent 8192 / tileSize 512
+  const MAPBOX_DEFAULT = 0.375;
+  const geo = [...e.sources.keys()].filter((id) =>
+    e.sources.get(id).type === 'geojson' &&                       // 벡터 타일은 tolerance 가 없다
+    !['route-line', 'draw-lines', 'capture-pins'].includes(id));  // 매 프레임 새로 만드는 오버레이는 제외
+  assert.ok(geo.length >= 2, '검사할 GeoJSON 소스가 없다 — 하네스를 확인할 것');
+  for (const id of geo) {
+    const t = e.sources.get(id).tolerance;
+    assert.ok(t > GRID_PX, `${id}: tolerance ${t} — 반올림 격자(${GRID_PX})보다 작으면 점이 뭉쳐 삼각분할이 튄다`);
+    assert.ok(t <= MAPBOX_DEFAULT, `${id}: tolerance ${t} — mapbox 기본값보다 거칠다`);
+  }
+  // 선과 색칠이 다르게 단순화되면 어긋난다
+  assert.equal(new Set(geo.map((id) => e.sources.get(id).tolerance)).size, 1,
+    '소스마다 단순화 세기가 다르다 — 선과 색칠이 어긋난다');
 });

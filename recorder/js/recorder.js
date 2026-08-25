@@ -539,6 +539,29 @@ function initRecorder(map) {
      GitHub Pages 는 캐시를 준다. */
   const DATA_V = (([...document.scripts].map(s => s.src || '').join(' ')
     .match(/recorder\.js\?v=([\d.]+)/) || [])[1]) || '';
+  /* ── GeoJSON 단순화 세기 ──
+
+     한동안 우리 GeoJSON 소스는 전부 tolerance: 0 이었다. mapbox-gl 이 타일을 구우면서
+     한 번 더 단순화하는 게 싫어서였다 — 촘촘하게 만든 데이터가 화면에서 각져 보였다.
+     그런데 0 은 단순화를 **끄는** 값이고, 끄면 다른 게 깨진다.
+
+     타일 좌표는 마지막에 정수로 반올림된다(extent 8192). 단순화를 안 하면 그 격자보다
+     촘촘한 점들이 전부 살아남아 같은 칸으로 내려앉고, 링이 스스로를 훑는 모양이 된다.
+     지오메트리 자체는 멀쩡한데 삼각분할만 튄다 — 함경남도에서 화면 밖으로 길게 뻗던
+     다각형이 이것이었다. 데이터 검사(핀치·자기교차·감김…)에 아무것도 안 걸리고,
+     **SVG 로 뽑으면 멀쩡한데**(SVG 는 지오메트리를 직접 그린다) 화면·MP4·PSD 에서만
+     보이던 이유다. 셋 다 캔버스를 굽기 때문이다.
+
+     단위는 **CSS 픽셀**이다. mapbox-gl 이 tolerance × (extent / tileSize) = ×16 을 해서
+     타일 단위로 바꾸고, 그 값을 그대로 단순화 문턱으로 쓴다(더글러스-포이커).
+       · 반올림 격자 1칸  = 1 타일단위 = 0.0625 px
+       · mapbox 기본 0.375 px = 6 타일단위
+     그래서 격자보다 크기만 하면 뭉침이 안 생긴다. 0.125 px(2 타일단위)로 둔다 —
+     기본값보다 3배 촘촘하면서 격자의 2배라 안전하다. 1/8 픽셀은 눈에 보이지 않는다.
+
+     **선과 색칠에 같은 값을 써야 한다.** 다르게 단순화하면 둘이 어긋난다. */
+  const GEO_TOLERANCE = 0.125;
+
   const dataURL = (u) => (DATA_V ? `${u}?v=${DATA_V}` : u);
 
   const SIDO_HIRES_URL = './recorder/js/data/sido-hires.json';
@@ -606,7 +629,7 @@ function initRecorder(map) {
     }),
     createRegionPainter({
       id: 'admin1', source: 'admin1-boundaries', layer: 'admin1-color-fill', prop: 'name',
-      sourceSpec: () => ADMIN1_GEO && { type: 'geojson', tolerance: 0, data: ADMIN1_GEO },   // tolerance 0 이유는 sido 주석 참고
+      sourceSpec: () => ADMIN1_GEO && { type: 'geojson', tolerance: GEO_TOLERANCE, data: ADMIN1_GEO },
       lazyInput: true,
       resolve:   (q) => resolveByMeta(admin1Meta, q, (s) => s.a),
       suggest:   (q) => suggestByMeta(admin1Meta, q, (s) => s.a),
@@ -619,11 +642,7 @@ function initRecorder(map) {
     }),
     createRegionPainter({
       id: 'sido', source: 'sido-boundaries', layer: 'sido-color-fill', prop: 'name',
-      /* tolerance: 0 — mapbox-gl 은 GeoJSON 을 타일로 만들 때 자체적으로 한 번 더
-         단순화한다 (기본 0.375). 실측하니 줌 6 에서 도네츠크주가 3,055개 중
-         1,197개만 남았다. 데이터를 아무리 촘촘하게 만들어도 화면에서는 각져 보이던
-         원인. 0 으로 두면 우리가 준비한 정밀도가 그대로 그려진다. */
-      sourceSpec: () => ({ type: 'geojson', tolerance: 0, data: SIDO_HIRES || SIDO_GEO }),
+      sourceSpec: () => ({ type: 'geojson', tolerance: GEO_TOLERANCE, data: SIDO_HIRES || SIDO_GEO }),
       resolve:  (q) => resolveByMeta(sidoMeta, q, (s) => stripSido(s.n)),
       fullName: (n) => n,
       label:    sidoShort,
@@ -648,7 +667,7 @@ function initRecorder(map) {
     }),
     createRegionPainter({
       id: 'sigungu', source: 'sigungu-boundaries', layer: 'sigungu-color-fill', prop: 'name',
-      sourceSpec: () => SIGUNGU_GEO && { type: 'geojson', tolerance: 0, data: SIGUNGU_GEO },
+      sourceSpec: () => SIGUNGU_GEO && { type: 'geojson', tolerance: GEO_TOLERANCE, data: SIGUNGU_GEO },
       lazyInput: true,
       resolve:   (q) => resolveByMeta(sigunguMeta, q),
       suggest:   (q) => suggestByMeta(sigunguMeta, q),
@@ -1186,7 +1205,7 @@ function initRecorder(map) {
   function addKoreaBorderLayer() {
     if (!KR_BORDER || !styleReady || map.getLayer(KR_BORDER_LAYER)) return;
     if (!map.getSource(KR_BORDER_LAYER)) {
-      map.addSource(KR_BORDER_LAYER, { type: 'geojson', tolerance: 0, data: KR_BORDER });
+      map.addSource(KR_BORDER_LAYER, { type: 'geojson', tolerance: GEO_TOLERANCE, data: KR_BORDER });
     }
     map.addLayer({
       id: KR_BORDER_LAYER, type: 'line', source: KR_BORDER_LAYER,
@@ -1260,7 +1279,7 @@ function initRecorder(map) {
 
   function addKoreaCountryLayer() {
     if (!KC_GEO || !styleReady || map.getLayer(KC_LAYER)) return;
-    if (!map.getSource(KC_LAYER)) map.addSource(KC_LAYER, { type: 'geojson', tolerance: 0, data: KC_GEO });
+    if (!map.getSource(KC_LAYER)) map.addSource(KC_LAYER, { type: 'geojson', tolerance: GEO_TOLERANCE, data: KC_GEO });
     /* 국가 색칠이므로 **다른 색칠 모드 아래**에 깔려야 한다. 이 레이어를 다른 색칠처럼
        첫 symbol 바로 아래에 넣으면, PAINTERS 가 먼저 깔린 뒤에 얹히는 탓에 시도·시군구
        **위**로 올라간다. 그러면 대한민국을 칠한 상태에서 시도를 칠해도 시도 색이 안 보인다
@@ -1326,7 +1345,7 @@ function initRecorder(map) {
 
   function addKoreaAdmin1Lines() {
     if (!KA_GEO || !styleReady || map.getLayer(KA_LAYER)) return;
-    if (!map.getSource(KA_LAYER)) map.addSource(KA_LAYER, { type: 'geojson', tolerance: 0, data: KA_GEO });
+    if (!map.getSource(KA_LAYER)) map.addSource(KA_LAYER, { type: 'geojson', tolerance: GEO_TOLERANCE, data: KA_GEO });
     map.addLayer({
       id: KA_LAYER, type: 'line', source: KA_LAYER,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
