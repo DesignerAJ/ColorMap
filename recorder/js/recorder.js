@@ -578,13 +578,21 @@ function initRecorder(map) {
      평소 쓰는 말과 다르다. 실제로 쓰는 두 글자(충북·경남)는 SIDO_META 에 이미 들어 있다.
      stripSido 는 검색어 별칭('충청북'으로 쳐도 찾히게)으로만 남긴다. */
   const sidoShort = (n) => (sidoMeta[n] && sidoMeta[n].s) || stripSido(n) || n;
-  /* 약칭(충북)과 정식명(충청북도)을 둘 다 올린다. 해석은 예전부터 양쪽 다 됐지만
-     목록에는 약칭만 있어서, '충청' 까지 친 사람에게는 아무것도 안 뜨고 다 친 뒤에야
-     Enter 로 들어갔다. 행정구역 탭도 이제 양쪽으로 찾히므로 두 탭이 같게 동작한다. */
+  /* 목록에는 **약칭만** 올린다. 예전에는 약칭과 정식명을 각각 option 으로 넣어서,
+     입력창을 누르기만 해도 17개 시도가 34줄로 펼쳐졌다 — '충북'과 '충청북도'가 나란히 떠서
+     고르는 데 방해만 됐다.
+
+     그렇다고 정식명으로 못 찾으면 안 된다. datalist 는 사용자가 친 글자를 **value 와
+     label 양쪽**에서 찾아 거르므로, value 에 약칭을 두고 label 에 정식명을 적으면
+     '충청'을 쳐도 '충북' 줄이 남는다. 목록은 17줄, 검색은 양쪽 — 둘 다 된다.
+     (해석은 resolveByMeta 가 별칭까지 보므로 원래 양쪽 다 됐다) */
   (function fillSidoList() {
     const dl = $('sido-list');
     SIDO_META.forEach(s => {
-      [s.s, s.n].forEach(v => { const opt = document.createElement('option'); opt.value = v; dl.appendChild(opt); });
+      const opt = document.createElement('option');
+      opt.value = s.s;                                 // 화면에 보이고, 골랐을 때 입력창에 들어가는 값
+      if (s.n !== s.s) opt.label = s.n;                // 정식명 — 검색에 걸리고 설명으로 보인다
+      dl.appendChild(opt);
     });
   })();
 
