@@ -67,6 +67,34 @@ function initRecorder(map) {
     return o;
   }
 
+  /* ── 이동 중에 지도가 단순해지지 않게 ──
+
+     비행 곡선은 중간에 줌아웃한다. 그런데 스타일 레이어에는 `minzoom` 이 걸려 있어서 —
+     지형도 18개, 모노톤 54개 — 줌이 그 아래로 내려가면 **스타일이 스스로 숨긴다.**
+     도로·지형 음영·등고선이 그렇게 빠진다. 출발·도착 화면은 멀쩡한데 이동 중에만
+     지도가 단순해 보이는 게 이것이다. 타일 로딩과는 무관해서 프리로드로는 안 고쳐진다.
+
+     그래서 녹화 동안만 문턱을 내린다. **양 끝에서 보이던 레이어만** 내린다 —
+     원래 안 보이던 레이어까지 켜면 이동 중에 없던 것이 나타나 오히려 더 튄다.
+     끝나면 원래 값으로 되돌린다. */
+  const _detailHold = { saved: null };   // 한 줄 const 라야 테스트가 꺼내 쓸 수 있다
+  function holdDetail(lowest, endpointZoom) {
+    if (_detailHold.saved) return;                     // 두 번 걸면 원래 값을 잃는다
+    _detailHold.saved = [];
+    for (const l of map.getStyle()?.layers || []) {
+      const mz = l.minzoom;
+      if (typeof mz !== 'number' || mz <= lowest) continue;
+      if (mz > endpointZoom) continue;                 // 양 끝에서도 안 보이던 레이어는 그대로 둔다
+      try { map.setLayerZoomRange(l.id, lowest, l.maxzoom ?? 24); _detailHold.saved.push([l.id, mz, l.maxzoom]); } catch (_) {}
+    }
+    if (_detailHold.saved.length) console.log(`[REC] 이동 중 디테일 유지: 레이어 ${_detailHold.saved.length}개의 minzoom 을 ${lowest.toFixed(1)} 로 내림`);
+  }
+  function restoreDetail() {
+    if (!_detailHold.saved) return;
+    for (const [id, mz, xz] of _detailHold.saved) { try { map.setLayerZoomRange(id, mz, xz ?? 24); } catch (_) {} }
+    _detailHold.saved = null;
+  }
+
   /* ── 실제 카메라 경로 표본 뽑기 (리허설) ──
      flyTo 는 중간에 줌이 낮아지는 곡선 궤적이라 출발↔도착을 선형 보간해도
      실제로 지나가는 화면과 다르다 = 엉뚱한 타일을 미리 받게 된다.
@@ -2896,12 +2924,13 @@ function initRecorder(map) {
       setStatus('타일 프리로드 중…','busy');
       map.jumpTo(endCam); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
+      /* 카메라가 따라갈 경로는 **자르기 전** 것이다. trimArcEnd 는 선을 도착핀 앞에서
+         멈추려는 것이지 카메라를 멈추려는 게 아니다 — 잘린 끝까지만 따라가면 마지막
+         프레임에서 도착 카메라로 점프해 화면이 튄다. 선은 잘린 것으로 그린다. */
+      const camPath = pathCoords.slice();
       if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
-      /* 구간별 궤적은 **경로를 자른 뒤에** 만든다. 먼저 만들면 카메라가 자르기 전 경로를
-         따라가서 선과 어긋난다. 프리로드도 이걸 그대로 써야 엉뚱한 타일을 안 데운다 —
-         그러면 이동 중에 저해상도 타일이 보인다. */
       {
-        const whole = followRoute ? pathFollower(pathCoords) : null;
+        const whole = followRoute ? pathFollower(camPath) : null;
         legPaths = camSeq.slice(0, -1).map((from, i) => {
           const flight = followCurve ? flightPath(from, camSeq[i + 1], followCurve, followW0) : null;
           if (!whole) return { path: flight, follow: null };
@@ -2915,6 +2944,17 @@ function initRecorder(map) {
       // 1-b) 이동 '중간' 타일까지 프리로드.
       //      여기까지는 출발·경유지·도착만 데워져 있어서, 그 사이를 지나갈 때는
       //      아직 안 받은 타일 대신 저해상도 부모 타일이 그려진다 (= 화면이 단순해 보이는 원인).
+      /* 이동 중 가장 낮게 내려가는 줌을 구해 그때까지 디테일이 안 빠지게 한다.
+         프리로드보다 **먼저** 걸어야 그 상태의 타일을 데운다. */
+      {
+        let lowest = Infinity, endpointZoom = 0;
+        camSeq.forEach((c) => { endpointZoom = Math.max(endpointZoom, c.zoom); });
+        legPaths.forEach((lg, i) => {
+          if (!lg.path) { lowest = Math.min(lowest, camSeq[i].zoom, camSeq[i+1].zoom); return; }
+          for (let k = 0; k <= 40; k++) lowest = Math.min(lowest, lg.path(k / 40).zoom);
+        });
+        if (isFinite(lowest)) holdDetail(Math.max(0, lowest - 0.2), endpointZoom);
+      }
       if ($('prewarm-path').checked) await prewarmPath(camSeq, mode, durSec, legPaths);
 
       map.jumpTo(startCam); await tilesSettled();
@@ -3031,7 +3071,7 @@ function initRecorder(map) {
       // 캡처 트랙을 반드시 정리 — 안 끊으면 녹화할 때마다 살아있는 캔버스 캡처 트랙이 쌓여 다음 녹화가 불안정해진다
       try { if (recStream) recStream.getTracks().forEach(t => t.stop()); } catch (_) {}
       recStream = null;
-      busy = false; setUI(true); if (pinRAF) cancelAnimationFrame(pinRAF); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
+      restoreDetail(); busy = false; setUI(true); if (pinRAF) cancelAnimationFrame(pinRAF); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
     }
   }
   /* ── 부드럽게 녹화 (오프라인: 프레임 단위 렌더 → 캡처) ── */
@@ -3233,9 +3273,10 @@ function initRecorder(map) {
       setStatus('타일 프리로드 중…','busy');
       map.jumpTo(endCam); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
+      const smoothCamPath = pathCoords.slice();     // 카메라는 자르기 전 경로를 따른다
       if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
-      if (followRoute) {                            // 자른 뒤의 경로로 연결한다
-        const whole = pathFollower(pathCoords);
+      if (followRoute) {                            // 카메라는 자르기 전 경로를 따른다 (위 참고)
+        const whole = pathFollower(smoothCamPath);
         legs.forEach((lg, L) => {
           const a = legFrac(L, 0, totalLegs), b = legFrac(L, 1, totalLegs);
           lg.follow = whole ? (k) => whole(a + (b - a) * k) : null;
@@ -3243,6 +3284,15 @@ function initRecorder(map) {
       }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
       for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
+      {   // 이동 중 디테일 유지 — 프리로드보다 먼저 걸어야 그 상태의 타일을 데운다
+        let lowest = Infinity, endpointZoom = 0;
+        legs.forEach((lg) => {
+          endpointZoom = Math.max(endpointZoom, lg.from.zoom, lg.to.zoom);
+          if (!lg.path) { lowest = Math.min(lowest, lg.from.zoom, lg.to.zoom); return; }
+          for (let k = 0; k <= 40; k++) lowest = Math.min(lowest, lg.path(k / 40).zoom);
+        });
+        if (isFinite(lowest)) holdDetail(Math.max(0, lowest - 0.2), endpointZoom);
+      }
       // 경로 타일 미리 데우기 — 각 구간 중간 시점을 훑어 타일 캐시에 올림 → 인코딩 중 프레임별 타일 로딩 대기 ↓ (화질 손실 없음)
       // 프레임 카메라와 **같은 곡선**으로 표본을 뽑아야 궤적이 정확히 일치한다 (안 그러면 엉뚱한 타일을 데운다).
       setStatus('경로 타일 프리로드 중…','busy');
@@ -3426,7 +3476,7 @@ function initRecorder(map) {
       console.error(err); setStatus('오류: ' + err.message, '');
       try { if (encoder && encoder.state !== 'closed') encoder.close(); } catch (_) {}
     } finally {
-      busy = false; setUI(true); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
+      restoreDetail(); busy = false; setUI(true); hideCapturePins(); refreshDrawPreview(); applyRasterFade(); restoreLabelFade(); pinEls.forEach(el => el.style.display = '');
     }
   }
   // MP4는 프레임 단위 경로 렌더링을 기본으로 사용한다. WebM 선택 시 기존 실시간 녹화를 유지한다.
@@ -3738,7 +3788,7 @@ function initRecorder(map) {
       removePsdBackdrop();   // 실패해도 임시 배경 레이어는 반드시 걷어낸다
       Object.keys(saved).forEach(id => setVis(id, saved[id]));
       if (showPins) { hideCapturePins(); pinEls.forEach(el => el.style.display = ''); }
-      busy = false; setUI(true);
+      restoreDetail(); busy = false; setUI(true);
       map.triggerRepaint();
     }
   });

@@ -233,3 +233,52 @@ test('경로 따라가기: 점이 모자라면 세우지 않는다', () => {
   assert.equal(P.pathFollower([[127, 37]]), null);
   assert.equal(P.pathFollower([[127, 37], [127, 37]]), null);   // 길이 0
 });
+
+/* ── 이동 중 지도가 단순해지지 않게 ──
+   비행 곡선은 중간에 줌아웃하는데, 스타일 레이어에 minzoom 이 걸려 있어서 줌이 그 아래로
+   내려가면 스타일이 스스로 숨긴다 — 지형도 18개, 모노톤 54개 레이어가 그렇다.
+   도로·지형 음영·등고선이 그렇게 빠진다. 출발·도착 화면은 멀쩡한데 이동 중에만 지도가
+   단순해 보이는 게 이것이고, 타일 로딩과 무관해서 프리로드로는 안 고쳐진다. */
+const D = extract('recorder/js/recorder.js', ['_detailHold', 'holdDetail', 'restoreDetail']);
+
+const withLayers = (layers, fn) => {
+  const prev = globalThis.map;
+  globalThis.map = {
+    getStyle: () => ({ layers }),
+    setLayerZoomRange: (id, mn, mx) => {
+      const L = layers.find((l) => l.id === id);
+      if (L) { L.minzoom = mn; L.maxzoom = mx; }
+    },
+  };
+  try { return fn(); } finally { globalThis.map = prev; }
+};
+
+test('줌아웃 구간에서도 디테일 레이어가 남는다', () => {
+  const layers = [
+    { id: 'road', minzoom: 9 },            // 양 끝에서는 보이고 이동 중에 빠진다 → 내려야 한다
+    { id: 'hillshade', minzoom: 5 },       // 이미 더 낮다 → 건드릴 것 없다
+    { id: 'building', minzoom: 15 },       // 양 끝에서도 안 보인다 → 켜면 안 된다
+    { id: 'water' },                       // minzoom 없음
+  ];
+  withLayers(layers, () => {
+    D.holdDetail(6.5, 10);                 // 이동 중 최저 6.5, 양 끝 줌 10
+    assert.equal(layers[0].minzoom, 6.5, '도로가 이동 중에 빠진다');
+    assert.equal(layers[1].minzoom, 5, '원래 더 낮던 레이어를 건드렸다');
+    assert.equal(layers[2].minzoom, 15,
+      '양 끝에서도 안 보이던 레이어를 켜면 이동 중에 없던 것이 나타나 더 튄다');
+    assert.equal(layers[3].minzoom, undefined, 'minzoom 없는 레이어를 건드렸다');
+    D.restoreDetail();
+    assert.equal(layers[0].minzoom, 9, '녹화가 끝나면 원래대로 돌려놔야 한다');
+  });
+});
+
+test('디테일 유지는 두 번 걸어도 원래 값을 잃지 않는다', () => {
+  const layers = [{ id: 'road', minzoom: 9 }];
+  withLayers(layers, () => {
+    D.holdDetail(6, 10);
+    D.holdDetail(4, 10);                   // 두 번째는 무시돼야 한다 — 안 그러면 6 이 '원래 값'이 된다
+    assert.equal(layers[0].minzoom, 6);
+    D.restoreDetail();
+    assert.equal(layers[0].minzoom, 9, '원래 값을 잃었다');
+  });
+});
