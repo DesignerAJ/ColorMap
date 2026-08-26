@@ -380,7 +380,8 @@
     <!-- 이 칸만 되돌린다. 색칠(국가·구역별 색상)과 녹화 설정은 건드리지 않는다.
          글자 없이 기호만 두므로 title 과 aria-label 로 무엇을 되돌리는지 밝힌다. -->
     <div class="row" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
-      <button type="button" id="camera-reset" class="set-view" style="margin-left:auto;"
+      <!-- .set-view 는 padding 0 이라 아이콘 높이(16px)까지 줄어든다. 다른 버튼과 같은 34px 로 못박는다. -->
+      <button type="button" id="camera-reset" class="set-view" style="margin-left:auto; flex:0 0 34px; width:34px; height:34px;"
               title="이 칸만 처음으로 — 핀·경유지·경로선·그린 선과 여기 설정을 되돌립니다 (색칠·녹화 설정은 그대로)"
               aria-label="핀·녹화 경로 설정 처음으로 되돌리기">
         <svg class="vf-ico" viewBox="0 0 24 24" width="16" height="16" fill="none"
