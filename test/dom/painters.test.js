@@ -471,3 +471,19 @@ test('되돌리기: 색칠과 녹화 설정은 건드리지 않는다', async ()
   assert.equal(e.$('fly-dip').value, '3', '녹화 설정까지 되돌렸다');
   assert.equal(e.$('country-color').value, '#123456', '색칠 설정까지 되돌렸다');
 });
+
+test('되돌리기 버튼을 눌러도 칸이 접히지 않는다', async () => {
+  /* summary 안에 있어서 그냥 두면 누를 때마다 칸이 접힌다.
+     버튼이 잠겼을 때(녹화 중)는 click 이 아예 안 나므로 감싼 span 이 받아야 한다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  const ev = new e.window.Event('click', { bubbles: true, cancelable: true });
+  e.$('camera-reset').dispatchEvent(ev);
+  assert.equal(ev.defaultPrevented, true, '누르면 칸이 접힌다');
+
+  e.$('camera-reset').disabled = true;              // 녹화 중
+  const ev2 = new e.window.Event('click', { bubbles: true, cancelable: true });
+  e.$('camera-reset-wrap').dispatchEvent(ev2);
+  assert.equal(ev2.defaultPrevented, true, '잠겼을 때 누르면 칸이 접힌다');
+});

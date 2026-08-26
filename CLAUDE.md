@@ -375,7 +375,7 @@ Enter 의 **기본 동작이 끝난 뒤에야** 입력창에 들어온다 — �
 ```bash
 node tools/serve.mjs                  # http://127.0.0.1:5500
 node --test test/*.test.js            # 107개, 설치 불필요
-npm install && node --test test/dom/*.test.js   # 65개, jsdom 필요
+npm install && node --test test/dom/*.test.js   # 66개, jsdom 필요
 ```
 
 푸시하면 `.github/workflows/qa.yml` 이 둘 다 돌린다 (배포는 건드리지 않는다).

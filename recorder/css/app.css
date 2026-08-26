@@ -409,6 +409,17 @@
   .set-view .vf-ico {
     display: block;
   }
+
+  /* '핀·녹화 경로 설정' 을 되돌리는 버튼. **칸을 펼쳤을 때만** 보인다 —
+     접힌 줄에 떠 있으면 무엇을 되돌리는지 안 보이는 채로 눌리게 된다. */
+  #camera-reset-wrap {
+    display: none;
+    margin-left: auto;
+    margin-right: 8px;
+  }
+  details[open] > summary > #camera-reset-wrap {
+    display: flex;
+  }
   .set-tag {
     flex: 0 0 auto;
     align-self: center;

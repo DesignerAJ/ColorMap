@@ -2900,6 +2900,9 @@ function initRecorder(map) {
 
   snapshotCameraPanel();
   $('camera-reset').addEventListener('click', resetCameraPanel);
+  /* summary 안에 있어서 그냥 두면 누를 때마다 칸이 접힌다. 감싼 span 에서 막는다 —
+     버튼이 잠겼을 때(녹화 중)는 click 이 아예 안 나므로 버튼에 걸면 안 된다. */
+  $('camera-reset-wrap').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
 
   // ── 라벨 폰트 ──
   // 팀 공용 기본 폰트: assets/fonts 의 파일을 받아서 자동 적용. 교체하려면 아래 url 만 바꾸면 됨.
