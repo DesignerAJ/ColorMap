@@ -589,7 +589,7 @@
   .seg-btn {
     flex: 1;
     padding: 8px 4px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     white-space: nowrap;
     background: transparent;
@@ -668,25 +668,55 @@
     padding: 0;
     cursor: pointer;
   }
-  /* 스타일 · 글자 토글 · 투영. 글자 칸은 라벨과 체크박스가 붙어 있어야 해서 두 칸을 쓴다. */
+  /* 스타일 섹션은 타입·투영 → 지도색·강/호수·지명 표시 순서다.
+     타입·투영과 지도 표시 설정 사이만 구분선으로 나눈다. */
   .style-projection-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .style-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--txt);
+  }
+  .style-projection-row {
     display: grid;
-    grid-template-columns: auto minmax(0, 0.9fr) auto auto minmax(0, 1.1fr);
+    grid-template-columns: auto minmax(0, 0.9fr) auto minmax(0, 1.1fr);
     align-items: center;
     gap: 10px;
   }
-  .style-projection-card .label-toggle {
-    font-size: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-    margin: 0 -6px 0 2px;                 /* 체크박스와 붙여 하나로 읽히게 */
-  }
-  .style-projection-card > label {
+  #country-selector-container .style-projection-row > label,
+  #country-selector-container .label-display-row .label-toggle {
     font-size: 12px;
     white-space: nowrap;
+    margin: 0;
   }
-  .style-projection-card select {
+  .style-projection-row select {
     min-width: 0;
+  }
+  .map-color-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .label-display-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .label-display-row .label-toggle {
+    cursor: pointer;
+    line-height: 1.25;
+    text-align: center;
+  }
+  .label-display-row input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
   }
   /* 색 선택 입력 — 원형 스와치 (칩 안의 .sw 제외, 아래에서 따로 처리) */
   input[type="color"]:not(.sw) {

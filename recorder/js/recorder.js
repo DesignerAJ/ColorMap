@@ -2985,7 +2985,7 @@ function initRecorder(map) {
     const modeLabel = $('record-mode-label');
     const format = $('format').value || 'video';
     if (label) label.textContent = format === 'webm' ? 'WebM' : format.toUpperCase();
-    if (modeLabel) modeLabel.textContent = format === 'mp4' ? '(경로 렌더링)' : '(실시간 녹화)';
+    if (modeLabel) modeLabel.textContent = format === 'mp4' ? '(경로 영상)' : '(실시간 녹화)';
   };
   $('format').addEventListener('change', syncRecordFormatLabel);
   syncRecordFormatLabel();

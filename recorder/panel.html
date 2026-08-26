@@ -18,10 +18,6 @@
   <button type="button" class="minimize-button" id="minimize-button" title="전체 패널 접기/펼치기">
     <span class="sr-only">전체 패널 접기/펼치기</span>
   </button>
-  <div class="colormap-panel-title">
-    <span>ColorMap 3.0 Beta</span>
-    <!-- <small>지도 디자인 · 카메라 녹화</small> -->
-  </div>
 
   <div id="controls">
     <details id="region-settings" class="adv" data-menu-section="region-selection" open>
@@ -167,7 +163,7 @@
             <div class="bd-head">
               <input type="checkbox" class="bd-on" checked hidden />
               <label class="line-label">행정구역선</label>
-              <input type="color" class="bd-color" list="palette" value="#ededed" aria-label="행정구역선 색상" />
+              <input type="color" class="bd-color" list="palette" value="#ffffff" aria-label="행정구역선 색상" />
               <div class="dash-reference" aria-hidden="true">
                 <img src="./image/dashLine_TypeA.png" alt="" />
                 <img src="./image/dashLine_TypeB.png" alt="" />
@@ -175,7 +171,7 @@
               </div>
             </div>
             <div class="bd-ctrls">
-              <label class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.01" value="0.6" /></label>
+              <label class="bd-cell">투명도<input type="range" class="bd-opacity" min="0" max="1" step="0.01" value="0.5" /></label>
               <label class="bd-cell">두께<input type="range" class="bd-width" min="0" max="6" step="0.1" value="1.2" /></label>
               <div class="bd-dash-options">
                 <span>점선</span>
@@ -187,38 +183,48 @@
           </div>
         </div>
 
-        <div id="map-color-section" class="design-card map-color-card">
-          <div class="map-color-row">
-            <label class="mc-label" for="land-color">육지색</label>
-            <input id="land-color" type="color" list="palette" value="#8896a1" />
-          </div>
-          <div class="map-color-row">
-            <label class="mc-label" for="sea-color">바다색</label>
-            <input id="sea-color" type="color" list="palette" value="#172c4d" />
-          </div>
-          <div class="map-color-row river-toggle-row">
-            <label class="mc-toggle" for="river-on">강·호수</label>
-            <input type="checkbox" id="river-on" />
-          </div>
-        </div>
-
         <div class="design-card style-projection-card">
-          <label for="style-select">스타일</label>
-          <select id="style-select">
-            <option value="mono_terrain">단색지형</option>
-            <option value="mono">단색</option>
-            <option value="satellite">위성사진</option>
-            <option value="detail">지형도</option>
-            <option value="monotone">모노톤</option>
-            <option value="general">일반지도</option>
-          </select>
-          <label class="label-toggle" for="label-on" title="지도의 지명·도로명을 모두 켜고 끕니다. 스타일마다 원래 상태를 따라 체크됩니다">글자</label>
-          <input type="checkbox" id="label-on" checked title="지도의 지명·도로명을 모두 켜고 끕니다. 스타일마다 원래 상태를 따라 체크됩니다" />
-          <select id="proj-select" aria-label="지도 투영 방식">
-            <option value="mercator">2D / 메르카토르</option>
-            <option value="equirectangular">2D / WGS84</option>
-            <option value="globe">3D / 구형</option>
-          </select>
+          <div class="style-section-title">스타일</div>
+
+          <div class="style-projection-row">
+            <label for="style-select">타입</label>
+            <select id="style-select">
+              <option value="mono_terrain">단색지형</option>
+              <option value="mono">단색</option>
+              <option value="satellite">위성사진</option>
+              <option value="detail">지형도</option>
+              <option value="monotone">모노톤</option>
+              <option value="general">일반지도</option>
+            </select>
+            <label for="proj-select">투영</label>
+            <select id="proj-select">
+              <option value="mercator">2D / 메르카토르</option>
+              <option value="equirectangular">2D / WGS84</option>
+              <option value="globe">3D / 구형</option>
+            </select>
+          </div>
+
+          <div id="map-color-section" class="map-color-section">
+            <div class="group-separator"></div>
+            <div class="map-color-card">
+              <div class="map-color-row">
+                <label class="mc-label" for="land-color">육지색</label>
+                <input id="land-color" type="color" list="palette" value="#8896a1" />
+              </div>
+              <div class="map-color-row">
+                <label class="mc-label" for="sea-color">바다색</label>
+                <input id="sea-color" type="color" list="palette" value="#172c4d" />
+              </div>
+              <div class="map-color-row river-toggle-row">
+                <label class="mc-toggle" for="river-on">강·호수</label>
+                <input type="checkbox" id="river-on" />
+              </div>
+              <div class="map-color-row label-display-row">
+                <label class="label-toggle" for="label-on" title="지도의 지명·도로명을 모두 켜고 끕니다. 스타일마다 원래 상태를 따라 체크됩니다">지명 표시<br />(체크용)</label>
+                <input type="checkbox" id="label-on" checked title="지도의 지명·도로명을 모두 켜고 끕니다. 스타일마다 원래 상태를 따라 체크됩니다" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </details>
@@ -229,7 +235,7 @@
            버튼이 잠겼을 때(녹화 중)는 click 이 아예 안 나므로 span 이 받아야 한다.
            글자 없이 기호만 두니 title 과 aria-label 로 무엇을 되돌리는지 밝힌다.
            보이고 숨기는 건 app.css 가 한다 — 인라인 display 를 두면 CSS 로 못 숨긴다. -->
-      <summary>핀·녹화 경로 설정
+      <summary>핀·경로 설정
         <span id="camera-reset-wrap">
           <button type="button" id="camera-reset" class="set-view"
                   style="flex:0 0 26px; width:26px; height:26px;"
@@ -279,20 +285,20 @@
 
     <div class="field" style="margin-top:4px;">
       <div style="display:flex; align-items:center; gap:16px;">
-        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; font-size:11px; margin:0;">
+        <label style="display:flex; align-items:center; gap:2px; cursor:pointer; font-size:11px; margin:0;">
           <input id="pin-in-video" type="checkbox" style="width:auto; flex:0 0 auto;" />
           출발·도착 핀 표시
         </label>
-        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; font-size:11px; margin:0;">
+        <label style="display:flex; align-items:center; gap:2px; cursor:pointer; font-size:11px; margin:0;">
           <input id="locpin-in-video" type="checkbox" style="width:auto; flex:0 0 auto;" />
-          위치 핀 표시
+          개별 핀 표시
         </label>
       </div>
     </div>
 
     <!-- ── 위치 표시 핀 (영상용·카메라 경로와 무관) — '위치 핀 표시' 체크 시에만 펼침 ── -->
     <div class="field" id="locpin-field" style="margin-top:8px; display:none;">
-      <label>위치 핀<span class="drag-hint">(경로와 무관)</span></label>
+      <label>개별 핀<span class="drag-hint">(경로와 무관)</span></label>
       <div class="pin-row">
         <div class="pin-src" id="pin-loc" draggable="true" data-target="loc" title="지도로 끌어다 놓기">
           <svg class="pin-mini" id="pin-dot-loc" viewBox="0 0 28 38" width="16" height="22"><path d="M14 0C6.3 0 0 6.3 0 14c0 10 14 24 14 24s14-14 14-24C28 6.3 21.7 0 14 0z" fill="#F17D38"/><circle cx="14" cy="14" r="6" fill="rgba(255,255,255,.9)"/></svg>
@@ -306,11 +312,11 @@
 
     <div class="field" style="margin-top:6px;">
       <div style="display:flex; align-items:center; gap:16px;">
-        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; font-size:11px; margin:0;">
+        <label style="display:flex; align-items:center; gap:2px; cursor:pointer; font-size:11px; margin:0;">
           <input id="route-on" type="checkbox" style="width:auto; flex:0 0 auto;" />
           경로 선 표시
         </label>
-        <label style="display:flex; align-items:center; gap:7px; cursor:pointer; font-size:11px; margin:0;">
+        <label style="display:flex; align-items:center; gap:2px; cursor:pointer; font-size:11px; margin:0;">
           <input id="draw-on" type="checkbox" style="width:auto; flex:0 0 auto;" />
           직접 선 그리기
         </label>
@@ -376,9 +382,10 @@
       </div>
     </div>
 
+    <div class="divider"></div>
     <div class="row" style="margin-top:8px; align-items:flex-end;">
       <div class="field" style="margin:0; flex:1;">
-        <label>위치 핀 글자 크기</label>
+        <label>핀 라벨 크기</label>
         <input id="locpin-text-size" type="number" min="8" max="120" step="1" value="30" />
       </div>
       <div class="field" style="margin:0; flex:1;">
@@ -399,7 +406,7 @@
     </details>
 
     <details id="recording-settings" class="adv" data-menu-section="recording-settings">
-      <summary>녹화 설정</summary>
+      <summary>녹화 세부 설정</summary>
       <div class="pad">
         <div class="row">
           <div class="field"><label>줌 시간 (초)</label>
@@ -486,7 +493,7 @@
     <div class="export-grid">
       <button type="button" id="record" class="export-tile">
         <strong id="record-format-label">MP4</strong>
-        <small id="record-mode-label">(경로 렌더링)</small>
+        <small id="record-mode-label">(경로 영상)</small>
       </button>
       <button type="button" id="capture-psd" class="export-tile">
         <strong>PSD</strong>
@@ -518,4 +525,6 @@
     </button>
     <output id="zoom-val" hidden>6.00</output>
   </div>
+
+  <footer class="colormap-panel-footer">© 2026 ColorMap Project by KBS 보도그래픽부</footer>
 </div>

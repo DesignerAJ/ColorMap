@@ -87,7 +87,8 @@ test('지도 디자인 패널 라벨이 설계한 크기로 그려진다', () =>
   assert.equal(size('#design-settings .bd-head .line-label'), '12px');
   assert.equal(size('#design-settings .mc-label'), '12px');
   assert.equal(size('#design-settings .mc-toggle'), '12px');
-  assert.equal(size('#design-settings .style-projection-card > label'), '12px');
+  assert.equal(size('#design-settings .style-projection-row > label'), '12px');
+  assert.equal(size('#design-settings .label-display-row .label-toggle'), '12px');
   assert.equal(size('#design-settings .bd-cell'), '10px', '투명도·두께가 옆의 점선(10px)과 따로 놀면 안 된다');
 });
 
