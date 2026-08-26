@@ -48,7 +48,7 @@ test('색칠 모드 4종이 쓰는 id 가 패널에 모두 있다', () => {
 
 test('녹화 중 잠그는 컨트롤이 전부 실재한다', () => {
   const ids = new Set([...panel.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
-  const list = recorder.match(/\['set-start'[\s\S]*?\]\n\s*\.forEach/);
+  const list = recorder.match(/\['set-start'[\s\S]*?\]\r?\n\s*\.forEach/);
   assert.ok(list, 'setUI 의 id 목록을 찾지 못했다');
   const missing = [...list[0].matchAll(/'([^']+)'/g)].map((m) => m[1]).filter((id) => !ids.has(id));
   assert.deepEqual(missing, [], 'setUI 가 없는 id 를 잠그려 한다 — 녹화 시작이 통째로 멈춘다');
@@ -58,6 +58,15 @@ test('패널 조각 버전이 index.html 과 같다', () => {
   const a = index.match(/\?v=([\d.]+)/)[1];
   const b = script.match(/panel\.html\?v=([\d.]+)/)[1];
   assert.equal(b, a, 'PANEL_URL 버전만 뒤처졌다');
+});
+
+test('패널 제목은 없고 저작권 문구는 최하단에 있다', () => {
+  assert.doesNotMatch(panel, /colormap-panel-title|ColorMap 3\.1/, '삭제한 상단 제목이 남아 있다');
+  assert.match(
+    panel,
+    /<footer class="colormap-panel-footer">© 2026 ColorMap Project by KBS 보도그래픽부<\/footer>\s*<\/div>\s*$/,
+    '저작권 문구가 패널 최하단에 없거나 내용이 달라졌다',
+  );
 });
 
 test('검색 인증키가 커밋에 실제 값으로 남아 있는지 알려준다', () => {

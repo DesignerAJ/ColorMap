@@ -1,5 +1,7 @@
 # 국가, 대한민국 시도 경계 및 영역 지도
-> for KBS 보도그래픽부
+> by KBS 보도그래픽부
+>
+> 현재 릴리스: **v3.1.0**
 
 ## 카메라 경로 녹화 통합
 
@@ -9,15 +11,34 @@
 - 카메라 출발·경유지·도착 지정
 - MP4 / WebM 녹화와 프레임 단위 부드러운 녹화
 - 국가·해외 행정구역·시도·시군구 색칠
-- 경로선, 위치 핀, 직접 선 그리기
+- 경로선, 개별 핀, 직접 선 그리기
 - PNG, PSD, SVG 내보내기
 
 `recorder/panel.html`은 단독 웹앱이 아니라 루트 앱의 단일 설정 패널을 구성하는 UI 조각입니다.
 별도의 recorder 지도나 전환 버튼은 없으며 지도와 Mapbox token은 `data/script.js`가 한 번만 생성하고 관리합니다.
-접이식 메뉴는 `지역 선택 → 지도 디자인 → 카메라 경로 · 핀과 선 → 녹화 설정` 순서의 `details[data-menu-section]` 단위로 구분합니다.
+접이식 메뉴는 `국가·구역별 색상 → 지도 디자인 → 핀·경로 설정 → 녹화 세부 설정` 순서의
+`details[data-menu-section]` 단위로 구분합니다.
 MP4·PSD·PNG·SVG 내보내기 버튼은 접이식 메뉴 밖에서 한 줄로 항상 노출되며, 지도 줌은 그 아래 아이콘형 컨트롤로 배치합니다.
 MP4는 별도 보조 버튼 없이 프레임 단위 경로 렌더링 방식으로 부드럽게 저장합니다.
-작업 상태는 패널 안에 상주하지 않고 화면 중앙에 잠시 나타난 뒤 디졸브됩니다.
+작업 상태는 패널 안에 상주하지 않고 화면 하단 중앙에 잠시 나타난 뒤 디졸브됩니다.
+
+## 버전 표기 규칙
+
+ColorMap 릴리스는 `v(Major.Minor.Patch)` 구조로 표기합니다. 실제 버전에는 괄호를 쓰지 않고,
+세 숫자를 항상 모두 적어 앞에 `v`를 붙입니다. 이번 릴리스의 표준 표기는 `v3.1.0`입니다.
+
+- **Major**: 하위 버전과 호환되지 않는 변경이나 대대적인 변화가 있을 때 올립니다. 예를 들어
+  `v1.0.0` 방식의 클라이언트가 `v2.0.0` API에 접근할 수 없다면 Major 변경입니다.
+- **Minor**: 하위 호환성을 유지하면서 새 기능을 추가할 때 올립니다. 새 API가 추가되어도 기존
+  공개 API가 계속 동작하거나, 기존 기능·사용 방법이 하위 호환 범위에서 달라지는 경우입니다.
+- **Patch**: 하위 호환성을 유지하는 버그 수정, 기존 사용자가 알아차리기 어려운 작은 변화,
+  내부 소스 수정에 사용합니다.
+
+상위 숫자를 올리면 그 오른쪽 숫자는 `0`으로 초기화합니다. 예: `v3.1.4`에서 호환되는 기능을
+추가하면 `v3.2.0`, 호환되지 않는 변경이면 `v4.0.0`입니다.
+
+`index.html`과 `data/script.js`에 붙는 `?v=3.7.22` 같은 값은 브라우저 캐시를 끊기 위한 내부
+키이며 릴리스 버전이 아닙니다. 이 값은 8곳이 서로 같아야 하지만 제품 버전과 일치할 필요는 없습니다.
 
 로컬에서는 `file://`로 열지 말고 서버를 실행합니다.
 
@@ -61,6 +82,48 @@ node tools/serve.mjs          # 또는  python -m http.server 5500
 다시 만들려면 `MAPBOX_TOKEN=... node recorder/tools/build-korea-border.mjs`
 (`npm i @mapbox/vector-tile pbf` 필요).
 
+행정구역 데이터는 나라별로 나눠 받습니다. `node recorder/tools/build-admin1-split.mjs` 가
+`admin1.json` 을 `admin1-meta.json`(속성) · `admin1-core.json`(자주 쓰는 8개국) ·
+`admin1/<ISO3>.json`(나머지)으로 쪼갭니다. 이때 거친 나라 224곳의 경계를
+**Natural Earth 10m**(퍼블릭 도메인)으로 올립니다 — 구역당 중앙값 73 → 166점.
+출처: Natural Earth (naturalearthdata.com), 퍼블릭 도메인.
+
+행정구역 경계는 나라마다 출처가 다릅니다. **어느 나라가 어디서 왔는지는
+`recorder/js/data/admin1-sources.json` 에 적혀 있습니다** — 도구가 파일을 쓸 때마다
+직접 갱신하므로 사람이 옮겨 적지 않습니다.
+
+| 출처 | 나라 수 | 표기 |
+|---|---|---|
+| OpenStreetMap (ODbL 1.0) | 57 | `© OpenStreetMap contributors` 한 줄 |
+| Natural Earth | 160 | 퍼블릭 도메인 — 의무 없음 |
+| 각국 공식기관 (geoBoundaries) | 9 | 아래 개별 표기 |
+
+바탕 지도가 Mapbox(OSM 기반)라 `© OpenStreetMap contributors` 는 어차피 표기해야 하므로,
+OSM 으로 맞춘 57개국은 **표기가 늘지 않습니다**. 개별 표기가 필요한 건 아래 9개국뿐입니다.
+
+  - 그리스: EuroGeoGraphics, Regional IM Working Group - Europe (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 베트남: geoBoundaries, Wikipedia (Public Domain)
+  - 스웨덴: geoBoundaries, Erik Frohne (Creative Commons Attribution 3.0 License)
+  - 싱가포르: Urban Redevelopment Authority, derived from ADM 3 (Open Data Commons Open Database License 1.0)
+  - 아제르바이잔: Wikipedia (Creative Commons Attribution-ShareAlike 3.0 Unported)
+  - 오스트레일리아: Australian Bureau of Statistics (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 칠레: La Biblioteca del Congreso Nacional de Chile (BCN), OCHA ROLAC (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+  - 카타르: geoBoundaries, Qatar Open Data Portal (Creative Commons Attribution 4.0 International (CC BY 4.0))
+  - 파푸아뉴기니: Papua New Guinea National Statistics Office, OCHA ROAP (Creative Commons Attribution 3.0 Intergovernmental Organisations (CC BY 3.0 IGO))
+
+만드는 순서 (뒤 도구가 앞 도구의 결과를 덮어씁니다):
+
+```bash
+node recorder/tools/build-admin1-firstlevel.mjs   # 프랑스·이탈리아·스페인을 1급으로 (admin1.json 을 고친다)
+node recorder/tools/build-admin1-split.mjs        # 나라별로 쪼개고 Natural Earth 로 올린다
+node recorder/tools/build-admin1-hires.mjs        # 각국 공식기관 데이터로 올린다
+node recorder/tools/build-admin1-osm.mjs          # 개별 표기가 필요한 나라를 OSM 으로 바꾼다
+node recorder/tools/build-admin1-clip.mjs         # 영해를 잘라내고 핀치·자기교차를 고친다
+```
+
+`build-admin1-hires.mjs` 와 `-osm.mjs` 는 **연달아 두 번 돌리면 안 됩니다** — 덮어쓴 자기
+출력을 다시 읽어 전부 건너뜁니다. 다시 만들려면 split 부터.
+
 북한 1급 행정구역(`admin1.json` 안의 '북한' 13개)은 OpenStreetMap 에서 받아
 `node recorder/tools/build-nk-admin1.mjs` 로 만듭니다. 원래 들어 있던 경계는 도당
 100~220점짜리라 도당 1.6만점인 우리 시도 옆에서 눈에 띄게 각졌고, 군사분계선 구간이
@@ -89,7 +152,7 @@ OSM 행정경계는 **영해까지 포함합니다** — 그대로 쓰면 황해
 `node recorder/tools/build-korea-countries.mjs`). Mapbox의 country-boundaries-v1이
 연평도 북쪽 북한 섬 넷(갈도·장재도·무도·료도)을 KOR로 분류해 대한민국을 칠하면 함께
 칠해졌고, 시도·시군구 색칠과 국경선은 국토부인데 국가 색칠만 Mapbox라 같은 자리에서
-최대 3.1km 어긋났기 때문입니다. 2.0은 시도 색칠이 OSM이었고 Mapbox 행정경계도 결국
+최대 3.1km 어긋났기 때문입니다. `v2.0.0`은 시도 색칠이 OSM이었고 Mapbox 행정경계도 결국
 OSM이라 우연히 맞아떨어졌던 것입니다. 나머지 나라는 Mapbox 그대로입니다.
 
 행정구역선도 남·북한은 우리 폴리곤에서 뽑습니다(`korea-admin1-lines.json`,

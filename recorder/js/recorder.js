@@ -37,18 +37,32 @@ function initRecorder(map) {
      줌이 낮아지면 스타일의 zoom 조건 때문에 도로·라벨·디테일 레이어가 빠지므로
      "이동 중에만 지도가 단순해지는" 현상이 생긴다. 타일 로딩과는 무관하다.
 
-     줌아웃을 없애는 데는 curve 가 minZoom 보다 정확하다. 실측(서울→파리, 양 끝 줌 10):
-       curve 1.42(기본) → 최저 2.34 / minZoom 지정 → 9.5 / curve 0.01 → 10.00
-     minZoom 을 두 끝점 줌으로 줘도 곡선 공식상 0.5 단계쯤 남는데, 스타일의 레이어
-     조건이 정수 줌에 걸려 있으면 그 0.5 만으로도 도로·지명이 사라질 수 있다.
-     그래서 '없음'은 curve 로 평탄화하고, 단계별 줌아웃은 minZoom 으로 준다.
+     '없음'은 curve 로 평탄화한다. minZoom 을 두 끝점 줌으로 줘도 곡선 공식상 0.5 단계쯤
+     남는데(실측: 서울→파리 양 끝 줌 10 에서 9.5), 스타일의 레이어 조건이 정수 줌에
+     걸려 있으면 그 0.5 만으로도 도로·지명이 사라질 수 있다. curve 0.01 이면 정확히 10.00 이다.
+
+     단계별 줌아웃도 curve 로 준다. 예전에는 minZoom 으로 "몇 단계 내려갈지"를 직접
+     지정했다. 그건 정확히 먹었지만(1/2/3 → 1.16/2.04/3.01) **거리와 무관하게 고정**이라
+     긴 이동에서 뒤집혔다 — 서울→파리는 기본 곡선이 6.85 단계나 내려가는데 '많이'가 3.01 이라,
+     '자동'에서 '많이'로 바꾸면 줌아웃이 오히려 **줄었다**.
+     curve 는 rho 를 키워 곡선 자체를 깊게 만들므로 거리에 비례하고, 1.42(기본)보다 크면
+     언제나 '자동'보다 더 내려간다. 값은 재현 계산으로 골랐다(창 1600px 기준, 단위=줌 단계):
+
+                     자동   조금(2.0)  보통(2.8)  많이(4.0)
+       서울→부산  325km   0.38     0.94      1.75      2.73
+       서울→도쿄 1160km   0.84     1.63      2.55      3.56
+       서울→파리 8970km   6.85     7.84      8.81      9.84
+
+     국내 이동에서 라벨의 뜻(1·2·3 단계)에 가깝게 떨어지도록 맞춘 값이다.
      (mapbox 는 minZoom 이 있으면 curve 를 무시하므로 둘을 같이 주면 안 된다) */
+  const FLY_CURVES = { 1: 2.0, 2: 2.8, 3: 4.0 };       // '이동 중 줌아웃' 조금 / 보통 / 많이
   function moveOpts(to, mode, durSec) {
     const o = { ...to, duration: durSec*1000, essential: true };
     if (mode === 'fly') {
       const dip = $('fly-dip').value;
       if (dip === '0') o.curve = 0.01;                 // 사실상 직선 — 줌아웃 0
-      else if (dip !== 'auto') o.minZoom = Math.max(0, Math.min(map.getZoom(), to.zoom) - parseFloat(dip));
+      else if (FLY_CURVES[dip]) o.curve = FLY_CURVES[dip];
+      // 'auto' 는 아무것도 안 준다 — mapbox 기본 곡선(1.42)
     }
     return o;
   }
@@ -57,7 +71,17 @@ function initRecorder(map) {
      flyTo 는 중간에 줌이 낮아지는 곡선 궤적이라 출발↔도착을 선형 보간해도
      실제로 지나가는 화면과 다르다 = 엉뚱한 타일을 미리 받게 된다.
      그래서 한 번 실제로 이동시켜 보고 지나간 카메라를 그대로 기록한다. */
-  async function samplePath(from, to, mode, durSec, maxSamples = 10) {
+  async function samplePath(from, to, mode, durSec, maxSamples = 10, follow = null, flight = null) {
+    /* 경로를 따라가는 이동은 flyTo 를 흉내내 봐야 소용없다 — 실제로는 아크 위를 지나므로
+       flyTo 의 궤적으로 데우면 **엉뚱한 타일**을 받는다. 그러면 이동 중에 아직 안 받은
+       타일 대신 저해상도 부모 타일이 그려지고, 지도 디테일이 확확 바뀐다.
+       그때는 실제로 쓸 카메라를 그대로 계산해서 뽑는다. */
+    const straight = mode !== 'fly';
+    if (follow || (flight && straight)) {
+      const out = [];
+      for (let i = 1; i <= maxSamples; i++) out.push(interpCam(from, to, easeInOut(i / (maxSamples + 1)), flight, follow));
+      return out;
+    }
     map.jumpTo(from);
     const seen = [];
     const onMove = () => seen.push(grabCam());
@@ -74,32 +98,106 @@ function initRecorder(map) {
     return out;
   }
 
-  // 표본 카메라들을 차례로 방문해 타일을 캐시에 채워 넣는다
-  async function warmCams(cams, label) {
-    for (let i = 0; i < cams.length; i++) {
-      map.jumpTo(cams[i]);
-      await tilesSettled();
-      setStatus(`${label} ${i+1}/${cams.length}`, 'busy');
-    }
-  }
-
-  /* 이동 경로 전체를 미리 데워둔다 (출발·경유지·도착은 호출부에서 이미 처리) */
-  async function prewarmPath(cams, mode, durSec) {
+  /* 표본이 성기면 그 사이 줌에서 아직 안 받은 타일이 나온다 — 이동 중에만 지도가 거칠어
+     보이는 원인이다. 비행 곡선은 줌이 크게 오르내리므로 넉넉히 뽑는다. */
+  async function prewarmPath(cams, mode, durSec, legs = null) {
     for (let i = 0; i < cams.length - 1; i++) {
       setStatus(`이동 경로 타일 프리로드 중… (구간 ${i+1}/${cams.length-1})`, 'busy');
-      const pts = await samplePath(cams[i], cams[i+1], mode, durSec);
+      const lg = legs && legs[i];
+      const pts = await samplePath(cams[i], cams[i+1], mode, durSec, 18, lg && lg.follow, lg && lg.path);
       await warmCams(pts, `이동 경로 타일 ${i+1}/${cams.length-1} ·`);
     }
   }
 
-  /* 지명 참고용 스타일에서만 라벨을 한국어로 바꾼다.
-     setLanguage 는 지도 전체에 걸리고 스타일을 바꿔도 유지되므로, 참고용이 아닌
-     방송용 스타일로 돌아올 때는 반드시 null 로 되돌려 원본 디자인을 지켜야 한다.
+  /* 글자가 켜져 있는 동안만 라벨을 한국어로 바꾼다.
+     스타일의 text-field 는 `coalesce(name_en, name)` 이라 그냥 두면 영어로 나온다.
+     예전엔 '일반지도' 스타일에서만 걸었는데, 이제 어느 스타일에서든 글자를 켤 수 있어
+     조건이 스타일이 아니라 **글자 체크박스**다.
+     setLanguage 는 지도 전체에 걸리고 스타일을 바꿔도 유지되므로, 글자를 끌 때는 반드시
+     null 로 되돌려 원본 디자인을 지켜야 한다.
      스타일 로드가 끝난 뒤 걸어야 라벨 레이어에 제대로 반영된다. */
   function applyStyleLanguage() {
-    try { map.setLanguage(KO_LABEL_STYLES.has($('style-select').value) ? 'ko' : null); } catch (_) {}
+    try { map.setLanguage($('label-on').checked ? 'ko' : null); } catch (_) {}
   }
-  map.on('style.load', applyStyleLanguage);
+
+  /* ── 지도 글자(지명·도로명) 켜고 끄기 ──
+
+     사용자가 체크박스를 만지면 그때는 스타일 안의 글자를 **다 켜거나 다 끈다.** 시킨 일이다.
+
+     **한 번 만진 뒤로는 그 선택이 스타일을 바꿔도 따라간다.** 글자를 켜놓고 스타일만
+     비교해 보는 게 흔한데, 스타일마다 체크가 저절로 풀리면 매번 다시 켜야 한다.
+
+     아직 한 번도 안 만졌을 때만 스타일이 올라오면서 **아무것도 안 하고** 체크 상태만
+     그 스타일이 원래 글자를 보여주던 스타일인지에 맞춰 둔다. 방송용 스타일은 라벨을
+     일부러 꺼둔 것이 많아서 — 단색지형·단색·위성사진·지형도는 하나뿐인 심볼이 꺼져 있고,
+     모노톤은 18개 중 15개가 꺼져 있다 — 시키지도 않았는데 켜면 지명이 저절로 쏟아진다.
+     실제로 그렇게 만들었다가 모든 스타일에 지명이 생겼다.
+
+     **우리가 만든 심볼 레이어는 건드리지 않는다** — 경로선 화살표와 캡처용 핀이 심볼이라
+     싸잡아 숨기면 그 둘까지 사라진다. */
+  const OUR_SYMBOL_LAYERS = new Set(['route-arrow-layer', 'capture-pins-layer']);
+  const _labelIds = new Set();
+
+  /* 줌 14 이상에서만 나오는 심볼은 '글자가 보이는 스타일' 의 근거로 치지 않는다.
+     모노톤은 켜져 있는 심볼 3개가 전부 건물 번호·출입구·블록 번호(줌 16~18)라,
+     방송에서 쓰는 줌(6~10)에서는 글자가 하나도 안 보이는데 체크만 되어 있었다.
+     그러면 켤 방법이 없다 — 이미 켜진 것으로 보이니까. */
+  const LABEL_ZOOM = 14;
+
+  let _labelChoice = null;                         // 사용자가 직접 고른 값. 만지기 전엔 null
+  const _labelText = new Map();                    // name_ko 를 쓰는 레이어 → 원래 text-field
+
+  /* `language=ko` 를 걸면 Mapbox 가 `name` 을 한국어로 채우고 **`name_xx` 필드를 전부 뺀다.**
+     실측: 서울 타일이 145,891B(name_ar … name_ko … 15개) → 125,646B(name, name_local).
+     그런데 단색지형·단색·위성사진·지형도의 라벨 레이어는 text-field 가
+     `["to-string",["get","name_ko"]]` 이라, 필드가 없어져 빈 문자열이 되고 글자가 안 그려진다.
+     모노톤은 `coalesce(name_en, name)` 이라 name 으로 떨어져 혼자 살아남았다.
+     그래서 name_ko 를 참조하는 레이어만 name 으로 바꿔 준다. 끄면 원래대로 돌려놓는다. */
+  const swapNameKo = (v) => (Array.isArray(v)
+    ? (v.length === 2 && v[0] === 'get' && v[1] === 'name_ko' ? ['get', 'name'] : v.map(swapNameKo))
+    : v);
+
+  function snapshotLabels() {
+    _labelIds.clear();
+    _labelText.clear();
+    let anyOn = false;
+    for (const l of map.getStyle()?.layers || []) {
+      if (l.type !== 'symbol' || OUR_SYMBOL_LAYERS.has(l.id)) continue;
+      _labelIds.add(l.id);
+      const tf = l.layout && l.layout['text-field'];
+      if (tf && JSON.stringify(tf).includes('"name_ko"')) _labelText.set(l.id, tf);
+      const on = ((l.layout && l.layout.visibility) || 'visible') !== 'none';
+      if (on && (l.minzoom || 0) < LABEL_ZOOM) anyOn = true;
+    }
+    $('label-on').checked = _labelChoice ?? anyOn;
+  }
+  /* 글자를 켜지 않아도 한국어 설정은 걸릴 수 있으니(원래부터 라벨이 보이는 스타일)
+     text-field 손질은 체크 상태만 보고 따로 건다. */
+  function applyLabelText() {
+    const on = $('label-on').checked;
+    for (const [id, tf] of _labelText) {
+      try { map.setLayoutProperty(id, 'text-field', on ? swapNameKo(tf) : tf); } catch (_) {}
+    }
+  }
+  function applyLabelVisibility() {
+    const on = $('label-on').checked;
+    for (const id of _labelIds) {
+      try { map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'); } catch (_) {}
+    }
+    applyLabelText();
+  }
+  map.on('style.load', () => {
+    snapshotLabels();
+    if (_labelChoice !== null) applyLabelVisibility();   // 고른 값이 있으면 새 스타일에도 건다
+    else applyLabelText();
+    applyStyleLanguage();
+  });
+  $('label-on').addEventListener('change', () => {
+    _labelChoice = $('label-on').checked;
+    applyLabelVisibility();
+    applyStyleLanguage();
+  });
+
 
   /* 투영은 스타일에도 저장돼 있고, setStyle 은 그 값을 그대로 따라간다.
      '모노톤'만 globe 로 저장돼 있어서, 그 스타일로 바꾸면 지도는 3D 로 튀는데
@@ -435,6 +533,9 @@ function initRecorder(map) {
       const existing = entries.find(e => e.key === key);
       if (existing) { existing.color = color; existing.opacity = opacity; }   // 이미 있으면 색만 갱신
       else { entries.push({ key, color, opacity }); syncDefaultColor(); }     // 새로 추가하면 다음 기본색으로
+      /* 지오메트리가 아직 없는 나라면 지금 받는다. 칩과 색은 곧바로 반영되고,
+         도착하면 setData 가 색칠을 채운다 — 기다리게 하지 않는다. */
+      if (cfg.ensure) cfg.ensure(key);
       applyColors(); renderChips();
       const t = cfg.target(key);                                              // 추가한 곳으로 이동
       if (t && t.center) map.flyTo({ center: t.center, zoom: t.zoom, duration: 1200, essential: true });
@@ -525,6 +626,29 @@ function initRecorder(map) {
      GitHub Pages 는 캐시를 준다. */
   const DATA_V = (([...document.scripts].map(s => s.src || '').join(' ')
     .match(/recorder\.js\?v=([\d.]+)/) || [])[1]) || '';
+  /* ── GeoJSON 단순화 세기 ──
+
+     한동안 우리 GeoJSON 소스는 전부 tolerance: 0 이었다. mapbox-gl 이 타일을 구우면서
+     한 번 더 단순화하는 게 싫어서였다 — 촘촘하게 만든 데이터가 화면에서 각져 보였다.
+     그런데 0 은 단순화를 **끄는** 값이고, 끄면 다른 게 깨진다.
+
+     타일 좌표는 마지막에 정수로 반올림된다(extent 8192). 단순화를 안 하면 그 격자보다
+     촘촘한 점들이 전부 살아남아 같은 칸으로 내려앉고, 링이 스스로를 훑는 모양이 된다.
+     지오메트리 자체는 멀쩡한데 삼각분할만 튄다 — 함경남도에서 화면 밖으로 길게 뻗던
+     다각형이 이것이었다. 데이터 검사(핀치·자기교차·감김…)에 아무것도 안 걸리고,
+     **SVG 로 뽑으면 멀쩡한데**(SVG 는 지오메트리를 직접 그린다) 화면·MP4·PSD 에서만
+     보이던 이유다. 셋 다 캔버스를 굽기 때문이다.
+
+     단위는 **CSS 픽셀**이다. mapbox-gl 이 tolerance × (extent / tileSize) = ×16 을 해서
+     타일 단위로 바꾸고, 그 값을 그대로 단순화 문턱으로 쓴다(더글러스-포이커).
+       · 반올림 격자 1칸  = 1 타일단위 = 0.0625 px
+       · mapbox 기본 0.375 px = 6 타일단위
+     그래서 격자보다 크기만 하면 뭉침이 안 생긴다. 0.125 px(2 타일단위)로 둔다 —
+     기본값보다 3배 촘촘하면서 격자의 2배라 안전하다. 1/8 픽셀은 눈에 보이지 않는다.
+
+     **선과 색칠에 같은 값을 써야 한다.** 다르게 단순화하면 둘이 어긋난다. */
+  const GEO_TOLERANCE = 0.125;
+
   const dataURL = (u) => (DATA_V ? `${u}?v=${DATA_V}` : u);
 
   const SIDO_HIRES_URL = './recorder/js/data/sido-hires.json';
@@ -536,14 +660,34 @@ function initRecorder(map) {
      평소 쓰는 말과 다르다. 실제로 쓰는 두 글자(충북·경남)는 SIDO_META 에 이미 들어 있다.
      stripSido 는 검색어 별칭('충청북'으로 쳐도 찾히게)으로만 남긴다. */
   const sidoShort = (n) => (sidoMeta[n] && sidoMeta[n].s) || stripSido(n) || n;
-  /* 약칭(충북)과 정식명(충청북도)을 둘 다 올린다. 해석은 예전부터 양쪽 다 됐지만
-     목록에는 약칭만 있어서, '충청' 까지 친 사람에게는 아무것도 안 뜨고 다 친 뒤에야
-     Enter 로 들어갔다. 행정구역 탭도 이제 양쪽으로 찾히므로 두 탭이 같게 동작한다. */
+  /* 목록에는 **약칭만** 올린다. 예전에는 약칭과 정식명을 각각 option 으로 넣어서,
+     입력창을 누르기만 해도 17개 시도가 34줄로 펼쳐졌다 — '충북'과 '충청북도'가 나란히 떠서
+     고르는 데 방해만 됐다.
+
+     그렇다고 정식명으로 못 찾으면 안 된다. 네이티브 datalist 는 브라우저가 value 와 label
+     **양쪽으로 거르고 둘 다 그리므로**, 라벨을 숨기면서 검색만 남기는 방법은 없다.
+     대신 목록을 **입력에 따라 다시 짠다** — 평소엔 약칭 17줄뿐이고, 약칭으로는 안 걸리는데
+     정식명에는 걸리는 글자를 치면(‘충청’) 그때만 해당 정식명 줄을 넣는다.
+       빈칸/‘충’  → 약칭만 (충북·충남…)         목록이 깨끗하다
+       ‘충청’     → 충청북도·충청남도            그때만 나타난다
+     골라서 들어간 정식명은 resolveByMeta 가 그대로 해석한다. */
   (function fillSidoList() {
     const dl = $('sido-list');
-    SIDO_META.forEach(s => {
-      [s.s, s.n].forEach(v => { const opt = document.createElement('option'); opt.value = v; dl.appendChild(opt); });
-    });
+    const input = $('sido-input');
+    const put = (v) => { const o = document.createElement('option'); o.value = v; dl.appendChild(o); };
+    const rebuild = () => {
+      const q = (input.value || '').trim();
+      dl.innerHTML = '';
+      SIDO_META.forEach((s) => put(s.s));
+      if (!q) return;
+      /* 약칭으로 이미 걸리는 글자면 정식명을 넣지 않는다 — 넣으면 또 두 줄이 된다. */
+      SIDO_META.forEach((s) => {
+        if (s.n === s.s || s.s.includes(q)) return;
+        if (s.n.includes(q)) put(s.n);
+      });
+    };
+    rebuild();
+    input.addEventListener('input', rebuild);
   })();
 
   /* ── 해외 행정구역(주·도) ──
@@ -575,6 +719,69 @@ function initRecorder(map) {
     return meta;
   }
 
+  /* ── 행정구역 데이터: 나라별 온디맨드 ──
+
+     예전에는 전 세계 1급 행정구역이 admin1.json 한 파일(전송 10.7MB)에 들어 있었고,
+     '행정구역' 탭을 처음 열 때 통째로 받았다. 한 번에 칠하는 건 보통 한두 나라인데
+     235개국을 다 받고 기다린 것이다.
+
+     이제 셋으로 나눠 받는다 (`build-admin1-split.mjs` 가 만든다):
+       admin1-meta.json    전체 4,592 구역의 **속성만** (전송 0.11MB)
+                           검색·자동완성·카메라 목표가 여기서 나온다. 지오메트리는 없다.
+       admin1-core.json    자주 쓰는 8개국 (전송 7.2MB) — 고를 때 기다리지 않게 미리 받는다
+       admin1/<ISO3>.json  나머지 227개국 (중앙값 14KB) — 그 나라를 고를 때 받는다
+     첫 로드가 10.7MB → 7.3MB 로 줄고, 나머지는 고를 때 한 번씩 온다.
+
+     **받은 건 버리지 않는다.** 227개국을 전부 받아도 합쳐 6.7MB 라, 지금까지 늘 받던
+     10.7MB 보다 적다. LRU 로 쫓아낼 이유가 없다 — 쫓아내면 이미 칠한 구역이 사라지는
+     문제를 따로 막아야 하는데, 그 복잡함을 살 이유가 없다. */
+  const ADMIN1_DIR = './recorder/js/data/admin1/';
+  let ADMIN1_INDEX = null;                          // 나라 이름 → 파일 코드 (코어 8개국은 없다)
+  const admin1Have = new Set();                     // 이미 받은 나라
+  const admin1Coming = new Map();                   // 받는 중인 나라 → Promise
+
+  /* 이 구역을 그리려면 어느 나라 파일이 필요한가. 코어에 있거나 이미 받았으면 곧장 끝난다. */
+  function ensureAdmin1(name) {
+    const country = admin1Meta[name] && admin1Meta[name].q;
+    const code = country && ADMIN1_INDEX && ADMIN1_INDEX[country];
+    if (!code || admin1Have.has(country) || !ADMIN1_GEO) return Promise.resolve();
+    if (admin1Coming.has(country)) return admin1Coming.get(country);
+    const p = fetchGeo(dataURL(ADMIN1_DIR + code + '.json'))
+      .then((geo) => {
+        admin1Have.add(country);
+        ADMIN1_GEO.features.push(...geo.features);
+        // 소스가 이미 깔려 있으면 갈아끼운다. 아직이면 addLayer 가 ADMIN1_GEO 를 그대로 쓴다.
+        try { map.getSource('admin1-boundaries')?.setData(ADMIN1_GEO); } catch (_) {}
+      })
+      .catch(() => {})                              // 못 받으면 색칠만 안 보인다 — 칩과 검색은 그대로 동작
+      .finally(() => admin1Coming.delete(country));
+    admin1Coming.set(country, p);
+    return p;
+  }
+
+  /* 녹화·내보내기 전에 부른다. 받는 중인 나라가 있으면 기다린다 —
+     칠하자마자 녹화를 누르면 그 나라 지오메트리가 아직 안 왔을 수 있다. */
+  const admin1Settled = () => Promise.all([...admin1Coming.values()]);
+
+  /* 메타 먼저, 코어는 그 다음. 메타만 오면 검색·목록이 곧바로 열린다. */
+  function loadAdmin1(setText) {
+    setText('행정구역 목록을 불러오는 중…');
+    return fetchGeo(dataURL('./recorder/js/data/admin1-meta.json'))
+      .then((meta) => {
+        ADMIN1_INDEX = meta.index || {};
+        Object.assign(admin1Meta, tuneKoreanAdmin1(buildMeta(meta, 'country', 6)));
+        setText('경계 데이터를 불러오는 중…');
+        return fetchGeo(dataURL('./recorder/js/data/admin1-core.json'));
+      })
+      .then((core) => { ADMIN1_GEO = core; setText(''); return true; })
+      .catch((e) => {
+        setText(e.message === '404'
+          ? '경계 데이터 파일이 없습니다 (js/data/admin1-meta.json). node recorder/tools/build-admin1-split.mjs 로 만드세요.'
+          : '경계 데이터를 불러오지 못했습니다: ' + e.message);
+        return false;
+      });
+  }
+
   const PAINTERS = [
     createRegionPainter({
       id: 'country', source: 'country-boundaries', layer: 'country-color-fill', prop: 'iso_3166_1_alpha_3',
@@ -592,7 +799,7 @@ function initRecorder(map) {
     }),
     createRegionPainter({
       id: 'admin1', source: 'admin1-boundaries', layer: 'admin1-color-fill', prop: 'name',
-      sourceSpec: () => ADMIN1_GEO && { type: 'geojson', tolerance: 0, data: ADMIN1_GEO },   // tolerance 0 이유는 sido 주석 참고
+      sourceSpec: () => ADMIN1_GEO && { type: 'geojson', tolerance: GEO_TOLERANCE, data: ADMIN1_GEO },
       lazyInput: true,
       resolve:   (q) => resolveByMeta(admin1Meta, q, (s) => s.a),
       suggest:   (q) => suggestByMeta(admin1Meta, q, (s) => s.a),
@@ -600,16 +807,12 @@ function initRecorder(map) {
       label:     (n) => (admin1Meta[n] && admin1Meta[n].s) || n,
       qualifier: (n) => (admin1Meta[n] && admin1Meta[n].q) || '',
       target:    (n) => admin1Meta[n] && { center: admin1Meta[n].c, zoom: admin1Meta[n].z },
-      load: lazyGeoLoad(dataURL('./recorder/js/data/admin1.json'), 'js/data/admin1.json',
-        (geo) => { ADMIN1_GEO = geo; Object.assign(admin1Meta, tuneKoreanAdmin1(buildMeta(geo, 'country', 6))); }),
+      ensure:    ensureAdmin1,                      // 그 나라 지오메트리를 그때 받는다
+      load:      loadAdmin1,
     }),
     createRegionPainter({
       id: 'sido', source: 'sido-boundaries', layer: 'sido-color-fill', prop: 'name',
-      /* tolerance: 0 — mapbox-gl 은 GeoJSON 을 타일로 만들 때 자체적으로 한 번 더
-         단순화한다 (기본 0.375). 실측하니 줌 6 에서 도네츠크주가 3,055개 중
-         1,197개만 남았다. 데이터를 아무리 촘촘하게 만들어도 화면에서는 각져 보이던
-         원인. 0 으로 두면 우리가 준비한 정밀도가 그대로 그려진다. */
-      sourceSpec: () => ({ type: 'geojson', tolerance: 0, data: SIDO_HIRES || SIDO_GEO }),
+      sourceSpec: () => ({ type: 'geojson', tolerance: GEO_TOLERANCE, data: SIDO_HIRES || SIDO_GEO }),
       resolve:  (q) => resolveByMeta(sidoMeta, q, (s) => stripSido(s.n)),
       fullName: (n) => n,
       label:    sidoShort,
@@ -634,7 +837,7 @@ function initRecorder(map) {
     }),
     createRegionPainter({
       id: 'sigungu', source: 'sigungu-boundaries', layer: 'sigungu-color-fill', prop: 'name',
-      sourceSpec: () => SIGUNGU_GEO && { type: 'geojson', tolerance: 0, data: SIGUNGU_GEO },
+      sourceSpec: () => SIGUNGU_GEO && { type: 'geojson', tolerance: GEO_TOLERANCE, data: SIGUNGU_GEO },
       lazyInput: true,
       resolve:   (q) => resolveByMeta(sigunguMeta, q),
       suggest:   (q) => suggestByMeta(sigunguMeta, q),
@@ -773,42 +976,51 @@ function initRecorder(map) {
       `  키가 풀릴 때까지는 Mapbox 로 검색합니다 (한국 지명은 잘 안 나옵니다).`);
   }
 
-  /* VWorld 검색 API 2.0. type=place(관심지점)를 먼저 보고, 없으면 address(주소)로 한 번 더.
-     좌표계는 EPSG:4326(위경도)로 받아 그대로 쓴다. */
-  async function searchVWorld(q) {
+  /* VWorld 검색 API 2.0 — 한 번 부르는 단위. type 마다 category 가 필요한 것이 있다.
+     실측: type=place 는 category 없이 되지만, district·address 는 **category 가 필수**라
+     안 주면 PARAM_REQUIRED 로 떨어진다. 예전 코드는 address 를 category 없이 불러서
+     그 폴백이 늘 실패했고, 콘솔에 '인증키 문제' 경고까지 잘못 띄웠다. */
+  async function vworldQuery(q, type, category) {
     if (!keys.vworld) return [];
-    const base = 'https://api.vworld.kr/req/search?service=search&request=search&version=2.0'
-               + '&crs=EPSG:4326&size=8&page=1&format=json&errorformat=json'
-               + `&key=${encodeURIComponent(keys.vworld)}&query=${encodeURIComponent(q)}`;
-    for (const type of ['place', 'address']) {
-      const d = await jsonp(`${base}&type=${type}`);
-      // 무응답(시간제한·네트워크 오류)이면 두 번째 타입도 마찬가지다. 기다리게 하지 말고 바로 다음 제공자로.
-      if (d === null) { warnVWorld('응답 없음 (시간 초과)'); return []; }
-      const res = d && d.response;
-      /* 키가 거부되면(INVALID_KEY·도메인 불일치) 결과가 0건인 것과 겉보기가 같아서,
-         조용히 넘어가면 "검색이 안 되네"로만 보이고 원인을 알 수 없다. 콘솔에 한 번 남긴다. */
-      if (res && res.status === 'ERROR') {
-        warnVWorld((res.error && (res.error.text || res.error.code)) || '알 수 없는 오류');
-        return [];
-      }
-      if (!res || res.status !== 'OK') continue;
-      const items = (res.result && res.result.items) || [];
-      const out = items.map((it) => {
-        const x = parseFloat(it.point && it.point.x), y = parseFloat(it.point && it.point.y);
-        if (!isFinite(x) || !isFinite(y)) return null;
-        const addr = it.address || {};
-        return {
-          name: it.title || '',
-          ctx: addr.road || addr.parcel || it.category || '',
-          center: [x, y],
-          poi: type === 'place',
-          src: 'VWorld',
-        };
-      }).filter(Boolean);
+    const url = 'https://api.vworld.kr/req/search?service=search&request=search&version=2.0'
+              + '&crs=EPSG:4326&size=8&page=1&format=json&errorformat=json'
+              + `&key=${encodeURIComponent(keys.vworld)}&query=${encodeURIComponent(q)}&type=${type}`
+              + (category ? `&category=${category}` : '');
+    const d = await jsonp(url);
+    if (d === null) { warnVWorld('응답 없음 (시간 초과)'); return []; }
+    const res = d && d.response;
+    /* 키가 거부되면(INVALID_KEY·도메인 불일치) 결과 0건과 겉보기가 같아서, 조용히 넘어가면
+       "검색이 안 되네"로만 보인다. 다만 NOT_FOUND 는 그냥 '없음'이라 경고할 일이 아니다. */
+    if (res && res.status === 'ERROR') {
+      warnVWorld((res.error && (res.error.text || res.error.code)) || '알 수 없는 오류');
+      return [];
+    }
+    if (!res || res.status !== 'OK') return [];
+    return ((res.result && res.result.items) || []).map((it) => {
+      const x = parseFloat(it.point && it.point.x), y = parseFloat(it.point && it.point.y);
+      if (!isFinite(x) || !isFinite(y)) return null;
+      const addr = it.address || {};
+      return {
+        name: it.title || '',
+        ctx: addr.road || addr.parcel || it.category || '',
+        center: [x, y],
+        poi: type === 'place',
+        src: 'VWorld',
+      };
+    }).filter(Boolean);
+  }
+
+  /* 행정지명(시도·시군구·읍면동). **여기 걸리면 국내 지명이 확실하다** —
+     실측하면 서울·부산·강남구는 나오고 파리·런던·도쿄·베를린은 하나도 안 나온다.
+     그래서 이게 '국내냐 해외냐'를 가르는 잣대가 된다. */
+  const searchVWorldDistrict = async (q) => {
+    for (const category of ['L1', 'L2', 'L3']) {        // 시도 → 시군구 → 읍면동
+      const out = await vworldQuery(q, 'district', category);
       if (out.length) return out;
     }
     return [];
-  }
+  };
+  const searchVWorldPlace = (q) => vworldQuery(q, 'place');
 
   /* Google Places API (New) Text Search.
      좌표(location)와 이름(displayName)은 Pro SKU 라 월 5,000건까지 무료다.
@@ -880,12 +1092,25 @@ function initRecorder(map) {
   }
 
   /* 제공자를 순서대로 훑어 처음으로 결과가 나온 곳을 쓴다.
-     한글이 섞였으면 국내 API 를 앞에 둔다 — Mapbox 는 한국 POI 가 거의 없어서
-     앞에 두면 '결과 없음' 만 돌려주고 뒤 제공자까지 가지도 못한다.
-     Google 은 유료 구간이 있으므로 항상 마지막 국내 후보로만 둔다. */
+
+     한글 검색이 까다롭다. 예전에는 VWorld 를 맨 앞에 두고 결과가 있으면 거기서 끝냈는데,
+     VWorld 는 **국내만** 아는 데다 상호명(POI)까지 준다. 그래서 '파리' 를 치면 프랑스 파리가
+     아니라 파리바게트 같은 국내 상호가 잔뜩 나오고, 뒤 제공자는 불리지도 않았다.
+
+     그래서 국내인지 먼저 가른다. VWorld 의 **행정지명(district)** 에 걸리면 국내 지명이
+     확실하다 — 실측하면 서울·부산·강남구는 나오고 파리·런던·도쿄·베를린은 하나도 안 나온다.
+     그 뒤에야 해외를 보고, 국내 상호명은 **맨 뒤**로 미룬다.
+
+       한글:  행정지명(VWorld) → 해외(Mapbox → Google) → 국내 상호명(VWorld place)
+       그 외: Mapbox → Google
+
+     국내 상호명을 맨 뒤에 둬도 '서울시청'·'남대문시장' 은 그대로 나온다 — 그 앞 단계가
+     전부 0건이기 때문이다(Mapbox 는 한국 POI 가 사실상 비어 있다. 실측으로 확인했다).
+     반대로 '도쿄' 는 Mapbox 가 0건이라 Google 이 받아 '도쿄도'를 준다.
+     Google 은 유료 구간이 있으므로 앞 단계가 비었을 때만 불린다. */
   async function fetchPlaces(q, token) {
     const chain = hasKo(q)
-      ? [searchVWorld, searchGoogle, (s) => searchMapbox(s, token)]
+      ? [searchVWorldDistrict, (s) => searchMapbox(s, token), searchGoogle, searchVWorldPlace]
       : [(s) => searchMapbox(s, token), searchGoogle];
     let failed = 0;
     for (const provider of chain) {
@@ -1172,7 +1397,7 @@ function initRecorder(map) {
   function addKoreaBorderLayer() {
     if (!KR_BORDER || !styleReady || map.getLayer(KR_BORDER_LAYER)) return;
     if (!map.getSource(KR_BORDER_LAYER)) {
-      map.addSource(KR_BORDER_LAYER, { type: 'geojson', tolerance: 0, data: KR_BORDER });
+      map.addSource(KR_BORDER_LAYER, { type: 'geojson', tolerance: GEO_TOLERANCE, data: KR_BORDER });
     }
     map.addLayer({
       id: KR_BORDER_LAYER, type: 'line', source: KR_BORDER_LAYER,
@@ -1246,11 +1471,17 @@ function initRecorder(map) {
 
   function addKoreaCountryLayer() {
     if (!KC_GEO || !styleReady || map.getLayer(KC_LAYER)) return;
-    if (!map.getSource(KC_LAYER)) map.addSource(KC_LAYER, { type: 'geojson', tolerance: 0, data: KC_GEO });
+    if (!map.getSource(KC_LAYER)) map.addSource(KC_LAYER, { type: 'geojson', tolerance: GEO_TOLERANCE, data: KC_GEO });
+    /* 국가 색칠이므로 **다른 색칠 모드 아래**에 깔려야 한다. 이 레이어를 다른 색칠처럼
+       첫 symbol 바로 아래에 넣으면, PAINTERS 가 먼저 깔린 뒤에 얹히는 탓에 시도·시군구
+       **위**로 올라간다. 그러면 대한민국을 칠한 상태에서 시도를 칠해도 시도 색이 안 보인다
+       (해외는 Mapbox 레이어가 그려서 멀쩡했고 대한민국·북한만 반대였던 이유).
+       그래서 자기보다 위에 있어야 할 색칠 중 가장 아래 것 바로 밑에 끼운다. */
+    const above = ['admin1-color-fill', 'sido-color-fill', 'sigungu-color-fill'].find(id => map.getLayer(id));
     map.addLayer({
       id: KC_LAYER, type: 'fill', source: KC_LAYER,
       paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': DEFAULT_OPACITY },
-    }, (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id);
+    }, above || (map.getStyle().layers || []).find(l => l.type === 'symbol')?.id);
     excludeKoreaFromMapbox();
     syncKoreaCountries();
     raiseBoundaries();
@@ -1306,7 +1537,7 @@ function initRecorder(map) {
 
   function addKoreaAdmin1Lines() {
     if (!KA_GEO || !styleReady || map.getLayer(KA_LAYER)) return;
-    if (!map.getSource(KA_LAYER)) map.addSource(KA_LAYER, { type: 'geojson', tolerance: 0, data: KA_GEO });
+    if (!map.getSource(KA_LAYER)) map.addSource(KA_LAYER, { type: 'geojson', tolerance: GEO_TOLERANCE, data: KA_GEO });
     map.addLayer({
       id: KA_LAYER, type: 'line', source: KA_LAYER,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -1343,19 +1574,78 @@ function initRecorder(map) {
   map.on('style.load', addKoreaAdmin1Lines);
 
   /* ── 경계선 (국경선 / 분쟁지역 / 행정구역선) ── */
-  // 종류별 레이어 후보 (스타일마다 이름 다름, -bg 외곽선 포함)
-  const BOUNDARY_LAYERS = {
-    country:  ['admin-0-boundary', 'admin-0-boundary-bg',     // 도로표시/모노톤
-               'country-border-dot',                          // 단색/단색지형: 국경선
-               KR_BORDER_LAYER],                              // 북쪽 육상 국경선 — 우리 데이터로 그린다 (아래 참고)
-    disputed: ['admin-0-boundary-disputed',                   // 도로표시/모노톤
-               'dispute-boundaries'],                         // 단색/단색지형: 분쟁지역
-    admin:    ['admin-1-boundary', 'admin-1-boundary-bg',     // 도로표시/모노톤
-               'admin-boundaries',                            // 단색/단색지형: 행정구역선
-               KA_LAYER],                                     // 남·북한 — 우리 데이터로 그린다
-  };
+
+  /* 어떤 레이어가 어느 종류의 경계선인지는 **필터를 읽어서** 정한다.
+
+     예전에는 종류마다 레이어 id 를 적어 뒀는데, 스타일마다 이름이 달라 반드시 빠뜨린다.
+     빠진 레이어는 UI 가 손을 못 대므로 투명도를 0 으로 내려도 그대로 남았다 —
+     "조절 불가능한 흰색 국경선" 이 그것이다. 실제로 스타일 6개를 받아 세어 보니:
+
+       단색지형·단색   country_border · country-border · admin-2-boundaries-* ·
+                       admin-boundaries-dot  → 8개 중 5개가 목록 밖
+       위성사진        country-border-dot 이 아예 없어서, 국경선 칸이 우리 선(남·북한)
+                       하나만 잡고 있었다 → 한국 국경만 조절되고 나머지는 흰 선만 보였다
+       지형도          country-border 가 목록 밖
+       모노톤·지명참고용  admin-0/1-* 이름이라 우연히 전부 맞았다 → 원래 멀쩡했다
+
+     증상이 스타일마다 제각각이었던 게 전부 이 표로 설명된다.
+
+     id 대신 필터를 보면 이름이 뭐든 따라온다. Mapbox 의 admin 소스는 세 속성으로
+     갈린다 — admin_level(0=국경, 1=행정구역), disputed, maritime.
+       · disputed 가 "true" 로 고정 → 분쟁지역
+       · admin_level 이 0 으로 **고정** → 국경선
+       · 그 외 → 행정구역선
+     '고정'이 중요하다. admin-boundaries-dot 은 `>= 0` `<= 1` 이라 둘 다 지나가는데,
+     이건 행정구역선 쪽이다. `==` 만 본다.
+     country_boundaries 소스에서 나온 선(country_border)은 필터가 없고 국경선뿐이다. */
+  const BOUNDARY_SOURCE_LAYERS = new Set(['admin', 'country_boundaries']);
+
+  // 필터 어딘가에 `["==", ["get", prop], value]` 가 있는가 (구문법 `["==", prop, value]` 도 본다)
+  function filterPins(filter, prop, value) {
+    let found = false;
+    (function walk(node) {
+      if (found || !Array.isArray(node)) return;
+      if (node[0] === '==' && node.length === 3) {
+        const lhs = node[1];
+        const name = Array.isArray(lhs) && lhs[0] === 'get' ? lhs[1] : lhs;
+        if (name === prop && node[2] === value) { found = true; return; }
+      }
+      node.forEach(walk);
+    })(filter);
+    return found;
+  }
+
+  // 우리가 직접 그리는 경계선 — 소스가 geojson 이라 필터로는 안 잡힌다
+  const OUR_BOUNDARY_LAYERS = { country: [KR_BORDER_LAYER], disputed: [], admin: [KA_LAYER] };
+
+  function boundaryKindOf(l) {
+    if (l.type !== 'line' || !BOUNDARY_SOURCE_LAYERS.has(l['source-layer'])) return null;
+    /* **스타일이 꺼둔 레이어는 켜지 않는다.** 디자이너가 visibility:none 으로 빼둔 것이
+       스타일마다 서넛씩 있다. 한 번 전부 켰다가 그대로 사고가 났다 —
+         · country_border 는 country_boundaries 소스라 **maritime 조건이 없다.**
+           켜면 해안선(육지-바다 경계)에까지 흰 선이 그어진다.
+         · 같은 레이어가 KP-KR 가리기에서도 빠져 있어(그건 admin 소스만 훑는다)
+           우리 국경선과 두 겹이 됐다. 두 데이터가 어긋나는 양구 위쪽에서 선이
+           갈라졌다 합쳐졌고, 점선으로 바꾸면 점선 두 줄로 보였다.
+       위성 스타일의 landColor·water 를 건드리면 안 되는 것과 같은 이야기다.
+       꺼진 채로 두면 우리가 손대지 않으므로 계속 목록 밖이다 — 스스로 일관된다.
+       그래서 '표시' 체크를 끌 때도 visibility 가 아니라 불투명도로 끈다(아래). */
+    if ((l.layout || {}).visibility === 'none') return null;
+    if (l['source-layer'] === 'country_boundaries') return 'country';
+    /* 스타일 원본이 아니라 **지금 걸린** 필터를 읽는다. hideMapboxKoreanAdmin1 이
+       남·북한을 빼려고 필터를 덧씌우는데, 덧씌운 절은 admin_level 을 0 으로 고정하지도
+       disputed 를 true 로 고정하지도 않으므로 판정은 그대로다. */
+    let f = l.filter;
+    try { f = map.getFilter(l.id) ?? l.filter; } catch (_) {}
+    if (filterPins(f, 'disputed', 'true')) return 'disputed';
+    if (filterPins(f, 'admin_level', 0)) return 'country';
+    return 'admin';
+  }
+
   function bdExistingLayers(kind) {
-    return BOUNDARY_LAYERS[kind].filter(id => map.getLayer(id));
+    const ids = (map.getStyle()?.layers || []).filter(l => boundaryKindOf(l) === kind).map(l => l.id);
+    OUR_BOUNDARY_LAYERS[kind].forEach(id => { if (map.getLayer(id)) ids.push(id); });
+    return ids;
   }
 
   /* ── 색칠 위로 끌어올릴 경계선 찾기 ──
@@ -1363,22 +1653,13 @@ function initRecorder(map) {
      그대로 두면 불투명도 0.6 짜리 색칠이 선 위를 덮어 선 색이 탁해지거나 아예 사라진다.
      색칠을 올린 뒤 경계선만 그 위로 끌어올린다 — 스타일 원래의 상하 순서는 그대로 둔다.
 
-     끌어올릴 대상을 id 목록(BOUNDARY_LAYERS)으로 고르면 반드시 빠뜨린다.
-     실제로 단색지형·단색에서 경계선 8개 중 5개가 목록에 없어 색칠에 덮이고 있었다:
-       country_border · country-border            국경선 (이름만 다른 변형)
-       admin-2-boundaries-bg · -dispute           시군구 경계선  ← 시군구를 칠하면 이게 사라졌다
-       admin-boundaries-dot                       행정구역선 점선
-     그래서 이름 대신 '어느 소스에서 나온 선인가'로 판단한다. 스타일이 바뀌거나
-     레이어 이름이 달라져도 따라온다. (BOUNDARY_LAYERS 는 색·두께를 입히는 대상이라
-     별개로 두되, 우리가 직접 만든 국경선은 소스가 달라 여기에 합쳐 준다) */
-  const BOUNDARY_SOURCE_LAYERS = new Set(['admin', 'country_boundaries']);
+     여기도 이름으로 고르다가 단색지형·단색에서 8개 중 5개를 놓쳐 시군구 경계선이
+     색칠에 덮인 적이 있다. 위와 같은 기준을 쓰므로 이제 둘이 어긋날 일이 없다. */
   function boundaryLayerIds(layers) {
-    const named = new Set(Object.values(BOUNDARY_LAYERS).flat());
-    return layers
-      .filter(l => named.has(l.id) ||
-                   (l.type === 'line' && BOUNDARY_SOURCE_LAYERS.has(l['source-layer'])))
-      .map(l => l.id);
+    const ours = new Set(Object.values(OUR_BOUNDARY_LAYERS).flat());
+    return layers.filter(l => ours.has(l.id) || boundaryKindOf(l)).map(l => l.id);
   }
+
   function raiseBoundaries() {
     const layers = map.getStyle()?.layers || [];
     const firstSymbol = layers.find(l => l.type === 'symbol')?.id;
@@ -1402,14 +1683,25 @@ function initRecorder(map) {
       b: [4, 1.5, 1, 1.5],
       c: [1, 1],
     };
+    /* 점선을 켜면 선 끝을 **각지게** 바꾼다.
+       line-dasharray 의 단위는 선 두께의 배수인데, 둥근 끝(line-cap: round)은 대시
+       양 끝을 각각 두께의 절반만큼 불려서 그린다. 그만큼 간격이 먹힌다 —
+       [2, 1.5] 는 간격이 1.5 에서 0.5 로 줄고, [1, 1] 은 0 이 되어 실선처럼 보인다.
+       남·북한 선(kr-land-border · korea-admin1-lines)만 round 로 만들어 뒀던 탓에
+       "한국과 북한만 점선이 안 보인다"가 됐다. 스타일이 주는 경계선은 전부 기본값
+       butt 이라 멀쩡했다(6개 스타일을 받아 확인했다).
+       실선일 때는 둥근 끝이 더 낫다 — 조각난 선의 끝이 부드럽게 이어져 보인다. */
+    const cap = dashType ? 'butt' : 'round';
     block.classList.toggle('disabled', !on);
     bdExistingLayers(kind).forEach(id => {
       const isBg = id.endsWith('-bg');   // 외곽선(배경 라인)은 좀 더 두껍게/연하게
       try {
-        map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+        /* 끌 때 visibility 를 none 으로 만들면 그 레이어가 '스타일이 꺼둔 것'과
+           구별되지 않아 다시 켤 수 없게 된다(위 참고). 불투명도로 끈다. */
+        map.setPaintProperty(id, 'line-opacity', !on ? 0 : (isBg ? Math.min(1, opac) * 0.6 : opac));
         if (!on) return;
+        map.setLayoutProperty(id, 'line-cap', cap);
         map.setPaintProperty(id, 'line-color', color);
-        map.setPaintProperty(id, 'line-opacity', isBg ? Math.min(1, opac) * 0.6 : opac);
         map.setPaintProperty(id, 'line-width', isBg ? width + 1.5 : width);
         map.setPaintProperty(id, 'line-dasharray', dashPatterns[dashType] || [1]);
       } catch (_) {}
@@ -1421,8 +1713,12 @@ function initRecorder(map) {
     ['country','disputed','admin'].forEach(kind => {
       const block = document.querySelector(`.bd-block[data-bd="${kind}"]`);
       if (!block) return;
+      /* 피커에 보일 색은 **맨 위에 그려지는** 선에서 읽는다. 목록이 그리는 순서라
+         마지막이 위다. 예전에는 첫 번째를 읽었는데, 그때는 목록이 손으로 적은 id 라
+         우연히 위쪽 선이 앞에 있었다. 지금은 스타일 순서 그대로여서 첫 번째는
+         맨 아래 선(단색지형이면 country_border 의 하늘색)이다. */
       const layers = bdExistingLayers(kind).filter(id => !id.endsWith('-bg'));
-      const main = layers[0];
+      const main = layers.at(-1);
       if (main) {
         try { const hex = toHex(map.getPaintProperty(main, 'line-color')); if (hex) block.querySelector('.bd-color').value = hex; } catch (_) {}
       }
@@ -1494,6 +1790,23 @@ function initRecorder(map) {
     for (let i = 1; i < pts.length; i++) out.push([unwrapLng(out[i-1][0], pts[i][0]), pts[i][1]]);
     return out;
   }
+  /* 거점을 곧게 잇는다. 아크와 달리 제어점을 띄우지 않을 뿐 나머지는 같다 —
+     날짜변경선을 넘을 수 있으므로 감기지 않은 좌표계에서 잇고, 카메라가 따라갈 수 있게
+     조밀하게 찍는다(두 점만 두면 카메라가 그 사이를 어떻게 갈지 알 수 없다). */
+  function linePathCoords(segments = 48) {
+    const pts = unwrapSeq(routeWaypointCoords());
+    if (pts.length < 2) return pts;
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i-1], b = pts[i];
+      for (let k = 1; k <= segments; k++) {
+        const t = k / segments;
+        out.push([a[0] + (b[0]-a[0]) * t, a[1] + (b[1]-a[1]) * t]);
+      }
+    }
+    return out;
+  }
+
   // 거점들을 아크로 이어 하나의 조밀한 경로로
   function arcPathCoords() {
     const pts = unwrapSeq(routeWaypointCoords());
@@ -1583,7 +1896,7 @@ function initRecorder(map) {
       paint:{ 'icon-color': $('route-color').value }
     });
   }
-  let _lastRouteCoords = [];
+  let _lastRouteCoords = [], _lastRouteArrow = true;
   let _routeDotStep = 0;                 // 점선용 점 간격 (지리거리, 고정) — 전체 경로 설정 시 1회 계산
   const _EMPTY_FC = { type:'FeatureCollection', features: [] };
   const _EMPTY_LINE = { type:'Feature', geometry:{ type:'LineString', coordinates: [] } };
@@ -1621,18 +1934,22 @@ function initRecorder(map) {
     const GAP = 8;   // 점 간격 목표(px) — 작을수록 촘촘
     return geoLen / Math.max(2, Math.round(scrLen / GAP));
   }
-  function setRouteFull(coords) { _routeDotStep = routeDotStep(coords); setRouteData(coords); }   // 전체 경로(미리보기): 간격 갱신 후 그림
+  /* 전체 경로(미리보기): 간격 갱신 후 그린다. **화살표는 안 그린다** —
+     아직 아무것도 자라지 않았는데 도착지에 삼각형만 떠 있으면 이상하다.
+     화살표는 선이 자라기 시작할 때 그 끝에 따라붙는다. */
+  function setRouteFull(coords) { _routeDotStep = routeDotStep(coords); setRouteData(coords, false); }
 
-  function setRouteData(coords) {
+  function setRouteData(coords, arrow = true) {
     _lastRouteCoords = coords || [];
+    _lastRouteArrow = arrow;
     const src = map.getSource('route-line');
     const aSrc = map.getSource('route-arrow');
     const dSrc = map.getSource('route-dots');
-    const isArc = $('route-shape').value === 'arc';
+    const isArc = $('route-shape').value !== 'road';   // 아크·직선 모두 우리가 만든 경로다
     const isDash = $('route-dash').value === 'dash';
 
     let drawCoords = coords || [], arrowFeat = null;
-    if (isArc && coords && coords.length >= 2) {
+    if (arrow && isArc && coords && coords.length >= 2) {
       const w = parseFloat($('route-width').value);
       const size = (3*w) / 64;
       const tip = coords[coords.length-1], prev = coords[coords.length-2];
@@ -1661,7 +1978,7 @@ function initRecorder(map) {
     }
     if (map.getLayer('route-arrow-layer')) map.setPaintProperty('route-arrow-layer', 'icon-color', $('route-color').value);
     // 현재 선 좌표로 화살표/점 갱신 (굵기·색·모드 변경 반영)
-    if (_lastRouteCoords.length) setRouteData(_lastRouteCoords);
+    if (_lastRouteCoords.length) setRouteData(_lastRouteCoords, _lastRouteArrow);
   }
   // 두 점 사이 선형 보간 (t: 0~1)
   const lerpPt = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
@@ -1746,7 +2063,8 @@ function initRecorder(map) {
   // 현재 선택된 경로 모양에 따른 좌표 (도로는 비동기 fetch 필요)
   async function resolvePathCoords() {
     const shape = $('route-shape').value;
-    if (shape === 'arc') { roadCoords = null; return arcPathCoords(); }
+    if (shape === 'arc')  { roadCoords = null; return arcPathCoords(); }
+    if (shape === 'line') { roadCoords = null; return linePathCoords(); }
     // road
     try { if (!roadCoords) await fetchRoadRoute(); } catch (_) { roadCoords = null; }
     return roadCoords || arcPathCoords();   // 도로 실패 시 아크로 폴백
@@ -1756,9 +2074,9 @@ function initRecorder(map) {
     if (!$('route-on').checked) return;
     addRouteLayer(); applyRouteStyle();
     const shape = $('route-shape').value;
-    if (shape === 'arc') {
-      const coords = trimArcEnd(arcPathCoords());
-      if (coords.length >= 2) { setRouteFull(coords); setStatus('직선(아크) 경로 준비됨 ✓', 'done'); }
+    if (shape === 'arc' || shape === 'line') {
+      const coords = trimArcEnd(shape === 'arc' ? arcPathCoords() : linePathCoords());
+      if (coords.length >= 2) { setRouteFull(coords); setStatus(`${shape === 'arc' ? '아크' : '직선'} 경로 준비됨 ✓`, 'done'); }
       else { setStatus('출발·도착을 먼저 지정하세요.', ''); }
     } else {
       try {
@@ -2524,6 +2842,68 @@ function initRecorder(map) {
   });
   $('locpin-add').addEventListener('click', () => addLocPin(map.getCenter()));
 
+  /* ── '핀·녹화 경로 설정' 만 처음으로 되돌리기 ──
+
+     이 칸에서 만진 것만 되돌린다. 색칠(국가·구역별 색상)과 녹화 설정은 건드리지 않는다 —
+     색칠은 탭을 바꿔도 남기기로 한 것이고, 녹화 설정은 다른 칸이다.
+
+     **기본값을 코드에 다시 적지 않는다.** 그러면 panel.html 과 조용히 어긋난다.
+     부팅 직후 이 칸의 입력값을 그대로 적어 두고 그 값으로 되돌린 뒤, 각 컨트롤에
+     input·change 를 쏴서 **원래 핸들러가 화면을 맞추게 한다** — 색·두께 표시, 경로선
+     미리보기, 그린 선 안내처럼 값에 딸린 것이 많아 손으로 옮기면 빠뜨린다. */
+  const CAMERA_PANEL_DEFAULTS = new Map();
+
+  function snapshotCameraPanel() {
+    CAMERA_PANEL_DEFAULTS.clear();
+    for (const el of $('camera-settings').querySelectorAll('input[id], select[id]')) {
+      CAMERA_PANEL_DEFAULTS.set(el.id, el.type === 'checkbox' ? el.checked : el.value);
+    }
+  }
+
+  function resetCameraPanel() {
+    // 1) 지도에 얹힌 것부터 걷는다 — 마커를 안 지우면 값만 초기화되고 핀은 남는다
+    for (const which of ['start', 'end']) {
+      if (PIN[which].marker) { PIN[which].marker.remove(); PIN[which].marker = null; }
+      PIN[which].label = '';
+    }
+    startCam = null; endCam = null;
+    waypoints.forEach((w) => { if (w.marker) w.marker.remove(); });
+    waypoints.length = 0;
+    locPins.forEach((p) => { if (p.marker) p.marker.remove(); });
+    locPins.length = 0;
+    drawnStrokes.length = 0; drawCurrent = []; _drawMouse = null;
+    roadCoords = null;
+    setRouteData([], false);
+
+    // 2) 입력값을 부팅 직후 값으로 되돌리고, 핸들러가 나머지를 맞추게 한다
+    for (const [id, v] of CAMERA_PANEL_DEFAULTS) {
+      const el = $(id); if (!el) continue;
+      if (el.type === 'checkbox') el.checked = v; else el.value = v;
+      el.dispatchEvent(new Event('input',  { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 3) 값이 아닌 것들 — 지정됨 표시와 이동 버튼
+    for (const [tag, grab, src, go] of [
+      ['start-tag', 'set-start', 'pin-start', 'go-start'],
+      ['end-tag',   'set-end',   'pin-end',   'go-end'],
+    ]) {
+      $(tag).textContent = '';
+      $(grab).classList.remove('done');
+      $(src).classList.remove('done');
+      $(go).disabled = true;
+    }
+    renderWaypoints(); renderLocPins(); updateLocLabelSides();
+    refreshDrawPreview(); updateDrawNudge(); updatePinGhost();
+    setStatus('핀·경로 설정을 처음으로 되돌렸습니다.', 'done');
+  }
+
+  snapshotCameraPanel();
+  $('camera-reset').addEventListener('click', resetCameraPanel);
+  /* summary 안에 있어서 그냥 두면 누를 때마다 칸이 접힌다. 감싼 span 에서 막는다 —
+     버튼이 잠겼을 때(녹화 중)는 click 이 아예 안 나므로 버튼에 걸면 안 된다. */
+  $('camera-reset-wrap').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+
   // ── 라벨 폰트 ──
   // 팀 공용 기본 폰트: assets/fonts 의 파일을 받아서 자동 적용. 교체하려면 아래 url 만 바꾸면 됨.
   const EMBEDDED_LABEL_FONT = { name: '기본', url: '' };  // 라이선스가 확인된 팀 폰트만 연결할 것
@@ -2605,7 +2985,7 @@ function initRecorder(map) {
     const modeLabel = $('record-mode-label');
     const format = $('format').value || 'video';
     if (label) label.textContent = format === 'webm' ? 'WebM' : format.toUpperCase();
-    if (modeLabel) modeLabel.textContent = format === 'mp4' ? '(경로 렌더링)' : '(실시간 녹화)';
+    if (modeLabel) modeLabel.textContent = format === 'mp4' ? '(경로 영상)' : '(실시간 녹화)';
   };
   $('format').addEventListener('change', syncRecordFormatLabel);
   syncRecordFormatLabel();
@@ -2615,6 +2995,9 @@ function initRecorder(map) {
     if (busy) { console.log('[REC] busy 상태라 중단'); return; }
     if (!startCam || !endCam) { console.log('[REC] 출발/도착 미지정 → 중단'); setStatus('출발·도착 지점을 모두 지정하세요.',''); return; }
     busy = true; setUI(false);
+    /* 행정구역 지오메트리는 나라별로 늦게 온다. 칠하자마자 녹화를 누르면 아직 안 왔을 수
+       있고, 그러면 그 나라만 색이 빠진 영상이 나온다. 여기서 한 번 기다린다 (보통 즉시). */
+    await admin1Settled();
     const durSec  = Math.max(0.5, parseFloat($('duration').value) || 4);
     const leadSec = Math.max(0,   parseFloat($('lead').value)     || 0);
     const tailSec = Math.max(0,   parseFloat($('tail').value)     || 0);
@@ -2659,23 +3042,62 @@ function initRecorder(map) {
       const totalLegs = stops.length + 1;
       let legDone = 0;   // 완료된 카메라 이동 수
 
+      /* 아크·직선을 그렸으면 카메라도 그 위를 지나게 한다.
+         flyTo 는 자기 곡선으로만 움직여서 임의의 경로를 따라갈 수 없다 — 그래서 그때만
+         프레임 단위로 직접 몬다(부드럽게 녹화가 늘 하는 방식). 줌 곡선은 그대로 쓴다.
+         도로 경로는 여기 해당 없다 — 잘게 꺾여 따라가면 카메라가 흔들린다(요청서 7-2). */
+      const followRoute = drawRoute && pathCoords.length >= 2 && $('route-shape').value !== 'road';
+      const followW0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
+      const straight = mode !== 'fly';
+      /* 직선 이동에 줌아웃을 걸면 easeTo 로는 낼 수 없는 궤적이라 여기서도 프레임을 직접 몬다. */
+      const driveFrames = followRoute || (straight && $('fly-dip').value !== '0');
+
+      // 정수 줌에 걸터앉으면 줌아웃이 없어도 타일이 깜빡인다 (위 detailSafeZoom 참고)
+      const hasDip = $('fly-dip').value !== '0';
+      const camSeq = [startCam, ...stops.map((s) => s.cam), endCam].map((c) => detailSafeCam(c, hasDip));
+      let legPaths = camSeq.slice(0, -1).map(() => ({ path: null, follow: null }));
+
       const animateTo = async (cam) => {
-        const opts = moveOpts(cam, mode, durSec);   // 비행 곡선의 줌아웃 깊이도 여기서 결정됨
         const t0 = performance.now();
         let raf = 0;
-        if ((drawRoute && pathCoords.length) || drawLinesOn) {
-          const grow = () => {
-            const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
-            const ct = (legDone + easeInOut(legT)) / totalLegs;   // 카메라 시간 진행
-            if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, easeInOut(legT), totalLegs)));   // 경로선: 거리 동기화
-            if (drawLinesOn) setDrawData(ct);   // 직접 그린 선: 카메라 시간 기준
-            if (legT < 1) raf = requestAnimationFrame(grow);
-          };
-          raf = requestAnimationFrame(grow);
+        /* prog 는 카메라가 구간 안에서 나아간 **거리 비율**이다. 카메라를 경로에 태울 때는
+           선도 그 잣대로 자라야 끝의 화살표가 카메라와 같은 자리에 있다. 시간으로 자라게
+           두면 서울→런던에서 비행은 2,598km, 직선은 722km 까지 벌어진다.
+           경로를 안 따라갈 때(도로 경로)는 예전처럼 시간으로 자란다. */
+        const grow = (legT, prog) => {
+          const e = easeInOut(legT);
+          const ct = (legDone + e) / totalLegs;   // 카메라 시간 진행
+          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, prog == null ? e : prog, totalLegs)));   // 경로선: 거리 동기화
+          if (drawLinesOn) setDrawData(ct);   // 직접 그린 선: 카메라 시간 기준
+        };
+
+        if (driveFrames) {
+          const from = camSeq[legDone];
+          const { path: flight, follow } = legPaths[legDone] || {};
+          await new Promise((resolve) => {
+            const step = () => {
+              const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
+              const t = easeInOut(legT);
+              grow(legT, follow ? (flight ? flight(t).d : t) : null);
+              map.jumpTo(legT >= 1 ? cam : interpCam(from, cam, t, flight, follow));
+              if (legT < 1) requestAnimationFrame(step); else resolve();
+            };
+            requestAnimationFrame(step);
+          });
+        } else {
+          const opts = moveOpts(cam, mode, durSec);   // 비행 곡선의 줌아웃 깊이도 여기서 결정됨
+          if ((drawRoute && pathCoords.length) || drawLinesOn) {
+            const tick = () => {
+              const legT = Math.min(1, (performance.now() - t0) / (durSec*1000));
+              grow(legT);
+              if (legT < 1) raf = requestAnimationFrame(tick);
+            };
+            raf = requestAnimationFrame(tick);
+          }
+          (mode === 'fly' ? map.flyTo(opts) : map.easeTo(opts));
+          await new Promise((resolve) => { let d=false; const fn=()=>{ if(!d){d=true;resolve();} }; map.once('moveend', fn); setTimeout(fn, durSec*1000+400); });
+          if (raf) cancelAnimationFrame(raf);
         }
-        (mode === 'fly' ? map.flyTo(opts) : map.easeTo(opts));
-        await new Promise((resolve) => { let d=false; const f=()=>{ if(!d){d=true;resolve();} }; map.once('moveend', f); setTimeout(f, durSec*1000+400); });
-        if (raf) cancelAnimationFrame(raf);
         legDone++;
         if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(legDone, 0, totalLegs)));
         if (drawLinesOn) setDrawData(legDone / totalLegs);
@@ -2685,18 +3107,31 @@ function initRecorder(map) {
       setRasterFade(0);                              // 녹화 중 타일 크로스페이드 끔 → 페이드 도중 캡처로 생기는 줄무늬/밴딩 방지
       setLabelFade(0);                               // 라벨 페이드인 끔 → 이동 중 글자가 흐리게 잡히는 것 방지
       setStatus('타일 프리로드 중…','busy');
-      map.jumpTo(endCam); await tilesSettled();
+      map.jumpTo(camSeq[camSeq.length - 1]); await tilesSettled();
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
-      if (drawRoute && $('route-shape').value === 'arc' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      /* 카메라가 따라갈 경로는 **자르기 전** 것이다. trimArcEnd 는 선을 도착핀 앞에서
+         멈추려는 것이지 카메라를 멈추려는 게 아니다 — 잘린 끝까지만 따라가면 마지막
+         프레임에서 도착 카메라로 점프해 화면이 튄다. 선은 잘린 것으로 그린다. */
+      const camPath = pathCoords.slice();
+      if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      {
+        const whole = followRoute ? pathFollower(camPath) : null;
+        legPaths = camSeq.slice(0, -1).map((from, i) => {
+          const flight = dipPath(mode, from, camSeq[i + 1], followW0);
+          if (!whole) return { path: flight, follow: null };
+          const a = legFrac(i, 0, totalLegs), b = legFrac(i, 1, totalLegs);
+          return { path: flight, follow: (k) => whole(a + (b - a) * k) };
+        });
+      }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
-      for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
+      for (let k = 0; k < stops.length; k++) { map.jumpTo(camSeq[k + 1]); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
 
       // 1-b) 이동 '중간' 타일까지 프리로드.
       //      여기까지는 출발·경유지·도착만 데워져 있어서, 그 사이를 지나갈 때는
       //      아직 안 받은 타일 대신 저해상도 부모 타일이 그려진다 (= 화면이 단순해 보이는 원인).
-      if ($('prewarm-path').checked) await prewarmPath([startCam, ...stops.map(s => s.cam), endCam], mode, durSec);
+      if ($('prewarm-path').checked) await prewarmPath(camSeq, mode, durSec, legPaths);
 
-      map.jumpTo(startCam); await tilesSettled();
+      map.jumpTo(camSeq[0]); await tilesSettled();
       if (showPath) bakeCapPin('start');            // 출발 핀 라벨 (출발 화면 기준)
       if (showLoc && locFirst) bakeLocPins();       // 첫 컷: 위치 핀 라벨 (출발 화면 기준)
       await sleep(250);
@@ -2783,7 +3218,7 @@ function initRecorder(map) {
       // 4) 경유지 순회: 줌 → 홀드
       for (let k = 0; k < stops.length; k++) {
         setStatus(`녹화 중 · 경유지 ${k+1} 줌…`,'busy');
-        await animateTo(stops[k].cam);
+        await animateTo(camSeq[k + 1]);   // 원본 cam 을 쓰면 떼어낸 줌이 무시돼 홀드에서 타일이 바뀐다
         if (showPins) triggerCapPin('wp'+k, performance.now());   // 도착 시 경유지 핀 팝업
         setStatus(`녹화 중 · 경유지 ${k+1} 홀드 ${stops[k].hold}s…`,'busy');
         await sleep(stops[k].hold*1000);
@@ -2791,7 +3226,7 @@ function initRecorder(map) {
 
       // 5) 도착으로 줌
       setStatus('녹화 중 · 도착 줌…','busy');
-      await animateTo(endCam);
+      await animateTo(camSeq[camSeq.length - 1]);
       if (showPins) { const now = performance.now(); triggerCapPin('end', now); if (!locFirst) triggerLocPins(now); }   // 마지막 컷이면 위치 핀이 도착 컷에 등장
 
       // 6) 뒤 정지 (도착 화면 유지)
@@ -2814,17 +3249,218 @@ function initRecorder(map) {
     }
   }
   /* ── 부드럽게 녹화 (오프라인: 프레임 단위 렌더 → 캡처) ── */
-  // 카메라 보간 헬퍼
+  /* ── 카메라 보간 헬퍼 ──
+
+     '부드럽게 녹화'는 flyTo 를 돌리지 않는다. 프레임마다 jumpTo 로 세워 놓고 타일이
+     다 도착할 때까지 기다렸다 찍는다 — 이동 중 저해상도 부모 타일이 잡히던 문제를
+     그렇게 없앴다. 그 대신 카메라 궤적을 **직선 보간**으로 대신했고, 그래서 비행 곡선이
+     통째로 빠졌다. 출발·도착 줌이 같으면 줌이 처음부터 끝까지 고정이라
+     '이동 중 줌아웃' 설정이 이 모드에서만 아무 반응이 없었다.
+
+     그래서 flyTo 의 곡선(van Wijk)을 여기서 직접 계산한다. mapbox-gl v3.13.0 의
+     flyTo 를 그대로 옮긴 것이다:
+       ρ = curve, w₀ = 화면 긴 변, w₁ = w₀/2^(도착줌-출발줌), u₁ = 투영 픽셀 거리
+       r(e) = ln(√(b²+1) − b),  b = (w₁²−w₀²+(∓)ρ⁴u₁²) / (2·(e?w₁:w₀)·ρ²·u₁)
+       S = (r(1)−r(0))/ρ,  f = t·S
+       줌   = 출발줌 + log₂( cosh(r₀+ρf) / cosh(r₀) )
+       중심 = 투영 좌표에서 D(f) 만큼 — 직선 위를 **불균등한 속도로** 지난다
+     중심을 위경도로 섞으면 안 된다. flyTo 는 투영(머케이터) 좌표에서 섞는다.
+
+     화면 크기(w₀)에 따라 곡선 깊이가 달라지므로 실제 캔버스 크기를 쓴다. */
   const lerp = (a, b, t) => a + (b - a) * t;
   const lerpAngle = (a, b, t) => { let d = ((b - a + 540) % 360) - 180; return a + d * t; };
-  function interpCam(from, to, t) {
+
+  const CLAMP_LAT = (lat) => Math.max(-85.051129, Math.min(85.051129, lat));
+  const mercX = (lng) => (180 + lng) / 360;
+  const mercY = (lat) => 0.5 - 0.25 * Math.log((1 + Math.sin(CLAMP_LAT(lat) * Math.PI / 180)) / (1 - Math.sin(CLAMP_LAT(lat) * Math.PI / 180))) / Math.PI;
+  const unmercX = (x) => x * 360 - 180;
+  const unmercY = (y) => (2 * Math.atan(Math.exp((0.5 - y) * 2 * Math.PI)) - Math.PI / 2) * 180 / Math.PI;
+
+  /* 이 이동에 쓸 곡선 세기. 녹화(record)의 moveOpts 와 같은 값을 봐야 두 모드가 같은 그림을 낸다. */
+  function flyCurveNow(mode) {
+    if (mode !== 'fly') return null;                 // 직선은 비행 곡선을 쓰지 않는다 (아래 dipPath)
+    const dip = $('fly-dip').value;
+    if (dip === '0') return 0.01;
+    return FLY_CURVES[dip] || 1.42;                  // 'auto' = mapbox 기본
+  }
+
+  /* ── 직선 이동의 줌아웃 ──
+
+     비행 곡선을 그대로 빌려 쓰면 안 된다. 그 곡선은 **경로 전체가 화면에 들어오게**
+     만드는 것이라 거리가 멀수록 깊고 V 자로 뾰족해진다. 실측(서울→런던, 양 끝 z8):
+     '조금' 인데 5.87단계나 내려가 최저 z2.13 이고, 바닥권(최저+0.5)에 머무는 구간이
+     18.5% 뿐이라 절반을 지나자마자 줌인이 시작되는 것처럼 보인다 — 서울→부산은 69.2% 다.
+     비행은 카메라가 실제로 그 경로를 훑으니 그래야 맞지만, **직선은 중심이 등속으로 곧게
+     가므로 경로를 담을 이유가 없다.**
+
+     그래서 폭과 모양을 직접 만든다.
+       폭  — 라벨의 뜻(1·2·3.5단계)에서 출발해 거리에 따라 자라되 **최대 2배**까지만.
+             거리의 잣대는 '경로 전체가 들어오는 데 필요한 폭'(기본 곡선의 깊이)을 쓴다.
+       모양 — 바닥이 평평한 종. **좌우 대칭이 아니다** — 앞에서 내려가 오래 머물다가
+             도착 즈음에 올라온다. 대칭으로 두면 절반을 지나자마자 줌인이 시작되는 것처럼
+             보인다. 도착 즈음에 들어와야 어디에 도착하는지가 눈에 남는다.
+             **깊이 내려갈수록 오르내리는 데 오래 쓴다.** 폭을 고정해 두면 '많이'(서울→런던
+             6.35단계)가 줌 시간 2.5초에서 초당 18.9단계로 튀어 급격해 보인다.
+             깊이에 비례시키면 14.2단계/초까지 내려간다. 올라오는 구간은 상한을 더 낮게
+             잡는다 — 넓히면 줌인이 일찍 시작돼 도착지에서 멀어진다. 그래도 지배적인 항은
+             **깊이 ÷ 줌 시간**이라, 더 완만하게 하려면 '줌 시간(초)'를 늘려야 한다.
+             구간 시간에는 easeInOut 이 한 번 더 걸리므로 재생 시간 기준으로 봐야 한다. */
+  const STRAIGHT_DIPS = { auto: 0.6, 1: 1, 2: 2, 3: 3.5 };
+  const DIP_REF   = 2;                               // 이 깊이(단계)를 기준으로 폭을 잡는다
+  const DIP_DOWN  = [0.28, 0.46];                    // 내려가는 구간 [최소, 최대]
+  const DIP_UP    = [0.22, 0.32];                    // 올라오는 구간 (도착 직전)
+
+  const dipSpan = ([lo, hi], depth) => Math.min(hi, Math.max(lo, lo * depth / DIP_REF));
+
+  function dipBell(t, down, up) {
+    const u = t <= down ? t / down
+            : t >= 1 - up ? (1 - t) / up
+            : 1;
+    return u * u * (3 - 2 * u);                      // smoothstep — 양 끝에서 기울기가 0
+  }
+
+  function straightDepth(dip, from, to, w0) {
+    const base = STRAIGHT_DIPS[dip];
+    if (!base) return 0;
+    const fit = flightPath(from, to, 1.42, w0);      // 경로 전체가 들어오는 깊이 = 거리의 잣대
+    let low = from.zoom;
+    if (fit) for (let k = 0; k <= 32; k++) low = Math.min(low, fit(k / 32).zoom);
+    return base * (1 + Math.min(1, (from.zoom - low) / 6));
+  }
+
+  /* 이동 방식에 맞는 줌 궤적. interpCam 이 쓰는 모양(t → {zoom, d})은 비행 곡선과 같다.
+
+     중심을 **등속**으로 두면 안 된다. 화면상 속도가 2^줌 에 비례하므로, 줌이 낮은 동안은
+     화면이 기어가고 줌이 올라오면 휙 지나간다. 서울→런던에서 재생 76% 지점에 줌인이
+     시작되는데 그때 중심은 아직 중부 유럽이라, 런던이 아니라 **중간 지점으로 줌인하는
+     것처럼** 보였다. 그러고 나서 높은 줌으로 미끄러져 간다.
+
+     그래서 진행도를 화면상 속도가 고르도록 다시 매긴다 — 줌이 낮을수록 빨리 나아간다
+     (2^-줌 에 비례). flyTo 가 하는 일과 같지만 **줌 궤적은 우리 것**이다.
+     그러면 넓게 빠진 동안 거리를 거의 다 먹고, 줌인이 시작될 때는 도착지 위에 있다. */
+  function dipPath(mode, from, to, w0) {
+    if (mode === 'fly') {
+      const curve = flyCurveNow(mode);
+      return curve ? flightPath(from, to, curve, w0) : null;
+    }
+    const depth = straightDepth($('fly-dip').value, from, to, w0);
+    if (!(depth > 0)) return null;                   // '없음' — 선형 보간 그대로
+    const down = dipSpan(DIP_DOWN, depth), up = dipSpan(DIP_UP, depth);
+    const zAt = (t) => lerp(from.zoom, to.zoom, t) - depth * dipBell(t, down, up);
+
+    const N = 256;                                   // 사다리꼴로 적분해 진행도 표를 만든다
+    const cum = new Float64Array(N + 1);
+    let prev = Math.pow(2, -zAt(0)), sum = 0;
+    for (let i = 1; i <= N; i++) {
+      const cur = Math.pow(2, -zAt(i / N));
+      sum += (prev + cur) / 2; cum[i] = sum; prev = cur;
+    }
+    const dOf = (t) => {
+      if (!(sum > 0)) return t;
+      const x = Math.min(N, Math.max(0, t * N));
+      const i = Math.min(N - 1, Math.floor(x));
+      return (cum[i] + (cum[i + 1] - cum[i]) * (x - i)) / sum;
+    };
+    return (t) => ({ zoom: zAt(t), d: dOf(t) });
+  }
+
+  /* from → to 의 비행 곡선. t(0~1) 를 카메라로 바꾸는 함수를 돌려준다.
+     곡선을 못 세우면(거리 0 등) null — 부르는 쪽이 직선 보간으로 넘어간다. */
+  function flightPath(from, to, curve, w0) {
+    const rho = curve, T = rho * rho;
+    const scale = Math.pow(2, from.zoom);
+    const u1 = Math.hypot((mercX(to.center[0]) - mercX(from.center[0])) * 512 * scale,
+                          (mercY(to.center[1]) - mercY(from.center[1])) * 512 * scale);
+    if (!(u1 > 1e-6) || !(rho > 0)) return null;     // 제자리 이동 — 줌만 바뀐다
+    const w1 = w0 / Math.pow(2, to.zoom - from.zoom);
+    const r = (e) => {
+      const b = (w1*w1 - w0*w0 + (e ? -1 : 1) * T*T * u1*u1) / (2 * (e ? w1 : w0) * T * u1);
+      return Math.log(Math.sqrt(b*b + 1) - b);
+    };
+    const r0 = r(0), S = (r(1) - r0) / rho;
+    if (!isFinite(S) || Math.abs(S) < 1e-9) return null;
+    const sinh = (v) => (Math.exp(v) - Math.exp(-v)) / 2;
+    const cosh = (v) => (Math.exp(v) + Math.exp(-v)) / 2;
+    return (t) => {
+      const f = t * S, k = r0 + rho * f;
+      const d = w0 * ((cosh(r0) * (sinh(k) / cosh(k)) - sinh(r0)) / T) / u1;   // 0 → 1
+      return {
+        zoom: from.zoom + Math.log2(cosh(k) / cosh(r0)),
+        d,
+      };
+    };
+  }
+
+  /* ── 경로를 따라가는 카메라 ──
+
+     경로선을 아크로 그려 놓고 카메라는 최단거리로 가면, 화면에 그린 화살표가 밖으로
+     벗어난다. 서울→런던에서 실제로 그랬다.
+
+     줌은 비행 곡선 그대로 두고 **중심만 경로 위를 지나게** 한다. 곡선이 주는 진행도 d 를
+     '직선을 따라 얼마나 갔나' 대신 '경로를 따라 얼마나 갔나'로 읽는 것뿐이다.
+     그래서 중간에 줌아웃했다 도착에서 다시 들어오는 움직임은 그대로 살아 있다.
+
+     도로 경로는 이렇게 하지 않는다 — 도로는 잘게 꺾여서 따라가면 카메라가 심하게 흔들린다.
+     (요청서 7-2) 그건 최단거리로 가고 선만 도로를 그린다. */
+  function pathFollower(coords) {
+    if (!coords || coords.length < 2) return null;
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i-1] + geoDist(coords[i-1], coords[i]));
+    const total = cum.at(-1);
+    if (!(total > 0)) return null;
+    return (frac) => {
+      const want = Math.max(0, Math.min(1, frac)) * total;
+      let lo = 0, hi = cum.length - 1;
+      while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= want) lo = mid; else hi = mid; }
+      const span = cum[hi] - cum[lo];
+      const u = span > 0 ? (want - cum[lo]) / span : 0;
+      const a = coords[lo], b = coords[hi];
+      return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+    };
+  }
+
+  /* ── 정수 줌에 걸터앉지 않게 ──
+
+     mapbox 는 정수 줌마다 다른 타일을 쓴다 — 줌 6.0 은 z6, 5.99 는 z5 이고 z5 타일에는
+     애초에 이면도로가 없다. 경계를 넘는 순간 지도 디테일이 한 프레임 사이에 바뀐다.
+
+     **줌이 정수에 정확히 걸려 있으면 줌아웃이 없어도 깜빡인다.** 카메라 줌은 곡선 공식으로
+     계산되는데(zoom = 출발줌 + log₂(cosh…)) 그 값이 8 을 미세하게 오르내린다 —
+     실측하면 7.999999999988 이 나온다. Math.floor 가 8 과 7 을 오가며 타일이 통째로
+     바뀌고, 화면은 도로가 있다 없다 한다. 콘솔에 줌을 찍으면 내내 8.000 이라 원인이 안 보인다.
+
+     이동 **중**에 경계를 넘는 건 문제가 안 된다 — 카메라가 움직이고 있어서 눈에 안 띈다.
+     문제는 멈춰 있을 때와 그 직후다.
+
+     그래서 출발·도착 줌이 경계에 붙어 있으면 살짝 떼어 놓는다.
+       줌아웃이 있으면  아래 칸 꼭대기로  (8.0 → 7.99) — 정지 화면과 이동 초반이 같은 칸
+       줌아웃이 없으면  같은 칸 안쪽으로  (8.0 → 8.01) — 칸을 안 바꾸니 디테일이 그대로
+     배율로 1% 안쪽이라 구도는 사실상 그대로다. 이미 칸 안쪽(8.34 등)이면 건드리지 않는다. */
+  const DETAIL_EDGE = 0.01;
+  function detailSafeZoom(z, dip) {
+    const frac = z - Math.floor(z);
+    if (frac >= 0.05) return z;                      // 이미 칸 안쪽 — 뒤집힐 일이 없다
+    return Math.floor(z) + (dip ? -DETAIL_EDGE : DETAIL_EDGE);
+  }
+  const detailSafeCam = (c, dip) => ({ ...c, zoom: detailSafeZoom(c.zoom, dip) });
+
+  function interpCam(from, to, t, path, follow) {
+    const p = path && path(t);
+    // 중심은 투영 좌표에서 섞는다 (flyTo 와 같은 방식). 곡선이 있으면 진행도만 d 로 바꾼다.
+    const k = p ? p.d : t;
+    /* 따라갈 경로가 있으면 그 위의 점을 쓴다. 진행도(k)는 비행 곡선이 정한 그대로다 —
+       그래야 줌아웃·줌인 타이밍과 중심 이동이 어긋나지 않는다. */
+    const onPath = follow && follow(k);
+    const x = lerp(mercX(from.center[0]), mercX(to.center[0]), k);
+    const y = lerp(mercY(from.center[1]), mercY(to.center[1]), k);
     return {
-      center: [lerp(from.center[0], to.center[0], t), lerp(from.center[1], to.center[1], t)],
-      zoom: lerp(from.zoom, to.zoom, t),
+      center: onPath || [unmercX(x), unmercY(y)],
+      zoom: p ? p.zoom : lerp(from.zoom, to.zoom, t),
       bearing: lerpAngle(from.bearing || 0, to.bearing || 0, t),
       pitch: lerp(from.pitch || 0, to.pitch || 0, t),
     };
   }
+
   // 한 프레임 렌더 완료까지 대기 (타일 로딩 포함)
   function renderFrame(cam) {
     return new Promise((resolve) => {
@@ -2855,6 +3491,9 @@ function initRecorder(map) {
       return;
     }
     busy = true; setUI(false);
+    /* 행정구역 지오메트리는 나라별로 늦게 온다. 칠하자마자 녹화를 누르면 아직 안 왔을 수
+       있고, 그러면 그 나라만 색이 빠진 영상이 나온다. 여기서 한 번 기다린다 (보통 즉시). */
+    await admin1Settled();
     const durSec  = Math.max(0.5, parseFloat($('duration').value) || 4);
     const leadSec = Math.max(0,   parseFloat($('lead').value)     || 0);
     const tailSec = Math.max(0,   parseFloat($('tail').value)     || 0);
@@ -2889,36 +3528,57 @@ function initRecorder(map) {
       if (drawLinesOn) { addDrawLayer(); applyDrawStyle(); setDrawVisible(true); setDrawData(0); }
 
       // 구간 시퀀스
+      /* 이동 방식·이동 중 줌아웃은 '녹화'와 같은 컨트롤을 본다. 두 모드가 다른 그림을
+         내면 안 된다 — 예전에는 이 모드만 직선 보간이라 줌아웃 설정이 통째로 무시됐다.
+         곡선 깊이는 화면 크기에 따라 달라지므로 실제 캔버스 긴 변을 넘긴다. */
+      const smoothMode = $('mode').value;
+      const w0 = Math.max(map.getCanvas().clientWidth, map.getCanvas().clientHeight) || 1600;
+      const hasDip = $('fly-dip').value !== '0';   // 위 detailSafeZoom 참고
+      const seq = [startCam, ...stops.map((w) => w.cam), endCam].map((c) => detailSafeCam(c, hasDip));
       const legs = [];
-      let prev = startCam;
-      for (const w of stops) { legs.push({ from: prev, to: w.cam, hold: w.hold }); prev = w.cam; }
-      legs.push({ from: prev, to: endCam, hold: 0 });
+      for (let i = 0; i < seq.length - 1; i++) legs.push({ from: seq[i], to: seq[i+1], hold: stops[i] ? stops[i].hold : 0 });
+      legs.forEach((lg) => {
+        lg.path = dipPath(smoothMode, lg.from, lg.to, w0);
+      });
       const totalLegs = legs.length;
+      /* 아크를 그렸으면 카메라도 그 위를 지난다. 도로는 그러지 않는다 —
+         잘게 꺾여서 따라가면 카메라가 심하게 흔들린다(요청서 7-2).
+         경로를 **자른 뒤에** 만들어야 한다(아래 trimArcEnd 참고) — 그래서 여기서는
+         조건만 정하고, 실제 연결은 자르기 다음에 한다. */
+      const followRoute = drawRoute && pathCoords.length >= 2 && $('route-shape').value !== 'road';
 
       // 프리로드
       setRasterFade(0);                              // 녹화 중 타일 크로스페이드 끔 → 페이드 도중 캡처로 생기는 줄무늬/밴딩 방지
       setLabelFade(0);                               // 라벨 페이드인 끔 → 프레임에 글자가 흐리게 잡히는 것 방지
       setStatus('타일 프리로드 중…','busy');
-      map.jumpTo(endCam); await tilesSettled();
+      map.jumpTo(seq[seq.length - 1]); await tilesSettled();   // 떼어낸 줌으로 데워야 실제로 쓸 타일이 온다
       if (showPath) bakeCapPin('end');              // 도착 핀 라벨 (도착 화면 기준 좌/우)
-      if (drawRoute && $('route-shape').value === 'arc' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      const smoothCamPath = pathCoords.slice();     // 카메라는 자르기 전 경로를 따른다
+      if (drawRoute && $('route-shape').value !== 'road' && pathCoords.length >= 2) { pathCoords = trimArcEnd(pathCoords); _wpFracs = pathWpFracs(pathCoords); }   // 아크 끝을 도착핀 앞에서 잘라둠(되돌아감 방지) — 도착 화면 줌 기준
+      if (followRoute) {                            // 카메라는 자르기 전 경로를 따른다 (위 참고)
+        const whole = pathFollower(smoothCamPath);
+        legs.forEach((lg, L) => {
+          const a = legFrac(L, 0, totalLegs), b = legFrac(L, 1, totalLegs);
+          lg.follow = whole ? (k) => whole(a + (b - a) * k) : null;
+        });
+      }
       if (showLoc && !locFirst) bakeLocPins();      // 마지막 컷: 위치 핀 라벨 (도착 화면 기준)
-      for (let k = 0; k < stops.length; k++) { map.jumpTo(stops[k].cam); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
+      for (let k = 0; k < stops.length; k++) { map.jumpTo(seq[k + 1]); await tilesSettled(); if (showPath) bakeCapPin('wp'+k); }
       // 경로 타일 미리 데우기 — 각 구간 중간 시점을 훑어 타일 캐시에 올림 → 인코딩 중 프레임별 타일 로딩 대기 ↓ (화질 손실 없음)
-      // 부드럽게 녹화는 프레임 카메라가 interpCam(선형 보간)이므로 같은 식으로 표본을 뽑으면 궤적이 정확히 일치한다.
+      // 프레임 카메라와 **같은 곡선**으로 표본을 뽑아야 궤적이 정확히 일치한다 (안 그러면 엉뚱한 타일을 데운다).
       setStatus('경로 타일 프리로드 중…','busy');
       {
         const N = 12;   // 구간당 표본 수 (촘촘할수록 이동 중 화질이 균일해짐)
         for (let li = 0; li < legs.length; li++) {
           const lg = legs[li];
           for (let s = 1; s <= N; s++) {
-            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1))));
+            map.jumpTo(interpCam(lg.from, lg.to, easeInOut(s/(N+1)), lg.path, lg.follow));
             await tilesSettled();
             setStatus(`경로 타일 프리로드 중… (구간 ${li+1}/${legs.length} · ${s}/${N})`,'busy');
           }
         }
       }
-      await renderFrame(startCam);
+      await renderFrame(seq[0]);
       if (showPath) bakeCapPin('start');            // 출발 핀 라벨 (출발 화면 기준)
       if (showLoc && locFirst) bakeLocPins();       // 첫 컷: 위치 핀 라벨 (출발 화면 기준)
       await sleep(200);
@@ -3039,17 +3699,19 @@ function initRecorder(map) {
 
       // 앞 정지 — 출발 핀 팝업 (gFrame=0 부터)
       if (showPins) { triggerCapPin('start', gFrame); if (locFirst) triggerLocPins(gFrame); }   // 첫 컷이면 위치 핀도 앞 정지에 등장
-      await holdEnc(startCam, leadFrames, '부드럽게 · 앞 정지');
+      await holdEnc(seq[0], leadFrames, '부드럽게 · 앞 정지');
 
       // 구간 보간
       for (let L = 0; L < legs.length; L++) {
-        const { from, to, hold } = legs[L];
+        const { from, to, hold, path, follow } = legs[L];
         for (let f = 1; f <= legFrames; f++) {
           const t = easeInOut(f / legFrames);
+          // 카메라를 경로에 태웠으면 선도 카메라가 나아간 거리로 자란다 (위 grow 참고)
+          const prog = follow ? (path ? path(t).d : t) : t;
           if (showPins) map.getSource('capture-pins').setData(capPinFC(gFrame));   // 핀 사이즈 갱신
-          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(L, t, totalLegs)));
+          if (drawRoute && pathCoords.length) setRouteData(partialPath(pathCoords, legFrac(L, prog, totalLegs)));
           if (drawLinesOn) setDrawData((L + t) / totalLegs);
-          await renderFrame(interpCam(from, to, t));            // setData 반영된 프레임 캡처
+          await renderFrame(interpCam(from, to, t, path, follow));   // setData 반영된 프레임 캡처
           await encodeFrame(f === 1);
           gFrame++;
           if (f % 3 === 0) setStatus(`부드럽게 · 구간 ${L+1}/${legs.length} (${Math.round(f/legFrames*100)}%)`,'busy');
@@ -3064,7 +3726,7 @@ function initRecorder(map) {
       }
 
       // 뒤 정지
-      await holdEnc(endCam, tailFrames, '부드럽게 · 뒤 정지');
+      await holdEnc(seq[seq.length - 1], tailFrames, '부드럽게 · 뒤 정지');   // 원본 endCam 을 쓰면 마지막 이동 프레임과 타일 칸이 달라져 튄다
 
       // 마무리: 인코더 비우고 mp4 완성
       setStatus('인코딩 마무리 중…','busy');
@@ -3165,8 +3827,15 @@ function initRecorder(map) {
        지도의 실제 렌더링을 쓰기 때문에 선 굵기·점선·라벨이 화면과 완전히 동일하다.
 
      ag-psd 는 이 기능에서만 쓰이므로 처음 누를 때 동적으로 불러온다 (810KB). */
+  /* 한 모드를 여러 레이어가 나눠 그리는 경우가 있다 — 국가는 나머지 나라를 Mapbox 레이어가,
+     남·북한을 우리 폴리곤 레이어가 그린다. prop 은 둘 다 iso_3166_1_alpha_3 로 같다. */
+  const fillLayersOf = (p) => [p.layer, ...(p.id === 'country' ? [KC_LAYER] : [])];
+
+  /* 색칠 목록을 손으로 적지 말 것. 예전에 네 개를 적어 뒀다가 남·북한 레이어가 빠졌고,
+     PSD 의 '지도' 레이어에 대한민국 색칠이 함께 구워졌다 — 포토샵에서 대한민국 레이어를
+     꺼도 색이 남았다. PAINTERS 에서 뽑아 쓰면 모드를 늘려도 여기가 뒤처지지 않는다. */
   const OVERLAY_LAYERS = {
-    색칠: ['country-color-fill', 'admin1-color-fill', 'sido-color-fill', 'sigungu-color-fill'],
+    색칠: PAINTERS.flatMap(fillLayersOf),
     경로선: ['route-line-layer', 'route-dots-layer', 'route-arrow-layer', 'draw-lines-layer'],
     핀: ['capture-pins-layer'],
   };
@@ -3175,8 +3844,10 @@ function initRecorder(map) {
      그 지역만 그려진다. 지역별로 레이어를 나눌 때 이 방식을 쓴다.
      레이어 id·키 속성·표시 이름은 모드 정의(PAINTERS)에 이미 있으므로 그대로 빌려 쓴다
      — 여기서 따로 적어두면 모드를 늘릴 때 또 한 군데가 뒤처진다. */
+  // PSD·SVG 도 한 모드를 나눠 그리는 레이어를 전부 훑어야 남·북한이 빠지지 않는다
   const COLOR_SOURCES = PAINTERS.map(p => ({
-    layer: p.layer, prop: p.prop, list: p.entries, keyOf: e => e.key, labelOf: e => p.label(e.key),
+    layer: p.layer, layers: fillLayersOf(p),
+    prop: p.prop, list: p.entries, keyOf: e => e.key, labelOf: e => p.label(e.key),
   }));
   // 파일명·레이어명에 쓸 안전한 이름 (빈 값이면 대체어)
   const layerName = (s, fallback) => (String(s || '').trim() || fallback).replace(/[\\/:*?"<>|]/g, '');
@@ -3260,6 +3931,7 @@ function initRecorder(map) {
   $('capture-psd').addEventListener('click', async () => {
     if (busy) return;
     busy = true; setUI(false);
+    await admin1Settled();                          // 아직 안 온 행정구역이 있으면 기다린다
     const showPath = $('pin-in-video').checked, showLoc = $('locpin-in-video').checked;
     const showPins = showPath || showLoc;
     const pinEls = [PIN.start.marker, PIN.end.marker, ...waypoints.map(w => w.marker), ...locPins.map(p => p.marker)]
@@ -3305,22 +3977,22 @@ function initRecorder(map) {
       const paintBackup = [];
       const colorItems = [];
       for (const src of COLOR_SOURCES) {
-        if (!map.getLayer(src.layer)) continue;
+        src.live = src.layers.filter(id => map.getLayer(id));       // 지금 깔려 있는 것만
+        if (!src.live.length) continue;
         const list = src.list();
         if (!list.length) continue;
-        paintBackup.push({ layer: src.layer, value: map.getPaintProperty(src.layer, 'fill-color') });
+        src.live.forEach(id => paintBackup.push({ layer: id, value: map.getPaintProperty(id, 'fill-color') }));
         list.forEach(e => colorItems.push({ src, entry: e }));
       }
       if (colorItems.length) {
-        allIds.forEach(id => setVis(id, id === colorItems[0].src.layer ? 'visible' : 'none'));
         const kids = [];
         for (let i = 0; i < colorItems.length; i++) {
           const { src, entry } = colorItems[i];
           setStatus(`색칠 ${i + 1}/${colorItems.length} 캡처 중…`, 'busy');
-          allIds.forEach(id => setVis(id, id === src.layer ? 'visible' : 'none'));
-          // 이 지역만 칠하고 나머지는 투명
-          map.setPaintProperty(src.layer, 'fill-color',
-            ['match', ['get', src.prop], src.keyOf(entry), entry.color, 'rgba(0,0,0,0)']);
+          allIds.forEach(id => setVis(id, src.live.includes(id) ? 'visible' : 'none'));
+          // 이 지역만 칠하고 나머지는 투명 (같은 모드를 나눠 그리는 레이어 전부에)
+          src.live.forEach(id => map.setPaintProperty(id, 'fill-color',
+            ['match', ['get', src.prop], src.keyOf(entry), entry.color, 'rgba(0,0,0,0)']));
           const img = await captureTransparent();
           if (hasPixels(img)) kids.push({ name: layerName(src.labelOf(entry), '색칠 ' + (i + 1)), imageData: img });
         }
@@ -3439,7 +4111,9 @@ function initRecorder(map) {
           }
           for (const k in byKey) acc.push(byKey[k]);
         };
-        PAINTERS.forEach(p => collect(p.layer, p.prop, (key) => p.entries().find(x => x.key === key)));
+        // 국가는 Mapbox 레이어와 우리 남·북한 레이어가 나눠 그린다 — 둘 다 훑어야 빠지지 않는다
+        PAINTERS.forEach(p => fillLayersOf(p)
+          .forEach(id => collect(id, p.prop, (key) => p.entries().find(x => x.key === key))));
 
         if (!acc.length) { setStatus('화면에 보이는 색칠 영역이 없습니다.', ''); return; }
 
@@ -3478,7 +4152,7 @@ function initRecorder(map) {
     el.hidden = !msg || msg === '대기 중';
   }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','label-on','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear','camera-reset']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){

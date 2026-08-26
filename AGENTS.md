@@ -25,9 +25,15 @@ CSS 캐스케이드(`@scope` 는 명시도를 올려주지 않는다), 레이어
 
 ```bash
 node tools/serve.mjs                  # http://127.0.0.1:5500
-node --test test/*.test.js            # 64개, 설치 불필요
-npm install && node --test test/dom/*.test.js   # 39개, jsdom 필요
+node --test test/*.test.js            # 108개, 설치 불필요
+npm install && node --test test/dom/*.test.js   # 66개, jsdom 필요
 ```
+
+## 이번 변경(`v3.1.0`)을 리뷰한다면
+
+`docs/PR-v3.1.0.md`가 PR 본문이다. 요청서(`docs/colormap-recorder-requests.md`) 10개 항목을 축으로
+무엇이 반영됐고 무엇이 안 됐는지, **원인이 요청서의 추정과 달랐던 항목**까지 적어 두었다.
+초기 지적사항은 `docs/TO_GUHNZ_20260817.md`, 최신 확인 결과는 `docs/TO_GUHNZ_20260826.md`에 있다.
 
 ## 이 저장소의 습관
 

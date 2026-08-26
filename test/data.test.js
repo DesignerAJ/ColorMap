@@ -3,7 +3,9 @@
    생성기를 고칠 때마다 여기서 걸리게 해 둔다 — 눈으로는 안 보이는 문제들이다. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readJSON } from './helpers/extract.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { readJSON, readSrc, ROOT } from './helpers/extract.js';
 
 const hires = readJSON('recorder/js/data/sido-hires.json');
 const border = readJSON('recorder/js/data/korea-border.json');
@@ -451,6 +453,36 @@ test('국가 폴리곤과 행정구역 폴리곤에 핀치가 없다', () => {
   check(admin1.features.filter((f) => f.properties.country === '대한민국'), 'admin1 대한민국');
 });
 
+test('링 감김 방향이 GeoJSON 규약대로다 (바깥 반시계 / 구멍 시계)', () => {
+  /* **벡터 타일에는 '구멍' 이라는 표시가 없다 — 감김 방향이 유일한 기준이다.**
+     GeoJSON 에서 링을 폴리곤마다 따로 내보내도 타일로 구우면 한 줄로 늘어서고,
+     mapbox-gl 은 첫 링의 부호를 바깥으로 잡은 뒤 부호가 반대인 링을 전부 앞 폴리곤의
+     구멍으로 붙인다. 그래서 방향이 섞이면 섬과 호수가 통째로 구멍이 되고, 그 구멍들이
+     서로 겹쳐 화면에 긴 다각형이 뻗는다 — 함경남도(128.0, 40.04)에서 링 165개 중
+     164개가 그렇게 본토의 구멍이 됐다. 삼각형 스파이크의 여섯 번째 원인이다. */
+  const area = (r) => {
+    let a = 0;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0] * r[i][1] - r[i][0] * r[j][1];
+    return a / 2;
+  };
+  const check = (feats, label) => {
+    const bad = [];
+    for (const f of feats) for (const poly of ringsOf(f.geometry)) {
+      poly.forEach((r, i) => {
+        const a = area(r);
+        if (!a) return;                                   // 넓이 0 은 아래 다른 검사가 잡는다
+        const want = i === 0;                             // 바깥 링만 반시계
+        if ((a > 0) !== want) bad.push(`${label} ${f.properties.short || f.properties.name} ${i === 0 ? '바깥' : '구멍'}링`);
+      });
+    }
+    assert.deepEqual(bad.slice(0, 3), [], `${label}: 방향이 뒤집힌 링 ${bad.length}개`);
+  };
+  check(countries.features, 'korea-countries');
+  check(NK, 'admin1 북한');
+  check(admin1.features.filter((f) => f.properties.country === '대한민국'), 'admin1 대한민국');
+  check(hires.features, 'sido-hires');
+});
+
 test('국가 폴리곤이 시도마다 나뉘어 있다', () => {
   /* 처음에는 나라별로 폴리곤 4,173개를 MultiPolygon 하나에 몰아넣었는데, 그 거대한
      feature 를 타일마다 삼각분할하면서 충남 해안에 삼각형이 뻗었다. 시도 탭은 시도마다
@@ -473,7 +505,10 @@ test('경계 폴리곤에 자기교차가 없다 (핀치가 아닌 가로지름)
     return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
   };
   const bad = [];
-  for (const [feats, label] of [[hires.features, '시도'], [NK, '북한']]) {
+  /* korea-countries 도 봐야 한다. 이 파일은 시도(7자리)를 **5자리로 새로 반올림**하는데,
+     반올림은 없던 겹침을 만들어낸다 — CLAUDE.md 가 경고하는 그 단계다. 원본 둘이
+     깨끗해도 이 출력이 깨끗하다는 보장이 없어서, 한동안 아무도 안 보는 파일이었다. */
+  for (const [feats, label] of [[hires.features, '시도'], [NK, '북한'], [countries.features, '국가']]) {
     for (const f of feats) for (const poly of ringsOf(f.geometry)) for (const r of poly) {
       if (r.length < 5) continue;
       const C = 0.01, grid = new Map();                   // 전수 비교는 느리다 — 격자로 후보만
@@ -578,4 +613,205 @@ test('국경선 동쪽 끝이 고성에서 바다에 닿고 해안을 따라 내
   assert.ok(gap < 0.001, `해안 조각이 종점에서 ${(gap*1000).toFixed(0)}m 떨어져 있다`);
   const len = KM(s[0][0]-s.at(-1)[0], s[0][1]-s.at(-1)[1], s[0][1]);
   assert.ok(len > 0.05 && len < 1, `해안까지 ${(len*1000).toFixed(0)}m — 너무 짧거나 길다`);
+});
+
+test('행정구역 카메라 목표가 그 지역을 가리킨다', () => {
+  /* 지역을 고르면 flyTo 로 c·z 를 비춘다. 이 값은 파일에 미리 들어 있는데,
+     경도 최소·최대를 그냥 평균 내어 만든 탓에 두 경우에 엉뚱한 곳을 가리켰다.
+
+       날짜변경선을 넘는 지역   알래스카는 -179.1° ~ 179.8° 라 평균이 0.3° —
+                            아프리카 앞바다다. 실제로 카메라가 거기로 날아갔다.
+       멀리 떨어진 섬이 있는 곳  칠레 발파라이소(이스터섬), 일본 도쿄도(오가사와라),
+                            남아프리카 웨스턴케이프(프린스에드워드) 등
+
+     build-admin1-camera.mjs 가 경도를 연속 좌표계로 펴고, 본토가 뚜렷하면 본토만 보고
+     목표를 정한다. 88개를 고쳤고 가장 크게는 키리바시가 17,797km 옮겨졌다. */
+  const KM = (a, b) => {
+    let d = a[0] - b[0];
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    return Math.hypot(d * 111 * Math.cos(b[1] * Math.PI / 180), (a[1] - b[1]) * 111);
+  };
+  const bad = [];
+  for (const f of admin1.features) {
+    const c = f.properties && f.properties.c;
+    if (!c) continue;
+    // 도형 안이면 통과. 큰 지역은 중심이 경계에서 수백 km 떨어지는 게 정상이다
+    if (ringsOf(f.geometry).some((p) => inRing(c, p[0]))) continue;
+    let best = Infinity, i = 0;
+    (function walk(x) {
+      if (typeof x[0] === 'number') {
+        if (i++ % 20 === 0) { const d = KM(x, c); if (d < best) best = d; }   // 성능 — 20개마다
+        return;
+      }
+      x.forEach(walk);
+    })(f.geometry.coordinates);
+    if (best > 500) bad.push(`${f.properties.name} @ ${JSON.stringify(c)} → ${Math.round(best)}km`);
+  }
+  assert.deepEqual(bad.slice(0, 5), [], `카메라 목표가 지역에서 멀리 떨어진 곳 ${bad.length}개`);
+});
+
+test('북한 경계에 없던 긴 직선이 끼어들지 않는다', () => {
+  /* 해안선으로 자를 때 두 교차점이 서로 다른 해안선 고리에 있으면 이어붙일 길이 없다.
+     강 하구가 그렇다 — OSM 해안선은 강어귀에서 끊기고 강둑은 해안선이 아니다.
+     예전에는 그 자리를 두 점을 잇는 직선으로 때웠고, 두만강 하구에 21.5km 짜리 수평선이
+     생겨 그 선과 해안 사이가 통째로 칠해졌다. 화면의 삼각형이 그것이었다.
+     지금은 원래 경계를 그대로 둔다.
+
+     10km 로 잡는다 — 량강도 백두산 쪽처럼 원본 OSM 에 7.6km 짜리 직선 국경이 실제로 있다. */
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+  const bad = [];
+  for (const f of NK) for (const r of nkRings(f)) {
+    for (let i = 1; i < r.length; i++) {
+      const d = KM(r[i][0]-r[i-1][0], r[i][1]-r[i-1][1], r[i][1]);
+      if (d > 10) bad.push(`${f.properties.short} ${d.toFixed(1)}km @ ${JSON.stringify(r[i-1])}`);
+    }
+  }
+  assert.deepEqual(bad.slice(0, 3), [], `10km 넘는 변 ${bad.length}개`);
+});
+
+/* ── 나라별로 쪼갠 행정구역 데이터 ──
+   전 세계 1급 행정구역을 한 파일(전송 10.7MB)로 받던 것을 셋으로 나눴다.
+   meta 는 속성만, core 는 자주 쓰는 8개국, 나머지는 나라별 파일이다.
+   나누는 과정에서 구역이 하나라도 새면 검색에는 뜨는데 색칠이 안 되는 상태가 된다 —
+   화면에서는 "왜 이 지역만 안 칠해지지" 로만 보이고 원인을 짚기 어렵다. */
+test('쪼갠 행정구역 데이터에서 새는 구역이 없다', () => {
+  const meta = readJSON('recorder/js/data/admin1-meta.json');
+  const core = readJSON('recorder/js/data/admin1-core.json');
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+
+  assert.equal(meta.features.length, admin1.features.length,
+    'meta 의 구역 수가 admin1.json 과 다르다');
+
+  // 지오메트리를 가진 구역을 전부 모은다 (core + 나라별 파일)
+  const have = new Set();
+  const add = (fc, where) => fc.features.forEach((f) => {
+    assert.ok(f.geometry, `${where}: 지오메트리가 없는 구역 ${f.properties.name}`);
+    assert.ok(!have.has(f.properties.name), `${where}: ${f.properties.name} 이 두 번 들어 있다`);
+    have.add(f.properties.name);
+  });
+  add(core, 'core');
+  for (const f of files) add(readJSON('recorder/js/data/admin1/' + f), f);
+
+  const missing = meta.features.map((f) => f.properties.name).filter((n) => !have.has(n));
+  assert.deepEqual(missing.slice(0, 5), [], `지오메트리가 없는 구역 ${missing.length}개`);
+
+  // 나라 → 파일 이름표가 실제 파일을 가리켜야 한다
+  const bad = Object.entries(meta.index).filter(([, code]) => !files.includes(code + '.json'));
+  assert.deepEqual(bad.slice(0, 5), [], '이름표가 가리키는 파일이 없다');
+
+  /* core 에 든 나라는 이름표에 없어야 한다 — 있으면 이미 가진 걸 또 받고,
+     같은 구역이 소스에 두 번 들어가 색칠이 겹친다. */
+  const coreCountries = new Set(core.features.map((f) => f.properties.country));
+  const overlap = [...coreCountries].filter((c) => meta.index[c]);
+  assert.deepEqual(overlap, [], 'core 국가가 이름표에도 있다 — 두 번 받는다');
+
+  /* meta 의 모든 나라는 core 이거나 이름표에 있어야 한다. 둘 다 아니면 받을 길이 없다. */
+  const reach = meta.features.map((f) => f.properties.country)
+    .filter((c) => !coreCountries.has(c) && !(c in meta.index));
+  assert.deepEqual([...new Set(reach)].slice(0, 5), [], '받을 길이 없는 나라가 있다');
+});
+
+test('쪼갠 뒤에도 정밀도가 떨어진 나라가 없다', () => {
+  /* Natural Earth 로 갈아끼우면서 나라별로 '더 나은 쪽'을 고른다. 방향을 잘못 잡으면
+     이미 정밀했던 나라(일본 5,284점·러시아 6,921점)가 조용히 거칠어진다. */
+  const core = readJSON('recorder/js/data/admin1-core.json');
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const pts = (f) => ringsOf(f.geometry).flat().reduce((s, r) => s + r.length, 0);
+  const agg = (feats, into) => feats.forEach((f) => {
+    const c = f.properties.country;
+    into.set(c, (into.get(c) || 0) + pts(f));
+  });
+  const before = new Map(), after = new Map();
+  agg(admin1.features, before);
+  agg(core.features, after);
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.json'))) {
+    agg(readJSON('recorder/js/data/admin1/' + f).features, after);
+  }
+  /* 줄어들어도 되는 경우가 하나 있다 — 나라당 전송 1.5MB 상한에 걸려 기준 줌을 낮춘 때다.
+     그건 의도한 맞바꿈이고, 그 줌까지는 화면상 원본과 같다. 어느 나라가 왜 낮아졌는지는
+     admin1-sources.json 에 적혀 있으므로 그걸 근거로 본다 — '줄었으니 통과'가 아니라
+     '줄어든 이유가 적혀 있으니 통과'다. 이유 없이 줄면 여전히 걸린다(ISO 코드를 잘못 써서
+     엉뚱한 나라를 받은 적이 있는데, 그런 게 조용히 지나가면 안 된다). */
+  const sources = readJSON('recorder/js/data/admin1-sources.json');
+  const isoOf = {};
+  for (const [iso, v] of Object.entries(sources)) isoOf[iso] = v;
+  const koToIso = {};
+  {
+    const src = readSrc('recorder/js/data/regions.js');
+    const CO = new Function(src.match(/const COUNTRIES = \[[\s\S]*?\];/)[0] + '\nreturn COUNTRIES;')();
+    CO.forEach((c) => { koToIso[c.n.replace(/\s*#[^#]*#\s*/g, '').trim()] = c.i; });
+  }
+  const worse = [...before.entries()]
+    .filter(([c, b]) => (after.get(c) || 0) < b * 0.95)
+    .filter(([c]) => {
+      const s = isoOf[koToIso[c]];
+      if (!s) return true;
+      if (s.zoom && s.zoom < 10) return false;          // 전송 상한에 걸려 줌을 낮춘 나라
+      if (s.clipped) return false;                      // 영해를 잘라낸 나라 — 줄어드는 게 정상이다
+      return true;
+    })
+    .map(([c, b]) => `${c || '(이름 없음)'} ${b} → ${after.get(c) || 0}`);
+  assert.deepEqual(worse.slice(0, 5), [], `이유 없이 정밀도가 떨어진 나라 ${worse.length}개`);
+});
+
+test('출처 대장이 나라별 파일과 맞는다', () => {
+  /* 어느 나라 경계가 어디서 왔는지는 실행 순서에만 암묵적으로 남아 있었다 —
+     split 이 Natural Earth 를 깔고, hires 가 geoBoundaries 로 덮고, osm 이 다시 덮는다.
+     그래서 README 의 출처 목록이 실제와 어긋나기 쉬웠다. 방송 이미지에 따라붙는
+     표기 의무라 어긋나면 곤란하다. admin1-sources.json 이 그 대장이다. */
+  const sources = readJSON('recorder/js/data/admin1-sources.json');
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+    .map((f) => f.replace('.json', ''));
+  const missing = files.filter((iso) => !sources[iso]);
+  assert.deepEqual(missing.slice(0, 5), [], `대장에 없는 나라 ${missing.length}개`);
+  for (const [iso, v] of Object.entries(sources)) {
+    assert.ok(v.source && v.license, `${iso}: 출처나 라이선스가 비었다`);
+  }
+});
+
+/* ── 나라별 행정구역 파일에도 핀치·자기교차가 없어야 한다 ──
+   위쪽 검사들은 sido-hires · korea-countries · admin1 의 북한만 본다. 나라별로 쪼갠
+   admin1/<ISO3>.json 은 아무도 안 보고 있었고, 그래서 OSM 에서 받아온 프랑스가
+   핀치 64 · 자기교차 132 를 그대로 달고 들어왔다. 영해를 잘라내면서 더 늘기도 했다.
+   증상은 늘 같다 — mapbox-gl 의 삼각분할이 깨져 **일부가 아예 안 그려진다.**
+   브라질 마라냥에서 섬이 색칠 안 되는 것으로 보였던 게 이것이다. */
+test('나라별 행정구역 파일에 핀치·자기교차가 없다', () => {
+  const dir = path.join(ROOT, 'recorder/js/data/admin1');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  const o = (a, b, c) => { const v = (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]); return v > 0 ? 1 : v < 0 ? -1 : 0; };
+  const crosses = (p1, p2, p3, p4) => {
+    if (same(p1,p3) || same(p1,p4) || same(p2,p3) || same(p2,p4)) return false;
+    const d1 = o(p3,p4,p1), d2 = o(p3,p4,p2), d3 = o(p1,p2,p3), d4 = o(p1,p2,p4);
+    return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
+  };
+  const bad = [];
+  for (const file of files) {
+    const fc = readJSON('recorder/js/data/admin1/' + file);
+    for (const f of fc.features) for (const poly of ringsOf(f.geometry)) for (const r of poly) {
+      const seen = new Set();
+      for (let i = 0; i < r.length - 1; i++) {
+        const k = r[i][0] + ',' + r[i][1];
+        if (seen.has(k)) bad.push(`핀치 ${file} ${f.properties.short} @ ${k}`); else seen.add(k);
+      }
+      if (r.length < 5) continue;
+      const C = 0.01, grid = new Map();                   // 전수 비교는 느리다 — 격자로 후보만
+      for (let i = 0; i < r.length - 1; i++)
+        for (let x = Math.floor(Math.min(r[i][0],r[i+1][0])/C); x <= Math.floor(Math.max(r[i][0],r[i+1][0])/C); x++)
+          for (let y = Math.floor(Math.min(r[i][1],r[i+1][1])/C); y <= Math.floor(Math.max(r[i][1],r[i+1][1])/C); y++) {
+            const k = x + ':' + y;
+            if (!grid.has(k)) grid.set(k, []);
+            grid.get(k).push(i);
+          }
+      for (const arr of grid.values()) for (let a = 0; a < arr.length; a++) for (let b = a + 1; b < arr.length; b++) {
+        const i = Math.min(arr[a], arr[b]), j = Math.max(arr[a], arr[b]);
+        if (j - i < 2) continue;
+        if (crosses(r[i], r[i+1], r[j], r[j+1])) bad.push(`교차 ${file} ${f.properties.short} @ ${r[i]}`);
+      }
+    }
+  }
+  assert.deepEqual(bad.slice(0, 3), [], `핀치·자기교차 ${bad.length}곳`);
 });

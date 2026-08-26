@@ -34,7 +34,8 @@
 */
 
 import fs from 'node:fs';
-import { nudgeTouchingHoles } from './lib/rings.mjs';
+import { cleanRing } from './lib/clean.mjs';
+import { nudgeTouchingHoles, buildPolygons } from './lib/rings.mjs';
 import path from 'node:path';
 
 const SRC = 'recorder/js/data/sigungu.json';
@@ -52,51 +53,6 @@ const ringsOf = (g) =>
   g.type === 'Polygon' ? [g.coordinates]
   : g.type === 'MultiPolygon' ? g.coordinates
   : [];
-
-/* 부호 있는 넓이 — 양수면 반시계(CCW). 링의 방향과 크기 판정에 함께 쓴다. */
-function signedArea(ring) {
-  let a = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
-  }
-  return a / 2;
-}
-
-function bboxOf(ring) {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const [x, y] of ring) {
-    if (x < x0) x0 = x; if (x > x1) x1 = x;
-    if (y < y0) y0 = y; if (y > y1) y1 = y;
-  }
-  return [x0, y0, x1, y1];
-}
-
-const bboxInside = (a, b) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
-
-/* 링이 다른 링 안에 들어 있는지. 한 점만 보고 정하면 안 된다 —
-   핀치를 잘라 만든 링은 첫 점이 바깥 링과 맞닿은 공유 꼭짓점이라
-   그 점 하나로는 안팎 판정이 흔들린다. 여러 점을 고르게 뽑아 다수결로 정한다. */
-function ringInside(ring, outer) {
-  const n = ring.length - 1;
-  let inside = 0, tested = 0;
-  for (let s = 1; s <= 7; s++) {
-    const p = ring[Math.floor((n * s) / 8)];
-    if (!p) continue;
-    tested++;
-    if (pointInRing(p, outer)) inside++;
-  }
-  return tested > 0 && inside * 2 > tested;
-}
-
-function pointInRing(pt, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i], [xj, yj] = ring[j];
-    if ((yi > pt[1]) !== (yj > pt[1]) &&
-        pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
 
 /* 한 링이 같은 점을 두 번 지나면 그 지점에서 자기 자신과 만난다(핀치).
    분기점(한 점에서 변이 셋 이상 뻗는 곳)에서 다음 변을 아무거나 집어 들면 이런 링이 생긴다.
@@ -173,94 +129,9 @@ function assembleRings(edges, coord) {
   return rings;
 }
 
-/* 진짜 자기교차(끝점을 공유하지 않고 가로지르는 두 변) 복구.
+/* 자기교차·핀치 복구는 lib/clean.mjs 로 옮겼다. 영해를 잘라낸 뒤에도 같은 처리가
+   필요해서(build-admin1-clip.mjs) 둘이 같이 쓴다 — 복사본이 갈라지면 그 함정들이 되살아난다. */
 
-   1m 안팎으로 되돌아오는 슬리버가 남으면 mapbox-gl 의 삼각분할이 폴리곤을 가로지르는
-   거대한 삼각형을 그린다 — 충남 해안에서 실제로 났다. 핀치(같은 점 재방문)와 증상은
-   같지만 꼭짓점을 공유하지 않아 splitAtPinches 로는 안 잡힌다.
-
-   교차점에서 링을 둘로 나누고 각각 다시 검사한다. 면적이 사실상 없는 조각(12m² 미만)은
-   버린다 — 그 크기의 슬리버는 화면에 그릴 수 없고, 남겨두면 또 다른 삼각형이 된다. */
-function segIntersect(p1, p2, p3, p4) {
-  const d1x = p2[0]-p1[0], d1y = p2[1]-p1[1], d2x = p4[0]-p3[0], d2y = p4[1]-p3[1];
-  const den = d1x*d2y - d1y*d2x;
-  if (!den) return null;
-  const t = ((p3[0]-p1[0])*d2y - (p3[1]-p1[1])*d2x) / den;
-  const u = ((p3[0]-p1[0])*d1y - (p3[1]-p1[1])*d1x) / den;
-  if (t <= 0 || t >= 1 || u <= 0 || u >= 1) return null;
-  return [p1[0] + d1x*t, p1[1] + d1y*t];
-}
-
-function findCrossing(open) {
-  const n = open.length, C = 0.01, grid = new Map();
-  const seg = (i) => [open[i], open[(i+1) % n]];
-  for (let i = 0; i < n; i++) {
-    const [a, b] = seg(i);
-    const x0 = Math.floor(Math.min(a[0],b[0])/C), x1 = Math.floor(Math.max(a[0],b[0])/C);
-    const y0 = Math.floor(Math.min(a[1],b[1])/C), y1 = Math.floor(Math.max(a[1],b[1])/C);
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
-      const k = x + ':' + y;
-      if (!grid.has(k)) grid.set(k, []);
-      grid.get(k).push(i);
-    }
-  }
-  for (const arr of grid.values()) for (let a = 0; a < arr.length; a++) for (let b = a+1; b < arr.length; b++) {
-    const i = Math.min(arr[a], arr[b]), j = Math.max(arr[a], arr[b]);
-    if (j - i < 2 || (i === 0 && j === n - 1)) continue;
-    const P = segIntersect(...seg(i), ...seg(j));
-    if (P) return { i, j, P };
-  }
-  return null;
-}
-
-const MIN_AREA = 1e-12;                                   // 도² — 위도 36°에서 약 12m²
-
-/* 좌표 배열용 핀치 분리. 위쪽 splitAtPinches 는 키 문자열 링에 쓰는 것이고,
-   교차 복구는 좌표를 다루므로 같은 처리가 한 벌 더 필요하다. */
-function splitPinchesXY(ring) {
-  const out = [], stack = [], pos = new Map();
-  const k = (p) => p[0] + "," + p[1];
-  for (const p of ring) {
-    if (pos.has(k(p))) {
-      const at = pos.get(k(p));
-      const loop = stack.slice(at).concat([p]);
-      if (loop.length > 3) out.push(loop);
-      for (let t = at + 1; t < stack.length; t++) pos.delete(k(stack[t]));
-      stack.length = at + 1;
-    } else {
-      pos.set(k(p), stack.length);
-      stack.push(p);
-    }
-  }
-  return out.length ? out : [ring];
-}
-
-/* 교차를 자르면 그 자리에 같은 좌표가 둘 생겨 핀치가 되고, 핀치를 나누면 또 교차가
-   드러날 수 있다. 둘 다 없어질 때까지 번갈아 돌린다. */
-function cleanRing(ring) {
-  let rings = [ring];
-  for (let round = 0; round < 5; round++) {
-    const next = rings.flatMap(repairCrossings).flatMap(splitPinchesXY)
-      .filter((r) => r.length >= 4 && Math.abs(signedArea(r)) > MIN_AREA);
-    if (next.length === rings.length && next.every((r, i) => r.length === rings[i].length)) return next;
-    rings = next;
-  }
-  return rings;
-}
-
-function repairCrossings(ring) {
-  const queue = [ring.slice(0, -1)], done = [];
-  let guard = 0;
-  while (queue.length && guard++ < 2000) {
-    const open = queue.pop();
-    if (open.length < 3) continue;
-    const c = findCrossing(open);
-    if (!c) { done.push([...open, open[0].slice()]); continue; }
-    queue.push([...open.slice(0, c.i + 1), c.P, ...open.slice(c.j + 1)]);
-    queue.push([c.P, ...open.slice(c.i + 1, c.j + 1)]);
-  }
-  return done.filter((r) => r.length >= 4 && Math.abs(signedArea(r)) > MIN_AREA);
-}
 
 // ── 실행 ──
 const src = JSON.parse(fs.readFileSync(SRC, 'utf8'));
@@ -306,41 +177,8 @@ for (const [sido, feats] of groups) {
   const rings = assembleRings(kept, coord).map((r) => r.map((k) => coord.get(k))).flatMap(cleanRing);
   if (!rings.length) { console.error(`${sido}: 링 조립 실패 — 건너뜀`); continue; }
 
-  /* 4) 바깥 링 / 구멍 구분 — **중첩 깊이**로 정한다.
-
-     "어떤 바깥 링 안에 있으면 구멍"으로 처리하면 안 된다. 구멍 안에 또 링이 있는 경우가
-     있는데(호수 속의 섬), 그걸 다시 구멍으로 넣으면 구멍 둘이 겹쳐 놓이고 mapbox-gl 이
-     구멍을 바깥 링에 잇다가 엉뚱한 삼각형을 그린다 — 충남 부사호(126.560, 36.470)와
-     경기(126.691, 37.111)에서 실제로 났다.
-
-     깊이 0 = 바깥, 1 = 구멍, 2 = 그 구멍 안의 섬(다시 바깥), … 짝수면 육지, 홀수면 구멍.
-     부모는 자기를 감싸는 링 중 **가장 작은 것**이라야 한다. 큰 것부터 훑으며 마지막으로
-     자기를 감싼 링이 곧 가장 작은 부모다. */
-  const info = rings.map((r) => ({ ring: r, bbox: bboxOf(r), area: Math.abs(signedArea(r)) }));
-  info.sort((a, b) => b.area - a.area);                    // 큰 것부터 — 부모는 늘 앞에 있다
-  const depth = new Array(info.length).fill(0);
-  const parentOf = new Array(info.length).fill(-1);
-  for (let i = 0; i < info.length; i++) {
-    for (let j = 0; j < i; j++) {
-      if (!bboxInside(info[i].bbox, info[j].bbox)) continue;
-      if (!ringInside(info[i].ring, info[j].ring)) continue;
-      parentOf[i] = j;                                     // 계속 덮어써서 가장 작은(마지막) 부모가 남는다
-    }
-    depth[i] = parentOf[i] === -1 ? 0 : depth[parentOf[i]] + 1;
-  }
-  const holesOf = new Map();
-  const outers = [];
-  for (let i = 0; i < info.length; i++) {
-    if (depth[i] % 2 === 0) { outers.push(i); holesOf.set(i, []); }
-    else holesOf.get(parentOf[i]).push(i);
-  }
-
-  // 5) GeoJSON 규약대로 방향을 맞춘다 (바깥 반시계 / 구멍 시계)
-  const wind = (ring, ccw) => (signedArea(ring) < 0) === ccw ? ring.slice().reverse() : ring;
-  const polys = outers.map((oi) => nudgeTouchingHoles([
-    wind(info[oi].ring, true),
-    ...holesOf.get(oi).map((hi) => wind(info[hi].ring, false)),
-  ]));
+  // 4) 바깥 링 / 구멍 구분 + 감김 방향 정리 (lib/rings.mjs — 북한 도구와 같은 처리)
+  const polys = buildPolygons(rings);
 
   const pts = polys.reduce((s, p) => s + p.reduce((t, r) => t + r.length, 0), 0);
   totalPts += pts;

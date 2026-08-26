@@ -18,9 +18,16 @@
    의존성 없음. 실행: node recorder/tools/build-nk-admin1.mjs
 */
 import fs from 'node:fs';
+import { buildPolygons } from './lib/rings.mjs';
 
 const R = 'recorder/js/data/';
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
+
+/* Overpass 는 User-Agent 없는 요청을 406 Not Acceptable 로 막는다. node 의 fetch 는
+   기본 UA 가 'node' 인데 그것도 막힌다 — curl 은 통과하므로 오래 '사내망 탓'으로 보였다.
+   실제 응답은 HTML 안내문이라 '혼잡'과 구별이 안 돼 재시도만 네 번 돌다 죽었다.
+   UA 를 밝히면 그대로 통과한다. OSM 은 어차피 UA 로 연락처를 밝히길 요구한다. */
+const UA = 'ColorMap/3.0 (+https://github.com/DesignerAJ/ColorMap)';
 
 /* OSM 이름 → 이 저장소가 쓰던 이름.
    기존 11개는 이름을 그대로 유지한다 (사용자가 입력하던 값이고, 검색 색인이 여기에 걸려 있다).
@@ -37,16 +44,33 @@ const KEY = (p) => p[0].toFixed(7) + ',' + p[1].toFixed(7);
    가로채는 환경). curl 은 시스템 키체인을 쓰므로 그대로 통과한다. 그래서 fetch 를 먼저
    해보고 막히면 curl 로 넘어간다. 인증서를 끄는(NODE_TLS_REJECT_UNAUTHORIZED=0) 선택은
    하지 않는다 — 한 번 끄면 그 뒤로 아무도 안 켠다. */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Overpass 는 혼잡하면 JSON 대신 HTML 안내문을 준다. 기다렸다 다시 부른다. */
 async function overpass(query) {
+  /* Overpass 는 504 를 간헐적으로 뱉는다 — 부하가 걸리면 서버가 게이트웨이에서 끊는다.
+     같은 질의가 바로 다음 시도에 200 으로 돌아온다. 이 스크립트는 질의를 여러 번 하고
+     한 번에 몇 분씩 걸리므로, 중간에 한 번 걸려 죽으면 처음부터 다시다.
+     네 번으로는 모자랐다 (실측: 세 번 연속 504 뒤 네 번째 200). 넉넉히 기다린다. */
+  const waits = [0, 10, 20, 40, 60, 90, 120, 180];
+  let last;
+  for (let i = 0; i < waits.length; i++) {
+    // 재시도 사유를 '혼잡'으로 단정하지 않는다 — 406(UA 차단)을 혼잡으로 읽어 네 번 헛돌았다
+    if (waits[i]) { console.log(`  ${last} — ${waits[i]}초 뒤 다시 시도`); await sleep(waits[i] * 1000); }
+    try { return await overpassOnce(query); } catch (e) { last = e.message || e; if (i === waits.length - 1) throw e; }
+  }
+}
+
+async function overpassOnce(query) {
   try {
-    const r = await fetch(OVERPASS, { method: 'POST', body: query });
+    const r = await fetch(OVERPASS, { method: 'POST', body: query, headers: { 'User-Agent': UA } });
     if (!r.ok) throw new Error(`Overpass ${r.status} — 잠시 뒤 다시 시도하세요`);
     return await r.json();
   } catch (e) {
     if (!/certificate|fetch failed/i.test(String(e.message || e))) throw e;
     console.log('  (node fetch 가 인증서에 막혀 curl 로 받는다)');
     const { execFileSync } = await import('node:child_process');
-    const out = execFileSync('curl', ['-s', '-m', '600', '-X', 'POST', '--data-binary', '@-', OVERPASS],
+    const out = execFileSync('curl', ['-s', '-m', '600', '-A', UA, '-X', 'POST', '--data-binary', '@-', OVERPASS],
       { input: query, maxBuffer: 512 * 1024 * 1024, encoding: 'utf8' });
     if (!out.trim()) throw new Error('Overpass 응답이 비었다 — 잠시 뒤 다시 시도하세요');
     return JSON.parse(out);
@@ -299,7 +323,18 @@ function clipToLand(ring, C) {
     const ex = crossing(open[prev], open[k], C);
     const en = crossing(open[next], open[(next - 1 + n) % n], C);
     if (ex && en && ex.L === en.L) { out.push(...coastSlice(ex, en, C)); bridged++; }
-    else { out.push(...(ex ? [ex.pt.slice()] : []), ...(en ? [en.pt.slice()] : [])); straight++; }
+    else {
+      /* 두 교차점이 서로 다른 해안선 고리에 있으면 이어붙일 길이 없다. 강 하구가 대표적이다 —
+         OSM 해안선은 강어귀에서 끊기고 강둑은 해안선이 아니라, 양쪽이 다른 고리가 된다.
+
+         예전에는 두 점을 **직선으로 이어** 버렸는데, 두만강 하구에서 21.5km 짜리 수평선이
+         생기고 그 선과 해안 사이가 통째로 칠해졌다 — 화면의 삼각형이 이것이었다.
+
+         직선으로 때우는 대신 **원래 경계를 그대로 둔다.** 강을 따라 내려가는 실제 국경선이라
+         모양이 맞고, 바다로 조금 나가더라도 없는 땅을 만들어내지는 않는다. */
+      for (let t = 0; t < len; t++) out.push(open[(start + c + t) % n].slice());
+      straight++;
+    }
     c += len - 1;
   }
   out.push(out[0].slice());
@@ -359,7 +394,7 @@ for (const e of data.elements) {
   if (clipped.failed) throw new Error(`${short}: ${clipped.failed}`);
   rings[0] = clipped.ring;
   let note = clipped.sea ? ` · 바다쪽 ${clipped.sea}점 잘라냄` : '';
-  if (clipped.straight) note += ` (해안선 잇기 실패 ${clipped.straight}곳은 직선 처리)`;
+  if (clipped.straight) note += ` (해안선 잇기 실패 ${clipped.straight}곳은 원래 경계 유지)`;
 
   // 2) 잘라내면서 사라진 섬을 되붙인다 (갈도·무도·장재도 같은 것)
   if (clipped.sea) {
@@ -379,7 +414,19 @@ for (const e of data.elements) {
   rings = rings.flatMap(splitAtPinches).filter(r => r.length >= 4);
   if (rings.length !== before) note += ` · 핀치 ${rings.length - before}개 링으로 나눔`;
 
-  const pts = rings.flat();
+  /* 5) 링을 바깥/구멍으로 나누고 감김 방향을 맞춘다.
+
+     전에는 `rings.map(r => [r])` 로 링 하나하나를 별개 폴리곤으로 내보냈다. GeoJSON 으로는
+     틀린 게 아니지만 **벡터 타일에는 '구멍' 표시가 없다 — 감김 방향이 유일한 기준이다.**
+     타일로 구우면 링이 한 줄로 늘어서고, mapbox-gl 은 첫 링의 부호를 바깥으로 잡은 뒤
+     부호가 반대인 링을 전부 앞 폴리곤의 구멍으로 붙인다. OSM 의 호수·섬은 본토와 감김이
+     반대라, 함경남도는 링 165개 중 164개가 통째로 본토의 구멍이 됐다. 그 구멍들이 서로
+     겹치고 맞닿아 화면에 긴 다각형이 뻗었다(128.0, 40.04). 시도 도구와 같은 처리를 쓴다. */
+  const polys = buildPolygons(rings);
+  const holes = polys.reduce((s, p) => s + p.length - 1, 0);
+  if (holes) note += ` · 구멍 ${holes}개`;
+
+  const pts = polys.flat(2);
   const lo = pts.map(p => p[0]), la = pts.map(p => p[1]);
   const [w, h] = [Math.max(...lo) - Math.min(...lo), Math.max(...la) - Math.min(...la)];
   const prev = old.get(short);
@@ -392,11 +439,11 @@ for (const e of data.elements) {
   built.push({
     type: 'Feature',
     properties: { country: '북한', short, name: `북한 ${short}`, c, z },
-    geometry: rings.length === 1
-      ? { type: 'Polygon', coordinates: [rings[0]] }
-      : { type: 'MultiPolygon', coordinates: rings.map(r => [r]) },
+    geometry: polys.length === 1
+      ? { type: 'Polygon', coordinates: polys[0] }
+      : { type: 'MultiPolygon', coordinates: polys },
   });
-  console.log(`  ${short.padEnd(7)} 링 ${String(rings.length).padStart(2)} · ${String(pts.length).padStart(6)}점` +
+  console.log(`  ${short.padEnd(7)} 폴리곤 ${String(polys.length).padStart(3)} · ${String(pts.length).padStart(6)}점` +
     `${prev ? '' : '  (새로 추가)'}${note}`);
 }
 

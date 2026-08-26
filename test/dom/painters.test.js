@@ -68,7 +68,7 @@ test('레이어 종류: 국가는 벡터타일, 시도는 GeoJSON', () => {
 
   const ss = e.sources.get('sido-boundaries');
   assert.equal(ss.type, 'geojson');
-  assert.equal(ss.tolerance, 0, 'tolerance 0 이 아니면 화면에서 각져 보인다');
+  assert.ok(ss.tolerance > 0, 'tolerance 0 은 단순화를 끄는 값이다 — 아래 검사 참고');
   assert.ok(!e.layers.get('sido-color-fill')['source-layer']);
 });
 
@@ -113,10 +113,13 @@ test('스타일을 바꿔도 색칠 레이어가 다시 붙는다', () => {
   assert.ok(e.layers.get('country-color-fill'), '스타일 교체 후 색칠이 돌아오지 않는다');
 });
 
-/* 하네스의 가짜 스타일에는 실제 스타일과 같은 경계선 레이어들이 들어 있다.
-   admin-2-* 는 시군구 경계선이고, country_border 는 country_boundaries 소스에서 온
-   국경선이다. 예전에는 이 둘이 끌어올림 목록에 없어서 색칠에 덮였다. */
-const BOUNDARY_IDS = ['country-border-dot', 'admin-boundaries', 'dispute-boundaries', 'country_border'];
+/* 하네스의 가짜 스타일은 '단색지형' 을 그대로 옮긴 것이다. 스타일이 켜둔 경계선은 셋뿐이고
+   (admin-boundaries · country-border · dispute-boundaries) 나머지는 디자이너가
+   visibility:none 으로 꺼뒀다. 예전에는 이름 목록으로 골라 country-border 를 놓쳤다. */
+const BOUNDARY_IDS = ['admin-boundaries', 'country-border', 'dispute-boundaries'];
+// 스타일이 꺼둔 것들 — 우리가 켜서도, 끌어올려서도 안 된다
+const STYLE_OFF_IDS = ['country_border', 'country-border-dot', 'admin-boundaries-dot',
+                       'admin-2-boundaries-bg', 'admin-2-boundaries-dispute'];
 
 test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다', async () => {
   const geo = (name) => ({ type: 'FeatureCollection', features: [{ type: 'Feature',
@@ -126,7 +129,13 @@ test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다
   const base = e.window.fetch;
   e.window.fetch = (u, o) => {
     const s = String(u);
-    if (s.includes('admin1.json')) return Promise.resolve({ ok: true, json: async () => geo('오사카부') });
+    /* 행정구역은 셋으로 나뉘어 온다 — 속성만 담은 meta, 자주 쓰는 8개국 core,
+       그리고 나라별 파일. 여기서는 core 에 들어 있는 나라 하나로 충분하다. */
+    if (s.includes('admin1-meta.json')) {
+      const m = geo('오사카부');
+      return Promise.resolve({ ok: true, json: async () => ({ ...m, index: {}, features: m.features.map((f) => ({ ...f, geometry: null })) }) });
+    }
+    if (s.includes('admin1-core.json')) return Promise.resolve({ ok: true, json: async () => geo('오사카부') });
     if (s.includes('sigungu.json')) return Promise.resolve({ ok: true, json: async () => geo('서울특별시 강남구') });
     if (s.includes('sido-hires')) return Promise.resolve({ ok: true, json: async () => geo('서울특별시') });
     return base(u, o);
@@ -136,7 +145,7 @@ test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다
 
   const order = e.layers.order();
   const lineAt = BOUNDARY_IDS.map((id) => order.indexOf(id)).filter((i) => i >= 0);
-  assert.ok(lineAt.length >= 4, '가짜 스타일에 경계선이 다 안 들어 있다');
+  assert.equal(lineAt.length, BOUNDARY_IDS.length, '가짜 스타일에 경계선이 다 안 들어 있다');
   for (const mode of ['country', 'admin1', 'sido', 'sigungu']) {
     const fill = order.indexOf(`${mode}-color-fill`);
     assert.ok(fill >= 0, `${mode} 색칠 레이어가 없다`);
@@ -145,10 +154,336 @@ test('네 모드 모두 색칠이 국경선·행정구역선 아래에 깔린다
   }
 });
 
-test('경계선 후보를 이름이 아니라 소스로 고른다 (목록에서 빠지는 일이 없게)', () => {
+test('경계선 후보를 이름이 아니라 필터로 고른다 (목록에서 빠지는 일이 없게)', () => {
   const e = boot(); e.styleLoad();
-  // admin 소스의 선인데 BOUNDARY_LAYERS 에는 없는 레이어도 끌어올려야 한다
   const moved = new Set(e.calls.filter((c) => c.api === 'moveLayer').map((c) => c.id));
-  assert.ok(moved.has('country_border'), 'country_boundaries 소스의 국경선이 안 올라갔다');
-  assert.ok(moved.has('dispute-boundaries'), 'admin 소스의 분쟁 경계선이 안 올라갔다');
+  // 이름 목록에 없던 레이어도 끌어올려야 한다 — country-border 를 놓쳐 색칠에 덮였다
+  assert.ok(moved.has('country-border'), '국경선이 안 올라갔다');
+  assert.ok(moved.has('dispute-boundaries'), '분쟁 경계선이 안 올라갔다');
+  // 꺼둔 레이어는 올릴 것도 없다 (올려도 안 보이지만, 대상에서 빠졌다는 확인이기도 하다)
+  for (const id of STYLE_OFF_IDS) {
+    assert.ok(!moved.has(id), `${id} 는 스타일이 꺼둔 레이어인데 끌어올렸다`);
+  }
+});
+
+test('대한민국 국가 색칠이 시도·시군구 색칠 아래에 깔린다', async () => {
+  /* 국가를 칠한 위에 시도를 칠하면 시도 색이 보여야 한다. 해외는 Mapbox 레이어가
+     그려서 멀쩡했는데, 대한민국·북한만 우리 레이어(korea-country-fill)로 그리면서
+     반대가 됐다 — PAINTERS 가 먼저 깔린 뒤에 얹히는 탓에 시도 위로 올라갔다.
+     그래서 대한민국을 칠하면 시도 색이 국가 색에 가려졌다. */
+  const e = boot({ loadCountries: true });
+  e.styleLoad();
+  await e.tick(40);
+
+  const order = e.layers.order();
+  const kc = order.indexOf('korea-country-fill');
+  assert.ok(kc >= 0, '남·북한 국가 색칠 레이어가 없다');
+
+  for (const above of ['sido-color-fill', 'country-color-fill']) {
+    const i = order.indexOf(above);
+    if (i < 0) continue;
+    if (above === 'country-color-fill') {
+      assert.ok(kc > i, '남·북한 색칠이 Mapbox 국가 색칠보다 아래에 있다');
+    } else {
+      assert.ok(kc < i, `${above} 이 국가 색칠에 가려진다`);
+    }
+  }
+});
+
+/* ── GeoJSON 단순화 세기 ──
+   tolerance: 0 은 단순화를 **끄는** 값이다. 끄면 타일 좌표를 정수로 반올림할 때
+   격자보다 촘촘한 점들이 같은 칸으로 내려앉아 링이 스스로를 훑고, 삼각분할이 튄다 —
+   함경남도에서 화면 밖으로 길게 뻗던 다각형이 이것이었다. 지오메트리는 멀쩡해서
+   데이터 검사에 아무것도 안 걸렸고, SVG 로 뽑으면 멀쩡한데(지오메트리를 직접 그린다)
+   화면·MP4·PSD 에서만 보였다(셋 다 캔버스를 굽는다).
+   단위는 CSS 픽셀이고 반올림 격자는 0.0625 px 다. 그보다 커야 뭉치지 않는다. */
+test('지리 데이터 소스는 반올림 격자보다 큰 값으로 단순화한다', async () => {
+  const e = boot({ loadBorder: true, loadCountries: true });
+  await e.tick(); e.styleLoad(); await e.tick(40);
+  const GRID_PX = 1 / 16;                                // 타일 1칸 = extent 8192 / tileSize 512
+  const MAPBOX_DEFAULT = 0.375;
+  const geo = [...e.sources.keys()].filter((id) =>
+    e.sources.get(id).type === 'geojson' &&                       // 벡터 타일은 tolerance 가 없다
+    !['route-line', 'draw-lines', 'capture-pins'].includes(id));  // 매 프레임 새로 만드는 오버레이는 제외
+  assert.ok(geo.length >= 2, '검사할 GeoJSON 소스가 없다 — 하네스를 확인할 것');
+  for (const id of geo) {
+    const t = e.sources.get(id).tolerance;
+    assert.ok(t > GRID_PX, `${id}: tolerance ${t} — 반올림 격자(${GRID_PX})보다 작으면 점이 뭉쳐 삼각분할이 튄다`);
+    assert.ok(t <= MAPBOX_DEFAULT, `${id}: tolerance ${t} — mapbox 기본값보다 거칠다`);
+  }
+  // 선과 색칠이 다르게 단순화되면 어긋난다
+  assert.equal(new Set(geo.map((id) => e.sources.get(id).tolerance)).size, 1,
+    '소스마다 단순화 세기가 다르다 — 선과 색칠이 어긋난다');
+});
+
+/* ── 시도 검색 목록 ──
+   입력창을 누르기만 해도 후보가 펼쳐지는데, 예전에는 약칭과 정식명을 각각 option 으로
+   넣어서 17개 시도가 34줄로 떴다 — '충북'과 '충청북도'가 나란히 놓여 고르는 데 방해였다.
+
+   네이티브 datalist 는 브라우저가 value·label 양쪽으로 거르고 둘 다 그리므로, 라벨을
+   숨기면서 검색만 남길 수는 없다. 그래서 목록을 입력에 따라 다시 짠다 — 평소엔 약칭뿐이고
+   정식명에만 걸리는 글자를 칠 때만 그 줄이 생긴다. */
+const sidoOptions = (e) => [...e.doc.querySelectorAll('#sido-list option')].map((o) => o.value);
+const typeSido = (e, q) => {
+  const i = e.$('sido-input');
+  i.value = q;
+  i.dispatchEvent(new e.window.Event('input', { bubbles: true }));
+  return sidoOptions(e);
+};
+
+test('평소 시도 목록은 약칭 17줄뿐이다', () => {
+  const e = boot();
+  const opts = sidoOptions(e);
+  assert.equal(opts.length, 17, `${opts.length}줄 — 시도는 17개다 (정식명을 늘 올리면 34줄이 된다)`);
+  assert.ok(opts.includes('충북'), '약칭이 없다');
+  assert.ok(!opts.includes('충청북도'), '정식명이 늘 올라가 있다 — 중복이다');
+  assert.equal(new Set(opts).size, 17, '같은 값이 두 번 올라가 있다');
+  assert.deepEqual([...e.doc.querySelectorAll('#sido-list option')].filter((o) => o.label).map((o) => o.value), [],
+    'label 이 붙어 목록에 군더더기가 보인다');
+});
+
+test('약칭으로 걸리는 글자면 정식명을 안 넣는다', () => {
+  const e = boot();
+  const opts = typeSido(e, '충');                     // 충북·충남이 이미 걸린다
+  assert.ok(!opts.some((v) => v.length > 3), `정식명이 섞였다: ${opts.filter((v) => v.length > 3)}`);
+});
+
+test("정식명에만 걸리는 글자를 치면 그때 그 줄이 생긴다", () => {
+  const e = boot();
+  const opts = typeSido(e, '충청');                   // 약칭 '충북'·'충남' 으로는 안 걸린다
+  assert.ok(opts.includes('충청북도'), "'충청' 을 쳤는데 충청북도가 안 뜬다");
+  assert.ok(opts.includes('충청남도'), "'충청' 을 쳤는데 충청남도가 안 뜬다");
+});
+
+test('입력을 지우면 다시 약칭만 남는다', () => {
+  const e = boot();
+  typeSido(e, '충청');
+  assert.equal(typeSido(e, '').length, 17, '정식명 줄이 남아 있다');
+});
+
+/* ── 지도 글자(지명·도로명) 켜고 끄기 ──
+   스타일이 올라올 때는 라벨을 건드리지 않는다 — 방송용 스타일은 라벨을 일부러 꺼둔 것이
+   많아서, 올라오자마자 켜면 모든 스타일에 지명이 쏟아진다(실제로 그렇게 만들었다).
+   체크박스를 만졌을 때만 다 켜거나 다 끈다. 그건 시킨 일이다. */
+const visOf = (e, id) => (e.layers.get(id)?.layout || {}).visibility || 'visible';
+const setLabels = (e, on) => {
+  const c = e.$('label-on');
+  c.checked = on;
+  c.dispatchEvent(new e.window.Event('change', { bubbles: true }));
+};
+
+test('스타일이 올라올 때는 라벨을 그대로 둔다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  assert.equal(visOf(e, 'poi-label'), 'visible', '원래 켜져 있던 라벨이 꺼졌다');
+  assert.equal(visOf(e, 'label-for-check'), 'none',
+    '디자이너가 꺼둔 라벨을 켰다 — 모든 스타일에 지명이 쏟아진다');
+});
+
+test('체크박스를 켜면 꺼져 있던 라벨까지 켜진다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  setLabels(e, false);
+  assert.equal(visOf(e, 'poi-label'), 'none', '글자를 껐는데 라벨이 남았다');
+  assert.equal(visOf(e, 'label-for-check'), 'none');
+
+  setLabels(e, true);
+  assert.equal(visOf(e, 'poi-label'), 'visible');
+  assert.equal(visOf(e, 'label-for-check'), 'visible',
+    '글자를 켰는데 안 켜졌다 — 라벨 없는 스타일에서는 이 체크박스가 유일한 수단이다');
+});
+
+test('글자를 꺼도 우리 심볼(화살표·핀)은 남는다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  e.map.addLayer({ id: 'route-arrow-layer', type: 'symbol', source: 'route-arrow' });
+  setLabels(e, false);
+  assert.notEqual(visOf(e, 'route-arrow-layer'), 'none', '경로선 화살표까지 숨겼다');
+});
+
+test('체크 상태는 그 스타일이 원래 글자를 보여주는지를 따라간다', async () => {
+  /* 스타일마다 라벨을 꺼둔 정도가 다르다. 체크박스가 화면과 어긋나 있으면
+     한 번 눌러야 비로소 맞는 상태가 된다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  assert.equal(e.$('label-on').checked, true, '보이는 라벨이 있는데 체크가 풀려 있다');
+
+  // 라벨을 전부 꺼둔 스타일로 갈아탄 셈 치고
+  for (const l of e.map.getStyle().layers) {
+    if (l.type === 'symbol') l.layout = { visibility: 'none' };
+  }
+  e.styleLoad(); await e.tick();
+  assert.equal(e.$('label-on').checked, false, '보이는 라벨이 없는데 체크가 남아 있다');
+});
+
+test('줌 올려야 나오는 글자는 "글자 있는 스타일"의 근거가 아니다', async () => {
+  /* 모노톤은 켜져 있는 심볼 3개가 전부 건물 번호·출입구·블록 번호(줌 16~18)다.
+     방송에서 쓰는 줌에서는 글자가 하나도 안 보이는데 체크만 되어 있어, 이미 켜진 줄 알고
+     켤 방법이 없었다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  for (const l of e.map.getStyle().layers) {
+    if (l.type !== 'symbol') continue;
+    l.layout = { visibility: 'none' };
+    delete l.minzoom;
+  }
+  const high = e.map.getStyle().layers.find((l) => l.type === 'symbol');
+  high.layout = { visibility: 'visible' };
+  high.minzoom = 17;                                  // 건물 번호 같은 것
+
+  e.styleLoad(); await e.tick();
+  assert.equal(e.$('label-on').checked, false,
+    '줌 17에서만 나오는 글자를 보고 체크했다 — 그러면 켤 수가 없다');
+});
+
+test('글자를 켜면 라벨이 한국어로 바뀌고, 끄면 원래대로 돌아온다', async () => {
+  /* 스타일의 text-field 는 coalesce(name_en, name) 이라 그냥 두면 영어로 나온다.
+     setLanguage 는 지도 전체에 걸리고 스타일이 바뀌어도 남으므로 끌 때 되돌려야 한다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  const langs = () => e.calls.filter((c) => c.api === 'setLanguage').map((c) => c.v);
+
+  setLabels(e, false);
+  assert.equal(langs().at(-1), null, '글자를 껐는데 한국어 설정이 남았다');
+
+  setLabels(e, true);
+  assert.equal(langs().at(-1), 'ko', '글자를 켰는데 영어로 나온다');
+});
+
+test('한 번 고른 뒤에는 스타일을 바꿔도 그 선택이 따라간다', async () => {
+  /* 글자를 켜놓고 스타일만 바꿔 가며 비교하는 게 흔하다. 스타일마다 체크가 저절로
+     풀리면 매번 다시 켜야 한다. 만지기 전에만 스타일을 따라간다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  setLabels(e, true);
+
+  // 라벨을 전부 꺼둔 방송용 스타일로 갈아탄 셈 치고
+  for (const l of e.map.getStyle().layers) {
+    if (l.type === 'symbol') l.layout = { visibility: 'none' };
+  }
+  e.styleLoad(); await e.tick();
+
+  assert.equal(e.$('label-on').checked, true, '켜둔 게 스타일을 바꾸니 풀렸다');
+  assert.equal(visOf(e, 'label-for-check'), 'visible', '체크는 남았는데 글자가 안 켜졌다');
+  assert.equal(e.calls.filter((c) => c.api === 'setLanguage').at(-1).v, 'ko',
+    '스타일을 바꾸니 다시 영어로 돌아갔다');
+});
+
+test('name_ko 로 글자를 찍는 스타일은 name 으로 바꿔 준다', async () => {
+  /* language=ko 를 걸면 Mapbox 가 name 을 한국어로 채우고 name_xx 필드를 전부 뺀다.
+     그러면 to-string(get name_ko) 가 빈 문자열이 되어 글자가 아예 안 그려진다 —
+     단색지형·단색·위성사진·지형도가 그랬다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  // jsdom 안에서 만들어진 배열이라 realm 이 달라 deepEqual 이 안 통한다
+  const tf = () => JSON.stringify((e.layers.get('label-for-check')?.layout || {})['text-field']);
+
+  setLabels(e, true);
+  assert.equal(tf(), '["to-string",["get","name"]]',
+    'name_ko 를 그대로 뒀다 — 켜도 글자가 안 나온다');
+
+  setLabels(e, false);
+  assert.equal(tf(), '["to-string",["get","name_ko"]]', '끄면 원래 값으로 돌려놔야 한다');
+});
+
+/* ── 경로선 모양 ──
+   요청서 7-3·7-4. 아크가 기본이고 직선이 선택지에 있어야 한다.
+   뉴스 그래픽은 도로 경로보다 아크·직선을 훨씬 자주 쓴다. */
+test('경로선 모양은 아크가 기본이고, 직선이 선택지에 있다', async () => {
+  const e = boot();
+  await e.tick();
+  const sel = e.$('route-shape');
+  const vals = [...sel.options].map((o) => o.value);
+
+  assert.equal(sel.value, 'arc', '기본값이 아크가 아니다');
+  assert.deepEqual([...vals].sort(), ['arc', 'line', 'road'], '경로 모양 선택지가 바뀌었다');
+});
+
+/* ── '핀·녹화 경로 설정' 만 되돌리기 ──
+   이 칸에서 만진 것만 처음으로 돌린다. 색칠과 녹화 설정은 다른 칸이라 건드리지 않는다.
+   값만 되돌리고 지도에 얹힌 마커를 안 걷으면 핀이 그대로 남는다. */
+const click = (e, id) => e.$(id).dispatchEvent(new e.window.Event('click', { bubbles: true }));
+const setVal = (e, id, v) => {
+  const el = e.$(id);
+  if (el.type === 'checkbox') el.checked = v; else el.value = v;
+  el.dispatchEvent(new e.window.Event('input',  { bubbles: true }));
+  el.dispatchEvent(new e.window.Event('change', { bubbles: true }));
+};
+
+test('되돌리기: 이 칸의 값이 처음 값으로 돌아온다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  const before = ['route-shape', 'route-dash', 'route-color', 'route-width', 'locpin-text-size']
+    .map((id) => e.$(id).value);
+
+  setVal(e, 'route-on', true);
+  setVal(e, 'route-shape', 'road');
+  setVal(e, 'route-dash', 'dash');
+  setVal(e, 'route-color', '#ff0000');
+  setVal(e, 'route-width', '9');
+  setVal(e, 'locpin-text-size', '77');
+  setVal(e, 'label-start', '서울');
+
+  click(e, 'camera-reset');
+
+  assert.deepEqual(
+    ['route-shape', 'route-dash', 'route-color', 'route-width', 'locpin-text-size'].map((id) => e.$(id).value),
+    before, '값이 처음으로 안 돌아왔다');
+  assert.equal(e.$('route-on').checked, false);
+  assert.equal(e.$('label-start').value, '');
+  assert.equal(e.$('route-opts').style.display, 'none', '경로선 옵션이 펼쳐진 채로 남았다');
+  assert.equal(e.$('route-w-val').textContent, before[3], '두께 표시가 값과 어긋난다');
+});
+
+test('되돌리기: 지도에 얹힌 핀도 걷는다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  click(e, 'set-start');
+  click(e, 'set-end');
+  click(e, 'add-waypoint');
+  click(e, 'locpin-add');
+  assert.ok(e.markers.size >= 3, `핀이 안 찍혔다 (${e.markers.size}개)`);
+
+  click(e, 'camera-reset');
+  assert.equal(e.markers.size, 0, '값만 되돌리고 지도의 핀은 남겼다');
+  assert.equal(e.$('start-tag').textContent, '', "'지정됨' 표시가 남았다");
+  assert.equal(e.$('go-start').disabled, true, '출발로 버튼이 열린 채로 남았다');
+  assert.equal(e.$('waypoint-list').innerHTML, '', '경유지 목록이 남았다');
+  assert.equal(e.$('locpin-list').innerHTML, '', '위치 핀 목록이 남았다');
+});
+
+test('되돌리기: 색칠과 녹화 설정은 건드리지 않는다', async () => {
+  /* 다른 칸이다. 색칠은 탭을 바꿔도 남기기로 한 것이라 여기서 지우면 안 된다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  setVal(e, 'duration', '7');
+  setVal(e, 'fly-dip', '3');
+  setVal(e, 'country-color', '#123456');
+
+  click(e, 'camera-reset');
+
+  assert.equal(e.$('duration').value, '7', '녹화 설정까지 되돌렸다');
+  assert.equal(e.$('fly-dip').value, '3', '녹화 설정까지 되돌렸다');
+  assert.equal(e.$('country-color').value, '#123456', '색칠 설정까지 되돌렸다');
+});
+
+test('되돌리기 버튼을 눌러도 칸이 접히지 않는다', async () => {
+  /* summary 안에 있어서 그냥 두면 누를 때마다 칸이 접힌다.
+     버튼이 잠겼을 때(녹화 중)는 click 이 아예 안 나므로 감싼 span 이 받아야 한다. */
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  const ev = new e.window.Event('click', { bubbles: true, cancelable: true });
+  e.$('camera-reset').dispatchEvent(ev);
+  assert.equal(ev.defaultPrevented, true, '누르면 칸이 접힌다');
+
+  e.$('camera-reset').disabled = true;              // 녹화 중
+  const ev2 = new e.window.Event('click', { bubbles: true, cancelable: true });
+  e.$('camera-reset-wrap').dispatchEvent(ev2);
+  assert.equal(ev2.defaultPrevented, true, '잠겼을 때 누르면 칸이 접힌다');
 });
