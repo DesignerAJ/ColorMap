@@ -397,11 +397,6 @@
       </div>
     </div>
 
-    <div id="wp-hold-section" style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px; display:none;">
-      <label style="display:block; margin-bottom:6px;">경유지 정지 시간</label>
-      <div id="wp-hold-list"></div>
-    </div>
-
       </div>
     </details>
 
@@ -424,6 +419,13 @@
               <button type="button" class="step" data-t="lead" data-d="-1">−</button>
               <input id="lead" type="number" min="0" step="0.5" value="0.5" />
               <button type="button" class="step" data-t="lead" data-d="1">＋</button>
+            </div>
+          </div>
+          <div class="field"><label>경유지 정지 (초)</label>
+            <div class="stepper">
+              <button type="button" class="step" data-t="wp-hold" data-d="-1">−</button>
+              <input id="wp-hold" type="number" min="0" step="0.5" value="2" />
+              <button type="button" class="step" data-t="wp-hold" data-d="1">＋</button>
             </div>
           </div>
           <div class="field"><label>뒤 정지 (초)</label>

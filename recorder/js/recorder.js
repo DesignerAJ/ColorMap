@@ -2623,7 +2623,7 @@ function initRecorder(map) {
 
   /* ── 경유지 (최대 3) ── */
   const MAX_WP = 3;
-  const waypoints = []; // [{ cam: null|{...}, hold: 2, marker: null }]
+  const waypoints = []; // [{ cam: null|{...}, marker: null, label }] — 정지 시간은 wpHold() 로 공통
   let WP_COLOR = '#0F3564';  // 경유지 핀 기본색 (세부 설정에서 변경)
 
   // 경유지 마커 생성/이동
@@ -2682,28 +2682,12 @@ function initRecorder(map) {
     });
     $('add-waypoint').style.display = (waypoints.length >= MAX_WP) ? 'none' : 'block';
     renderGotoButtons();
-    renderHoldList();
   }
 
-  // 세부 설정의 경유지 정지 시간 목록
-  function renderHoldList() {
-    const sec = $('wp-hold-section'), list = $('wp-hold-list');
-    if (!waypoints.length) { sec.style.display = 'none'; list.innerHTML = ''; return; }
-    sec.style.display = 'block';
-    list.innerHTML = '';
-    waypoints.forEach((w, i) => {
-      const row = document.createElement('div');
-      row.className = 'wp-hold-row';
-      row.innerHTML =
-        `<span class="wp-hold-label">경유지${i+1}</span>` +
-        `<span class="wp-hold-wrap"><input type="number" class="wp-hold" data-i="${i}" min="0" step="0.5" value="${w.hold}" title="정지 시간(초)" /><span class="wp-sec">초</span></span>`;
-      list.appendChild(row);
-    });
-  }
-  $('wp-hold-list').addEventListener('input', (e) => {
-    const inp = e.target.closest('.wp-hold'); if (!inp) return;
-    waypoints[+inp.dataset.i].hold = Math.max(0, parseFloat(inp.value) || 0);
-  });
+  /* 경유지 정지 시간은 **모든 경유지가 같은 값**을 쓴다. 예전에는 경유지마다 칸을 따로
+     뒀는데, 경유지가 늘수록 칸이 쌓이고 대부분 기본값 그대로 쓰였다.
+     칸은 '녹화 세부 설정' 의 앞 정지·뒤 정지 사이에 있다 — 셋 다 같은 성격이다. */
+  const wpHold = () => Math.max(0, parseFloat($('wp-hold').value) || 0);
 
   // 출발로/도착으로 사이의 경유지 이동 버튼들
   function renderGotoButtons() {
@@ -2724,7 +2708,7 @@ function initRecorder(map) {
 
   $('add-waypoint').addEventListener('click', () => {
     if (waypoints.length >= MAX_WP) return;
-    waypoints.push({ cam: null, hold: 2, marker: null, label: '' });
+    waypoints.push({ cam: null, marker: null, label: '' });
     renderWaypoints();
   });
   $('waypoint-list').addEventListener('click', (e) => {
@@ -3241,8 +3225,8 @@ function initRecorder(map) {
         setStatus(`녹화 중 · 경유지 ${k+1} 줌…`,'busy');
         await animateTo(camSeq[k + 1]);   // 원본 cam 을 쓰면 떼어낸 줌이 무시돼 홀드에서 타일이 바뀐다
         if (showPins) triggerCapPin('wp'+k, performance.now());   // 도착 시 경유지 핀 팝업
-        setStatus(`녹화 중 · 경유지 ${k+1} 홀드 ${stops[k].hold}s…`,'busy');
-        await sleep(stops[k].hold*1000);
+        setStatus(`녹화 중 · 경유지 ${k+1} 홀드 ${wpHold()}s…`,'busy');
+        await sleep(wpHold()*1000);
       }
 
       // 5) 도착으로 줌
@@ -3557,7 +3541,7 @@ function initRecorder(map) {
       const hasDip = $('fly-dip').value !== '0';   // 위 detailSafeZoom 참고
       const seq = [startCam, ...stops.map((w) => w.cam), endCam].map((c) => detailSafeCam(c, hasDip));
       const legs = [];
-      for (let i = 0; i < seq.length - 1; i++) legs.push({ from: seq[i], to: seq[i+1], hold: stops[i] ? stops[i].hold : 0 });
+      for (let i = 0; i < seq.length - 1; i++) legs.push({ from: seq[i], to: seq[i+1], hold: stops[i] ? wpHold() : 0 });
       legs.forEach((lg) => {
         lg.path = dipPath(smoothMode, lg.from, lg.to, w0);
       });
@@ -4173,7 +4157,7 @@ function initRecorder(map) {
     el.hidden = !msg || msg === '대기 중';
   }
   function setUI(enabled){
-    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','label-on','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear','camera-reset']
+    ['set-start','set-end','go-start','go-end','label-start','label-end','record','capture-png','capture-psd','export-svg','duration','lead','tail','wp-hold','fps','mode','bitrate','format','frame','tile-fade','pin-color-start','pin-color-wp','pin-color-end','land-color','sea-color','river-on','style-select','label-on','proj-select','zoom-slider','zoom-out','zoom-in','country-input','country-color','country-clear','country-dot','admin1-input','admin1-color','admin1-clear','admin1-dot','sido-input','sido-color','sido-clear','sido-dot','sigungu-input','sigungu-color','sigungu-clear','sigungu-dot','geo-input','geo-clear','add-waypoint','route-on','route-shape','route-dash','route-color','route-width','pin-in-video','locpin-in-video','locpin-add','locpin-color','locpin-text-size','locpin-text-color','locpin-timing','draw-on','draw-mode','draw-color','draw-width','draw-undo','draw-clear','camera-reset']
       .forEach(id => { $(id).disabled = !enabled; });
     document.querySelectorAll('.step, .wp-ctl, #wp-goto button, .bd-block input, .loc-text').forEach(b => { b.disabled = !enabled; });
     if (enabled){

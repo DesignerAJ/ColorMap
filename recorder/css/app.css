@@ -831,32 +831,6 @@
     opacity: 0.35;
     pointer-events: none;
   }
-  .wp-hold-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-  }
-  .wp-hold-row .wp-hold-label {
-    flex: 1;
-    font-size: 12px;
-  }
-  .wp-hold-row .wp-hold-wrap {
-    flex: 0 0 64px;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-  }
-  .wp-hold-row .wp-hold {
-    flex: 1;
-    width: 100%;
-    text-align: center;
-  }
-  .wp-hold-row .wp-sec {
-    font-size: 10px;
-    color: var(--muted);
-    flex: 0 0 auto;
-  }
 
   /* 색·투명도 동그라미 — 체크무늬 위에 반투명 색을 얹어 투명도가 눈에 바로 보이게 한다.
      누르면 직접 만든 색상 팝업이 뜬다 (네이티브 색상 창에는 투명도를 못 넣는다). */
