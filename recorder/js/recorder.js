@@ -1850,11 +1850,16 @@ function initRecorder(map) {
     ctx.fill();
     return ctx.getImageData(0,0,size,size);
   }
-  // 두 좌표 간 방위각(도, 북=0, 시계방향) — 화면(웹 메르카토르) 기준
+  /* 두 좌표 간 방위각(도, 북=0, 시계방향) — 화면(웹 메르카토르) 기준.
+     **위도 차이를 그대로 쓰면 안 된다.** 메르카토르는 위도가 높을수록 세로를 늘려 그려서
+     (1/cos φ) 같은 1도라도 화면에서 차지하는 높이가 다르다. 지리 좌표 차이로 각을 재면
+     대각선 구간에서 화살촉이 선의 기울기와 벌어진다 — 실측 서울 6.6도, 런던 13.1도.
+     정북·정동 구간은 오차가 0이라 '때때로만 안 맞는' 것처럼 보였다.
+     세로를 메르카토르 y 로 바꿔서 잰다. x 는 경도 그대로(라디안)가 메르카토르 x 다. */
   function bearingDeg(a, b) {
-    const dx = b[0]-a[0], dy = b[1]-a[1];
-    // 화면상 위가 +lat 이므로 atan2(dx, dy) 로 북쪽 0도
-    return Math.atan2(dx, dy) * 180/Math.PI;
+    const my = (lat) => Math.log(Math.tan(Math.PI/4 + Math.max(-85, Math.min(85, lat)) * Math.PI/360));
+    const dx = (b[0]-a[0]) * Math.PI/180;
+    return Math.atan2(dx, my(b[1]) - my(a[1])) * 180/Math.PI;
   }
 
   function addRouteLayer() {
