@@ -895,7 +895,7 @@ function initRecorder(map) {
       const item = document.createElement('div');
       item.className = 'geo-item';
       item.innerHTML = `<div class="gi-name">📍 좌표 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</div><div class="gi-ctx">위도, 경도 · 클릭하면 이동</div>`;
-      item.addEventListener('click', () => { map.flyTo({ center: [c.lng, c.lat], zoom: 14, duration: 1200, essential: true }); hideGeoResults(); });
+      item.addEventListener('click', () => { map.flyTo({ center: [c.lng, c.lat], zoom: 14, duration: 1200, essential: true }); pinSearchResult([c.lng, c.lat]); hideGeoResults(); });
       geoResults.appendChild(item);
       geoResults.style.display = 'block';
       return;
@@ -922,6 +922,7 @@ function initRecorder(map) {
           } else {
             map.flyTo({ center: [lng, lat], zoom: p.poi ? 15 : 12, duration: 1200, essential: true });
           }
+          pinSearchResult([lng, lat]);
           geoInput.value = p.name;
           hideGeoResults();
         });
@@ -2816,6 +2817,21 @@ function initRecorder(map) {
     renderLocPins();
     updatePinGhost();                                // 영상 미표시(체크 해제)면 흐리게
   }
+
+  /* 검색해서 간 곳에 개별 핀을 찍는다. 검색 결과를 여러 개 눌러보면 그만큼 쌓인다 —
+     옮기지 않고 누적하는 쪽을 골랐다. 필요 없는 것은 목록에서 지운다.
+     **라벨은 비워 둔다.** 검색어가 곧 자막은 아니라서, 자동으로 채우면 지우는 일이 는다.
+     **찍었으면 관리할 자리를 열어 준다.** 핀 목록은 두 겹으로 접혀 있다 —
+     '핀·경로 설정' 칸(details)이 기본으로 접혀 있고, 그 안의 개별 핀 컨트롤은
+     '개별 핀 표시' 를 켜야 펴진다. 둘 다 안 열면 반투명 핀만 지도에 뜨고
+     지울 방법이 화면에 없다. */
+  function pinSearchResult(lngLat) {
+    const sec = $('camera-settings'); if (sec) sec.open = true;
+    const cb = $('locpin-in-video');
+    if (cb && !cb.checked) { cb.checked = true; updateLocpinField(); }   // addLocPin 이 updatePinGhost 를 부른다
+    addLocPin(lngLat);
+  }
+
   function renderLocPins() {
     const box = $('locpin-list'); if (!box) return;
     box.innerHTML = '';
