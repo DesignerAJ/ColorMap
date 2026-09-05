@@ -207,20 +207,25 @@
           <div id="map-color-section" class="map-color-section">
             <div class="group-separator"></div>
             <div class="map-color-card">
-              <div class="map-color-row">
+              <!-- mc-paint-row: 지도에 우리 색을 얹는 칸. 위성사진은 사진이라 색이 무의미해서
+                   이 세 칸만 숨긴다. '지명 표시'는 사진 위에서도 쓰는 값이라 남는다. -->
+              <div class="map-color-row mc-paint-row">
                 <label class="mc-label" for="land-color">육지색</label>
                 <input id="land-color" type="color" list="palette" value="#8896a1" />
               </div>
-              <div class="map-color-row">
+              <div class="map-color-row mc-paint-row">
                 <label class="mc-label" for="sea-color">바다색</label>
                 <input id="sea-color" type="color" list="palette" value="#172c4d" />
               </div>
-              <div class="map-color-row river-toggle-row">
+              <div class="map-color-row mc-paint-row river-toggle-row">
                 <label class="mc-toggle" for="river-on">강·호수</label>
                 <input type="checkbox" id="river-on" />
               </div>
               <div class="map-color-row label-display-row">
-                <label class="label-toggle" for="label-on" title="지도의 지명·도로명을 모두 켜고 끕니다. 스타일마다 원래 상태를 따라 체크됩니다">지명 표시<br />(체크용)</label>
+                <!-- <br /> 뒤의 공백은 일부러 둔 것이다. 줄바꿈이 살아 있을 때는 줄 첫머리
+                     공백이라 사라지고, 위성사진처럼 한 줄로 펼 때(br 을 display:none) 만
+                     '지명 표시 (체크용)' 의 띄어쓰기로 살아난다. -->
+                <label class="label-toggle" for="label-on" title="지도의 지명·도로명을 모두 켜고 끕니다. 스타일마다 원래 상태를 따라 체크됩니다">지명 표시<br /> (체크용)</label>
                 <input type="checkbox" id="label-on" checked title="지도의 지명·도로명을 모두 켜고 끕니다. 스타일마다 원래 상태를 따라 체크됩니다" />
               </div>
             </div>

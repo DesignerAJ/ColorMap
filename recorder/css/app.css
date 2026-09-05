@@ -718,6 +718,16 @@
     padding: 0;
     cursor: pointer;
   }
+  /* 위성사진 — 색 칸 셋(.mc-paint-row)이 빠지고 '지명 표시' 하나만 남는다.
+     혼자 남으면 space-between 이 왼쪽으로 밀어붙이므로 가운데로 모은다.
+     넷이 나눠 쓰던 자리를 혼자 쓰게 되니 두 줄로 접어 둘 이유도 없어 한 줄로 편다
+     (br 을 지우면 panel.html 에 넣어 둔 공백이 띄어쓰기로 살아난다). */
+  .map-color-section.photo-only .map-color-card {
+    justify-content: center;
+  }
+  .map-color-section.photo-only .label-display-row .label-toggle br {
+    display: none;
+  }
   /* 색 선택 입력 — 원형 스와치 (칩 안의 .sw 제외, 아래에서 따로 처리) */
   input[type="color"]:not(.sw) {
     -webkit-appearance: none;

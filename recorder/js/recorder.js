@@ -1337,9 +1337,16 @@ function initRecorder(map) {
   function syncMapColorPickers() {
     for (const k in _origTonePaint) delete _origTonePaint[k];   // 새 스타일이므로 톤 백업 초기화
     const styleKey = $('style-select').value;
-    // 위성은 사진이라 '색' 지정은 무의미 → 색 섹션만 숨김
+    /* 위성은 사진이라 '색' 지정은 무의미 → **색 칸만** 숨긴다.
+       예전엔 칸 전체(#map-color-section)를 숨겼는데, 그 안에 '지명 표시' 체크박스와
+       구분선이 같이 들어 있어서 위성사진을 고르면 둘 다 사라졌다. 지명 표시는 사진
+       위에서도 쓰는 값이다(오히려 위성에서 지명을 켜보는 일이 흔하다). */
     const isPhoto = (styleKey === 'satellite');
-    $('map-color-section').style.display = isPhoto ? 'none' : '';
+    const mcSection = $('map-color-section');
+    mcSection.querySelectorAll('.mc-paint-row')
+      .forEach(row => { row.style.display = isPhoto ? 'none' : ''; });
+    // 남은 '지명 표시' 한 줄을 가운데로 모으고 한 줄로 펴는 건 CSS 가 한다 (app.css 의 .photo-only)
+    mcSection.classList.toggle('photo-only', isPhoto);
     // 경계선은 '선'이라 위성 위에도 의미 있음 → 경계선 레이어가 실제로 있을 때만 표시 (없으면 숨김)
     const hasBd = ['country','disputed','admin'].some(k => bdExistingLayers(k).length > 0);
     $('boundary-section').style.display = hasBd ? '' : 'none';
