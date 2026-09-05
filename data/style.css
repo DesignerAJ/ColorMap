@@ -1144,6 +1144,57 @@ input[type="range"] {
 .map-pin.label-right .loc-label { left: 32px; text-align: left; }
 .map-pin.label-left .loc-label { right: 32px; text-align: right; }
 .map-pin .loc-label:empty { display: none; }
+
+/* 개별 핀 오른쪽 위의 ✕ — 지도에서 바로 지운다.
+   검색할 때마다 핀이 쌓이는데, 목록의 ✕ 는 '핀·경로 설정' 과 '개별 핀 표시' 를 둘 다
+   열어야 나온다. 지도만 보고 있으면 지울 방법이 화면에 없었다.
+
+   **결과물에는 안 찍힌다.** 녹화 전에 DOM 마커가 통째로 display:none 이 되고, 영상·PNG·PSD
+   의 핀은 canvas 에 구워지는 capture-pins 레이어에서 나온다(locLabelImageData). 편집 화면 전용이다.
+
+   .map-pin 이 마커 요소 자신이고 position 을 갖고 있어 그것을 기준으로 얹는다(.loc-label 과 같다).
+   UA 기본 button 스타일이 그대로 오므로 배경·테두리·글꼴을 전부 적어 준다.
+
+   **핀에 마우스를 올렸을 때만 보인다.** 핀을 여러 개 찍으면 ✕ 가 늘 떠 있는 쪽이 번잡하고,
+   이 화면은 결과물을 미리 보는 자리이기도 하다. 버튼은 .map-pin 의 자식이라 버튼 위로
+   커서를 옮겨도 .map-pin:hover 가 유지된다 — 핀과 버튼 사이에 끊기는 구간이 없다.
+   visibility 까지 끄는 것은 안 보이는 동안 클릭도 막기 위해서다. */
+.map-pin .pin-del {
+    position: absolute;
+    top: -7px;
+    right: -8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: 9px;
+    line-height: 1;
+    color: #fff;
+    background: rgba(18, 28, 48, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s, background 0.12s;
+}
+
+/* 키보드로 탭 이동해 왔을 때도 보여야 한다 — 안 그러면 안 보이는 버튼에 포커스가 간다. */
+.map-pin:hover .pin-del,
+.map-pin .pin-del:focus-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.map-pin .pin-del:hover,
+.map-pin .pin-del:focus-visible {
+    background: #d5384a;
+}
 #map.pins-ghost .map-pin:not(.loc-pin) { opacity: 0.35 !important; }
 #map.locpins-ghost .map-pin.loc-pin { opacity: 0.35 !important; }
 

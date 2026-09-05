@@ -2785,6 +2785,18 @@ function initRecorder(map) {
   }
   function refreshAllLocLabels() { eachPinMarker((el, ll, text) => setMarkerLabel(el, text)); updateLocLabelSides(); }
 
+  /* 개별 핀 하나를 지운다. 목록의 ✕ 와 지도 핀의 ✕ 가 **같은 함수를 부른다** —
+     지우는 일에 딸린 뒷정리(마커 제거·목록 재렌더·라벨 좌우 재계산)를 두 군데에 적어 두면
+     한쪽만 고쳐져 조용히 어긋난다. */
+  function removeLocPin(rec) {
+    const i = locPins.indexOf(rec);
+    if (i < 0) return;
+    if (rec.marker) rec.marker.remove();
+    locPins.splice(i, 1);
+    renderLocPins();
+    updateLocLabelSides();
+  }
+
   function addLocPin(lngLat) {
     const ll = (lngLat && lngLat.lng != null) ? [lngLat.lng, lngLat.lat] : [lngLat[0], lngLat[1]];
     const color = $('locpin-color').value || '#F17D38';
@@ -2792,6 +2804,30 @@ function initRecorder(map) {
     const m = new mapboxgl.Marker({ element: el, anchor:'bottom', draggable:true })
       .setLngLat(ll).addTo(map);
     const rec = { lngLat: ll, color, text: '', marker: m };
+
+    /* 핀 오른쪽 위의 ✕ — 지도에서 바로 지운다.
+       검색할 때마다 핀이 쌓이는데, 지우려면 '핀·경로 설정' 을 펴고 '개별 핀 표시' 까지
+       켜야 목록의 ✕ 가 나온다. 두 겹으로 접혀 있어서 지도만 보고 있으면 지울 방법이 없다.
+
+       **개별 핀에만 붙인다.** 출발·도착은 지우는 것이 아니라 옮기는 핀이고,
+       경유지는 자기 목록에서 관리한다.
+
+       **녹화·내보내기에는 안 나온다** — DOM 마커는 녹화 전에 통째로 display:none 이 되고,
+       영상·PNG·PSD 에 찍히는 핀은 캔버스에 구워지는 capture-pins 레이어다.
+       그래서 이 버튼은 편집 화면에만 있다.
+
+       mousedown 을 여기서 끊어야 한다 — 안 그러면 마커가 드래그로 알아듣고
+       ✕ 를 누르는 동안 핀이 따라 움직인다. */
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'pin-del';
+    del.textContent = '✕';
+    del.title = '이 핀 지우기';
+    del.setAttribute('aria-label', '이 핀 지우기');
+    del.addEventListener('mousedown', (ev) => { ev.stopPropagation(); ev.preventDefault(); });
+    del.addEventListener('click', (ev) => { ev.stopPropagation(); removeLocPin(rec); });
+    el.appendChild(del);
+
     m.on('dragend', () => { const p = m.getLngLat(); rec.lngLat = [p.lng, p.lat]; bounceEl(el); updateLocLabelSides(); renderLocPins(); });
     locPins.push(rec);
     ensureLocMoveHook();
@@ -2840,10 +2876,7 @@ function initRecorder(map) {
   $('locpin-list').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const i = +b.dataset.i;
-    if (b.classList.contains('wp-del')) {
-      const p = locPins[i]; if (p && p.marker) p.marker.remove();
-      locPins.splice(i, 1); renderLocPins(); updateLocLabelSides();
-    }
+    if (b.classList.contains('wp-del')) removeLocPin(locPins[i]);
   });
   $('locpin-add').addEventListener('click', () => addLocPin(map.getCenter()));
 
