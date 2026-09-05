@@ -1055,6 +1055,16 @@ input[type="range"] {
     background: rgba(47, 98, 175, 0.35);
 }
 
+/* 키보드(↑↓)로 짚고 있는 줄. :hover 와 명시도가 같으므로(둘 다 0,1,2,0)
+   **반드시 hover 뒤에 와야** 이긴다 — 앞에 두면 마우스가 목록 위에 있을 때 묻힌다.
+   hover 보다 진하게 하고 왼쪽에 띠를 둔다. 마우스를 움직이지 않은 채 키보드로만
+   옮기면 hover 줄과 짚은 줄이 잠깐 둘 다 밝아지는데, 그때 어느 쪽이 골라지는지가
+   보여야 하기 때문이다. */
+#geo-float .geo-item.active {
+    background: rgba(47, 98, 175, 0.62);
+    box-shadow: inset 3px 0 0 rgb(120, 170, 255);
+}
+
 #geo-float .geo-item .gi-ctx,
 #geo-float .geo-item.empty {
     margin-top: 2px;

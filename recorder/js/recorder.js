@@ -370,11 +370,15 @@ function initRecorder(map) {
   const cleanName = (n) => n.replace(/#[^#]*#/g, '').trim();
   const SUGGEST_MAX = 12;                          // datalist 후보 최대 개수
 
-  /* 한글 입력 중(조합 중)의 Enter 는 글자를 확정하는 키다. 이때 추가 처리를 하면 안 된다.
-     처리해버리면 입력창을 비운 직후 IME 가 조합 중이던 마지막 글자('도봉구' 의 '구')를
-     빈 칸에 써넣고, 그 값으로 change 가 한 번 더 돌아 엉뚱한 지역이 함께 칠해졌다.
-     ('구' 는 정식명 부분일치로 목록 첫 항목인 종로구를 집어냈다) */
-  const isComposingEnter = (e) => e.isComposing || e.keyCode === 229;
+  /* 한글 조합 중에 눌린 키인가. **조합을 끝내는 키는 그 일만 하고 끝나야 한다.**
+
+     Enter — 조합 중이면 글자를 확정하는 키다. 이때 추가 처리를 하면, 입력창을 비운 직후
+     IME 가 조합 중이던 마지막 글자('도봉구' 의 '구')를 빈 칸에 써넣고 그 값으로 change 가
+     한 번 더 돌아 엉뚱한 지역이 함께 칠해졌다 ('구' 가 목록 첫 항목인 종로구를 집어냈다).
+
+     방향키 — 검색 결과 목록에서 같은 일이 났다. 조합 중에 ↓ 를 누르면 브라우저가 조합을
+     확정하면서 keydown 을 **두 번** 흘려서, 첫 ↓ 인데 두 번째 줄로 뛰었다. */
+  const isComposingKey = (e) => e.isComposing || e.keyCode === 229;
 
   const fetchGeo = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
 
@@ -585,7 +589,7 @@ function initRecorder(map) {
        목록 선택이 값에 반영되면 change 가 먼저 돌아 이미 추가되는데, 그 경우
        입력창이 비워진 뒤라 아래 호출은 빈 값으로 그냥 빠져나간다. */
     input.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' || isComposingEnter(e)) return;   // 조합 중 Enter 는 글자 확정용
+      if (e.key !== 'Enter' || isComposingKey(e)) return;   // 조합 중 Enter 는 글자 확정용
       setTimeout(addFromInput, 0);
     });
     el('clear').addEventListener('click', reset);
@@ -869,10 +873,56 @@ function initRecorder(map) {
   /* ── 지역/주소 검색 (Mapbox Geocoding) ── */
   let _geoTimer = null, _geoSeq = 0;
   const geoInput = $('geo-input'), geoResults = $('geo-results');
-  function hideGeoResults() { geoResults.style.display = 'none'; geoResults.innerHTML = ''; }
+
+  /* ── 결과 목록 키보드 이동 ──
+     검색창에서 ↓ 를 누르면 목록으로 내려가고, ↑↓ 로 옮겨 Enter 로 고른다.
+     검색 → 이동까지 손을 마우스로 옮기지 않고 끝낼 수 있어야 한다.
+
+     고르는 동작(choose)을 줄마다 들고 있는다 — 결과 줄은 클릭으로도, Enter 로도
+     **똑같은 일**을 해야 하는데, 클릭 핸들러만 있으면 키보드 쪽에서 그 코드를 다시
+     쓸 수 없어 둘이 어긋나기 쉽다. */
+  let _geoItems = [];      // [{ el, choose }] — 지금 그려진 결과 줄
+  let _geoActive = -1;     // 키보드로 짚고 있는 줄 (-1 = 아직 없음)
+  let _geoMouse = null;    // 마지막으로 마우스가 '정말' 있던 자리 (아래 mousemove 참고)
+  let _geoLastQuery = '';  // 마지막으로 검색을 돌린 질의 (같은 질의로 다시 돌지 않게)
+
+  function resetGeoList() { geoResults.innerHTML = ''; _geoItems = []; _geoActive = -1; }
+  function hideGeoResults() { geoResults.style.display = 'none'; resetGeoList(); }
   function showGeoMessage(msg) {
-    geoResults.innerHTML = `<div class="geo-item empty">${msg}</div>`;
+    resetGeoList();
+    geoResults.innerHTML = `<div class="geo-item empty">${msg}</div>`;   // 고를 수 없는 줄이라 _geoItems 에 넣지 않는다
     geoResults.style.display = 'block';
+  }
+  function setGeoActive(i) {
+    _geoItems[_geoActive]?.el.classList.remove('active');
+    _geoActive = i;
+    const it = _geoItems[i];
+    if (!it) return;
+    it.el.classList.add('active');
+    // 목록이 260px 라 아래쪽 결과는 가려져 있다. jsdom 에는 이 메서드가 없어 옵셔널로 부른다.
+    it.el.scrollIntoView?.({ block: 'nearest' });
+  }
+  // 결과 줄 하나를 만들어 붙인다. choose 는 클릭과 Enter 가 같이 쓴다.
+  function addGeoItem(html, choose) {
+    const el = document.createElement('div');
+    el.className = 'geo-item';
+    el.innerHTML = html;
+    const i = _geoItems.length;
+    el.addEventListener('click', choose);
+    /* 마우스를 올리면 짚은 줄도 그리로 옮긴다. 안 그러면 :hover 로 밝아진 줄과
+       키보드가 짚은 줄이 동시에 두 개 밝아져 어느 것이 골라지는지 알 수 없다.
+
+       **정말 움직였을 때만 옮긴다.** 목록이 멈춰 있는 커서 아래에 새로 그려지면 브라우저가
+       좌표가 그대로인 mousemove 를 한 번 흘린다. 그걸 '마우스로 짚었다'로 받으면 첫 줄이
+       조용히 짚힌 상태가 되고, 키보드로 처음 ↓ 를 눌렀을 때 두 번째 줄로 뛴다. */
+    el.addEventListener('mousemove', (ev) => {
+      const moved = _geoMouse && (ev.clientX !== _geoMouse.x || ev.clientY !== _geoMouse.y);
+      _geoMouse = { x: ev.clientX, y: ev.clientY };
+      if (!moved) return;   // 좌표가 그대로(유령)이거나 이번 세션 첫 이벤트면 자리만 기억한다
+      if (_geoActive !== i) setGeoActive(i);
+    });
+    geoResults.appendChild(el);
+    _geoItems.push({ el, choose });
   }
   // "위도, 경도" 또는 "경도, 위도" 좌표 입력 파싱 (구분자: 쉼표/공백/슬래시). 순서 자동 판별.
   function parseCoords(q) {
@@ -888,15 +938,14 @@ function initRecorder(map) {
   }
   async function runGeocode(q) {
     const seq = ++_geoSeq;
+    _geoLastQuery = q;   // 조합 확정으로 같은 값의 input 이 또 와도 다시 돌지 않게
     // 좌표 입력이면 바로 그 지점으로 (Geocoding API 호출 없이)
     const c = parseCoords(q);
     if (c) {
-      geoResults.innerHTML = '';
-      const item = document.createElement('div');
-      item.className = 'geo-item';
-      item.innerHTML = `<div class="gi-name">📍 좌표 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</div><div class="gi-ctx">위도, 경도 · 클릭하면 이동</div>`;
-      item.addEventListener('click', () => { map.flyTo({ center: [c.lng, c.lat], zoom: 14, duration: 1200, essential: true }); pinSearchResult([c.lng, c.lat]); hideGeoResults(); });
-      geoResults.appendChild(item);
+      resetGeoList();
+      addGeoItem(
+        `<div class="gi-name">📍 좌표 ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</div><div class="gi-ctx">위도, 경도 · 클릭하거나 Enter</div>`,
+        () => { map.flyTo({ center: [c.lng, c.lat], zoom: 14, duration: 1200, essential: true }); pinSearchResult([c.lng, c.lat]); hideGeoResults(); });
       geoResults.style.display = 'block';
       return;
     }
@@ -908,25 +957,23 @@ function initRecorder(map) {
       if (places == null) { showGeoMessage('검색 실패'); return; }
       const list = places.filter(p => p.center);
       if (!list.length) { showGeoMessage('결과 없음'); return; }
-      geoResults.innerHTML = '';
+      resetGeoList();
       list.forEach(p => {
-        const item = document.createElement('div');
-        item.className = 'geo-item';
         // 출처를 같이 보여준다 — 같은 이름이 여러 곳에 있을 때 어느 DB 가 준 값인지가 판단에 도움이 된다
         const meta = [p.ctx, p.src].filter(Boolean).map(escAttr).join(' · ');
-        item.innerHTML = `<div class="gi-name">${escAttr(p.name)}</div>${meta ? `<div class="gi-ctx">${meta}</div>` : ''}`;
-        item.addEventListener('click', () => {
-          const [lng, lat] = p.center;
-          if (p.bbox && p.bbox.length === 4) {
-            map.fitBounds([[p.bbox[0], p.bbox[1]], [p.bbox[2], p.bbox[3]]], { padding: 60, duration: 1200, essential: true });
-          } else {
-            map.flyTo({ center: [lng, lat], zoom: p.poi ? 15 : 12, duration: 1200, essential: true });
-          }
-          pinSearchResult([lng, lat]);
-          geoInput.value = p.name;
-          hideGeoResults();
-        });
-        geoResults.appendChild(item);
+        addGeoItem(
+          `<div class="gi-name">${escAttr(p.name)}</div>${meta ? `<div class="gi-ctx">${meta}</div>` : ''}`,
+          () => {
+            const [lng, lat] = p.center;
+            if (p.bbox && p.bbox.length === 4) {
+              map.fitBounds([[p.bbox[0], p.bbox[1]], [p.bbox[2], p.bbox[3]]], { padding: 60, duration: 1200, essential: true });
+            } else {
+              map.flyTo({ center: [lng, lat], zoom: p.poi ? 15 : 12, duration: 1200, essential: true });
+            }
+            pinSearchResult([lng, lat]);
+            geoInput.value = p.name;
+            hideGeoResults();
+          });
       });
       geoResults.style.display = 'block';
     } catch (_) {
@@ -1015,11 +1062,13 @@ function initRecorder(map) {
      실측하면 서울·부산·강남구는 나오고 파리·런던·도쿄·베를린은 하나도 안 나온다.
      그래서 이게 '국내냐 해외냐'를 가르는 잣대가 된다. */
   const searchVWorldDistrict = async (q) => {
-    for (const category of ['L1', 'L2', 'L3']) {        // 시도 → 시군구 → 읍면동
-      const out = await vworldQuery(q, 'district', category);
-      if (out.length) return out;
-    }
-    return [];
+    /* 시도 → 시군구 → 읍면동을 **한꺼번에** 부른다. 예전엔 위에서부터 하나씩 부르다
+       결과가 나오면 멈췄는데, 읍면동 이름을 치면 그것만으로 왕복 3번을 썼다.
+       셋을 동시에 던지면 왕복 1번이고, 순서는 아래에서 큰 단위부터로 되돌린다
+       (같은 이름이면 시도가 읍면동보다 먼저 나와야 한다). */
+    const byLevel = await Promise.all(
+      ['L1', 'L2', 'L3'].map(c => vworldQuery(q, 'district', c).catch(() => [])));
+    return byLevel.flat();
   };
   const searchVWorldPlace = (q) => vworldQuery(q, 'place');
 
@@ -1092,45 +1141,116 @@ function initRecorder(map) {
     } catch (_) { return []; }
   }
 
-  /* 제공자를 순서대로 훑어 처음으로 결과가 나온 곳을 쓴다.
+  /* 제공자를 **동시에** 부르고, 돌아온 결과를 한데 모아 순서를 매긴다.
 
-     한글 검색이 까다롭다. 예전에는 VWorld 를 맨 앞에 두고 결과가 있으면 거기서 끝냈는데,
-     VWorld 는 **국내만** 아는 데다 상호명(POI)까지 준다. 그래서 '파리' 를 치면 프랑스 파리가
-     아니라 파리바게트 같은 국내 상호가 잔뜩 나오고, 뒤 제공자는 불리지도 않았다.
+     예전에는 순서대로 훑다가 결과가 하나라도 나오면 거기서 멈췄다. 두 가지가 같이 망가졌다.
 
-     그래서 국내인지 먼저 가른다. VWorld 의 **행정지명(district)** 에 걸리면 국내 지명이
-     확실하다 — 실측하면 서울·부산·강남구는 나오고 파리·런던·도쿄·베를린은 하나도 안 나온다.
-     그 뒤에야 해외를 보고, 국내 상호명은 **맨 뒤**로 미룬다.
+       **틀린 답이 이긴다.** '남대문시장'은 행정구역명이 아니라 1단계(VWorld 행정지명)가
+       0건이고, 2단계 Mapbox 가 도로명 '남대문시장4길'을 준다. 그게 '결과 있음'이라
+       정작 남대문시장을 아는 Google·VWorld 상호명은 불리지도 않았다.
 
-       한글:  행정지명(VWorld) → 해외(Mapbox → Google) → 국내 상호명(VWorld place)
-       그 외: Mapbox → Google
+       **느리다.** 앞 단계가 빌수록 왕복이 쌓인다 — 실측으로 서울 1번 123ms,
+       광장시장 6번 510ms, 경복궁 6번 620ms. 순서를 기다리는 값이다.
 
-     국내 상호명을 맨 뒤에 둬도 '서울시청'·'남대문시장' 은 그대로 나온다 — 그 앞 단계가
-     전부 0건이기 때문이다(Mapbox 는 한국 POI 가 사실상 비어 있다. 실측으로 확인했다).
-     반대로 '도쿄' 는 Mapbox 가 0건이라 Google 이 받아 '도쿄도'를 준다.
-     Google 은 유료 구간이 있으므로 앞 단계가 비었을 때만 불린다. */
+     둘의 원인이 같으므로 고치는 방법도 하나다. 전부 한꺼번에 던지고(왕복 1번),
+     **이름이 정확히 맞는 것만** 위로 올린다. 나머지는 예전처럼 제공자 순서를 따른다.
+
+       0순위  이름이 그대로 일치     남대문시장 == 남대문시장
+       1순위  나머지 — 제공자 순서   행정지명 → Mapbox → Google → 국내 상호명
+
+     **'질의로 시작' 같은 중간 순위를 두면 안 된다.** 한 번 넣었다가 '파리'가 깨졌다 —
+     Mapbox 는 한글 질의에도 로마자 `Paris` 를 돌려주므로 '파리'와 글자가 하나도 안 겹친다.
+     그래서 `파리바게뜨 역삼점`(질의로 시작)이 `Paris`(안 겹침)를 이겨 버렸다.
+     **표기가 다른 언어끼리는 글자로 잴 수 없다.** 정확히 일치는 그 자체로 확실한 근거지만,
+     부분 일치는 근거가 못 된다 — 그 자리는 제공자의 판단이 더 낫다.
+
+     제공자 순서가 예전의 '국내냐 해외냐' 판정을 그대로 이어받는다. 한글 질의는
+     행정지명이 맨 앞이라 '강남'이 강남구로 가고, 국내 상호명이 맨 뒤라 '파리'가
+     파리바게뜨로 가지 않는다. 정확히 일치가 하나도 없을 때 이 순서가 그대로 남는다.
+
+     **Google 이 매번 불린다.** 예전엔 앞 단계가 빌 때만 불렀다(월 5,000건 무료,
+     초과 시 1,000건당 약 $32). 동시 호출이라 그 절약은 없어졌다 — 검색 1회 = Google 1건.
+     되돌리려면 아래 chain 에서 google 을 빼고, 결과가 부실할 때만 부르면 된다. */
+  const normName = (s) => (s || '').toLowerCase().replace(/\s+/g, '');
+
+  function rankPlaces(q, results) {
+    const nq = normName(q);
+    // 정확히 일치(0)냐 아니냐(1)만 본다. 그 안에서는 넣은 순서 = 제공자 순서를 지킨다.
+    const exact = (p) => (nq && normName(p.name) === nq ? 0 : 1);
+    const scored = results.map((p, i) => ({ p, t: exact(p), i }));
+    scored.sort((a, b) => (a.t - b.t) || (a.i - b.i));
+
+    /* 같은 곳을 여러 제공자가 주면 한 줄만 남긴다 — 이름이 같고 2km 안쪽이면 같은 곳으로 본다.
+       (geoDist 는 도(度) 단위다. 0.02도 ≈ 2km) 정렬 뒤에 거르므로 더 위 순위가 살아남는다. */
+    const kept = [];
+    for (const { p } of scored) {
+      const n = normName(p.name);
+      if (kept.some(k => normName(k.name) === n && geoDist(k.center, p.center) < 0.02)) continue;
+      kept.push(p);
+      if (kept.length >= 12) break;   // 목록이 길어지면 고르기 어렵다
+    }
+    return kept;
+  }
+
   async function fetchPlaces(q, token) {
     const chain = hasKo(q)
       ? [searchVWorldDistrict, (s) => searchMapbox(s, token), searchGoogle, searchVWorldPlace]
       : [(s) => searchMapbox(s, token), searchGoogle];
-    let failed = 0;
-    for (const provider of chain) {
-      try {
-        const out = await provider(q);
-        if (out && out.length) return out;
-      } catch (_) { failed++; }
-    }
-    return failed === chain.length ? null : [];   // 전부 예외면 '검색 실패', 아니면 '결과 없음'
+    /* 하나가 죽어도 나머지는 살린다. 전부 예외일 때만 '검색 실패'로 알린다 —
+       0건('결과 없음')과 구별해야 사용자가 오타를 의심할지 네트워크를 의심할지 안다. */
+    const settled = await Promise.all(chain.map(fn =>
+      Promise.resolve().then(() => fn(q)).then(
+        out => ({ ok: true, out: Array.isArray(out) ? out : [] }),
+        () => ({ ok: false, out: [] }))));
+    if (settled.every(r => !r.ok)) return null;
+    return rankPlaces(q, settled.flatMap(r => r.out).filter(p => p && p.center));
   }
   geoInput.addEventListener('input', () => {
     const q = geoInput.value.trim();
     clearTimeout(_geoTimer);
-    if (q.length < 2) { hideGeoResults(); return; }
+    if (q.length < 2) { hideGeoResults(); _geoLastQuery = ''; return; }
+    /* **한글 조합이 끝날 때 input 이 한 번 더 온다.** 방향키나 Enter 로 마지막 글자를
+       확정하면 compositionend 와 함께 input 이 흐르는데, 그때 값은 이미 그대로다.
+       그 값으로 검색을 다시 돌리면 목록이 새로 그려지면서 **키보드로 짚어둔 줄이 사라진다** —
+       ↓ 로 골라 놓고 가만히 있으면 300ms 뒤에 강조가 저절로 풀리던 것이 이것이다.
+       질의가 그대로이고 목록도 그대로 떠 있으면 다시 돌리지 않는다. */
+    if (q === _geoLastQuery && _geoItems.length) return;
     _geoTimer = setTimeout(() => runGeocode(q), 300);   // 디바운스
   });
   geoInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); clearTimeout(_geoTimer); const q = geoInput.value.trim(); if (q.length >= 1) runGeocode(q); }
-    else if (e.key === 'Escape') hideGeoResults();
+    const open = geoResults.style.display !== 'none' && _geoItems.length > 0;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      /* 조합 중 방향키는 글자를 확정하는 키다 — 확정만 하고 줄은 안 옮긴다.
+         가로채지 않으면 브라우저가 확정과 이동으로 keydown 을 두 번 흘려 한 번에 두 줄 뛴다. */
+      if (isComposingKey(e)) return;
+      /* 목록이 없으면 그대로 둔다 — 입력창 안에서 캐럿이 처음·끝으로 가는 기본 동작이다.
+         목록이 있으면 가로챈다. 안 그러면 줄을 짚으면서 캐럿까지 같이 움직인다. */
+      if (!open) return;
+      e.preventDefault();
+      const n = _geoItems.length;
+      const d = e.key === 'ArrowDown' ? 1 : -1;
+      // 아직 아무것도 안 짚었으면 ↓ 는 첫 줄, ↑ 는 마지막 줄로 (끝에서 반대편으로 돈다)
+      const from = _geoActive < 0 ? (d > 0 ? -1 : 0) : _geoActive;
+      setGeoActive((from + d + n) % n);
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      /* 한글 조합 중 Enter 는 글자 확정용이라 여기서 가로채면 안 된다 —
+         '서울'을 치다 말고 검색이 돈다. 방향키를 누르면 조합이 끝나므로,
+         목록에서 골라 Enter 를 누르는 흐름과는 부딪히지 않는다. */
+      if (isComposingKey(e)) return;
+      e.preventDefault();
+      if (open && _geoActive >= 0) { _geoItems[_geoActive].choose(); return; }
+      clearTimeout(_geoTimer);
+      const q = geoInput.value.trim();
+      if (q.length >= 1) runGeocode(q);
+      return;
+    }
+
+    if (e.key === 'Escape') hideGeoResults();
+    else if (e.key === 'Tab') hideGeoResults();   // 포커스가 떠나면 목록만 남아 떠 있지 않게
   });
   $('geo-clear').addEventListener('click', () => { geoInput.value = ''; hideGeoResults(); geoInput.focus(); });
   // 바깥 클릭 시 결과 닫기

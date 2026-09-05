@@ -149,3 +149,76 @@ test('buildMeta 가 중복 약칭을 dup 으로 표시한다', () => {
     assert.ok(same > 1, `${d.n} 이 dup 인데 실제로는 하나뿐이다`);
   }
 });
+
+/* ── 검색 결과 순위 (rankPlaces) ──
+
+   제공자를 동시에 부르게 되면서, 어느 답을 위로 올릴지가 검색 품질을 그대로 결정한다.
+   예전에는 순서대로 부르다 처음 결과가 나온 곳에서 멈췄고, 그래서 '남대문시장' 을 치면
+   Mapbox 가 준 도로명 '남대문시장4길' 이 이겨 정작 남대문시장은 나오지도 않았다. */
+const P = extract('recorder/js/recorder.js', ['normName', 'geoDist', 'rankPlaces']);
+const place = (name, center = [127, 37.5], src = 'X') => ({ name, center, src });
+
+test('이름이 정확히 맞는 결과가 부분 일치보다 위로 온다', () => {
+  // 실제로 났던 사고: 도로명이 먼저 나와 시장을 덮었다
+  const out = P.rankPlaces('남대문시장', [
+    place('남대문시장4길', [126.9754, 37.5589], 'Mapbox'),
+    place('남대문시장', [126.9779, 37.5594], 'Google'),
+  ]);
+  assert.equal(out[0].name, '남대문시장');
+});
+
+test('표기가 다른 해외 지명이 국내 상호명에 밀리지 않는다', () => {
+  /* **이 검사가 순위 규칙의 핵심이다.** '파리' 를 치면 파리바게뜨가 아니라 프랑스 파리가
+     나와야 하는데, Mapbox 는 한글 질의에도 로마자 'Paris' 를 준다 — 질의와 글자가 하나도
+     안 겹친다. 그래서 '질의로 시작하면 위로' 같은 중간 순위를 두면 '파리바게뜨' 가 'Paris'
+     를 이겨 버린다. 표기가 다른 언어끼리는 글자로 잴 수 없으므로, 정확히 일치가 없을 때는
+     제공자 순서(행정지명 → Mapbox → Google → 국내 상호명)에 맡긴다. */
+  const out = P.rankPlaces('파리', [
+    place('Paris', [2.3522, 48.8566], 'Mapbox'),
+    place('파리바게뜨 역삼점', [127.0361, 37.5006], 'VWorld'),
+    place('파리크라상 광화문점', [126.9769, 37.5714], 'VWorld'),
+  ]);
+  assert.equal(out[0].name, 'Paris', `첫 결과가 '${out[0].name}' — 해외 도시가 먼저 나와야 한다`);
+});
+
+test('정확히 일치가 없으면 제공자 순서를 지킨다', () => {
+  // 넣은 순서가 곧 제공자 순서다 (한글 질의: 행정지명 → Mapbox → Google → 상호명)
+  const out = P.rankPlaces('강남', [
+    place('강남구', [127.0473, 37.5172], 'VWorld'),
+    place('강남역', [127.0276, 37.4979], 'Google'),
+  ]);
+  assert.equal(out[0].name, '강남구');
+});
+
+test('정확히 일치는 뒤 제공자에 있어도 앞으로 끌어올린다', () => {
+  /* 이게 없으면 남대문시장 사고가 그대로다 — 앞 제공자(Mapbox)의 도로명이 뒤 제공자의
+     정답을 계속 덮는다. '정확히 일치' 만이 제공자 순서를 뒤집을 수 있는 근거다. */
+  const out = P.rankPlaces('광장시장', [
+    place('광장시장길', [126.999, 37.5701], 'Mapbox'),
+    place('광장시장', [126.9998, 37.5701], 'VWorld'),
+  ]);
+  assert.equal(out[0].name, '광장시장');
+});
+
+test('여러 제공자가 준 같은 곳은 한 줄만 남는다', () => {
+  const out = P.rankPlaces('경복궁', [
+    place('경복궁', [126.977, 37.5796], 'Mapbox'),
+    place('경복궁', [126.9770, 37.5797], 'Google'),   // 같은 곳, 좌표만 미세하게 다름
+    place('경복궁', [126.977, 37.5796], 'VWorld'),
+  ]);
+  assert.equal(out.length, 1);
+});
+
+test('이름이 같아도 멀리 떨어져 있으면 둘 다 남는다', () => {
+  // 동명이지(同名異地)를 합쳐버리면 사용자가 고를 방법이 없어진다
+  const out = P.rankPlaces('중앙동', [
+    place('중앙동', [129.0356, 35.1013], 'VWorld'),   // 부산
+    place('중앙동', [126.9195, 37.4563], 'VWorld'),   // 안양
+  ]);
+  assert.equal(out.length, 2);
+});
+
+test('목록이 12줄을 넘지 않는다', () => {
+  const many = Array.from({ length: 30 }, (_, i) => place(`곳${i}`, [127 + i, 37]));
+  assert.ok(P.rankPlaces('곳', many).length <= 12);
+});
