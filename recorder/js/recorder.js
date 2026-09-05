@@ -1903,6 +1903,10 @@ function initRecorder(map) {
     });
   }
   let _lastRouteCoords = [], _lastRouteArrow = true;
+  /* 미리보기로 그린 경로의 **자르기 전** 좌표. trimArcEnd 는 화면 픽셀 기준이라 줌이 바뀌면
+     결과도 달라져야 하는데, 잘린 좌표만 들고 있으면 다시 계산할 원본이 없다(잘린 것을 또
+     자르면 선이 조금씩 먹힌다). 그래서 원본을 따로 남긴다. 아크·직선일 때만 채운다. */
+  let _routeUntrimmed = null;
   let _routeDotStep = 0;                 // 점선용 점 간격 (지리거리, 고정) — 전체 경로 설정 시 1회 계산
   const _EMPTY_FC = { type:'FeatureCollection', features: [] };
   const _EMPTY_LINE = { type:'Feature', geometry:{ type:'LineString', coordinates: [] } };
@@ -2081,16 +2085,23 @@ function initRecorder(map) {
     addRouteLayer(); applyRouteStyle();
     const shape = $('route-shape').value;
     if (shape === 'arc' || shape === 'line') {
-      const coords = trimArcEnd(shape === 'arc' ? arcPathCoords() : linePathCoords());
+      _routeUntrimmed = shape === 'arc' ? arcPathCoords() : linePathCoords();
+      const coords = trimArcEnd(_routeUntrimmed);
       if (coords.length >= 2) { setRouteFull(coords); setStatus(`${shape === 'arc' ? '아크' : '직선'} 경로 준비됨 ✓`, 'done'); }
       else { setStatus('출발·도착을 먼저 지정하세요.', ''); }
     } else {
       try {
         setStatus('도로 경로 가져오는 중…', 'busy');
         await fetchRoadRoute();
+        _routeUntrimmed = null;   // 도로 경로는 자르지 않는다 (실제 길을 따라가므로 끝을 당길 이유가 없다)
         if (roadCoords) { setRouteFull(roadCoords); setStatus('도로 경로 준비됨 ✓', 'done'); }
         else { setStatus('출발·도착을 먼저 지정하세요.', ''); }
-      } catch (err) { roadCoords = null; setStatus('경로 오류: ' + err.message + ' (아크로 표시)', ''); setRouteFull(trimArcEnd(arcPathCoords())); }
+      } catch (err) {
+        roadCoords = null;
+        setStatus('경로 오류: ' + err.message + ' (아크로 표시)', '');
+        _routeUntrimmed = arcPathCoords();
+        setRouteFull(trimArcEnd(_routeUntrimmed));
+      }
     }
   }
 
@@ -2098,16 +2109,37 @@ function initRecorder(map) {
   $('route-on').addEventListener('change', (e) => {
     $('route-opts').style.display = e.target.checked ? 'block' : 'none';
     if (e.target.checked) previewRoute();
-    else { setRouteData([]); roadCoords = null; }
+    else { setRouteData([]); roadCoords = null; _routeUntrimmed = null; }
   });
   $('route-shape').addEventListener('change', () => { roadCoords = null; previewRoute(); });
   $('route-dash').addEventListener('change', applyRouteStyle);
   $('route-color').addEventListener('input', applyRouteStyle);
   $('route-width').addEventListener('input', () => { $('route-w-val').textContent = $('route-width').value; applyRouteStyle(); });
   map.on('style.load', () => { if ($('route-on').checked) { addRouteLayer(); applyRouteStyle(); previewRoute(); } });
-  // 줌 변경 시 점선 점 간격을 화면 기준으로 다시 맞춤 (녹화 중 제외 — 녹화는 셋업 시점 간격으로 안정 유지)
+  /* 줌이 바뀌면 미리보기 선을 화면 기준으로 다시 맞춘다 (녹화 중 제외 —
+     녹화는 셋업 시점 값으로 고정해야 프레임마다 흔들리지 않는다).
+
+     두 가지가 화면 픽셀 기준이라 줌에 따라 다시 계산해야 한다:
+       · 끝단 — trimArcEnd 가 도착핀 앞에서 잘라내는 양(10~26px)
+       · 점 간격 — 점선일 때 점 사이가 ~8px 이 되도록 정한 지리거리
+
+     예전에는 점선일 때만 다시 그렸다. 그래서 줌을 당기면 잘린 끝이 지리좌표로 굳어 있어
+     도착핀과의 간격이 줌아웃에서는 벌어지고 줌인에서는 핀에 파고들었다.
+     **자를 때는 반드시 원본(_routeUntrimmed)에서 다시 자른다** — 이미 잘린 선을 또 자르면
+     줌을 만질 때마다 선이 조금씩 짧아진다.
+
+     줌 이벤트는 한 프레임에 여러 번 오므로 rAF 로 한 번만 처리한다. */
+  let _routeZoomRaf = 0;
   map.on('zoom', () => {
-    if (!busy && $('route-on').checked && $('route-dash').value === 'dash' && _lastRouteCoords.length) setRouteFull(_lastRouteCoords);
+    if (busy || !$('route-on').checked) return;
+    if (!_routeUntrimmed && !($('route-dash').value === 'dash' && _lastRouteCoords.length)) return;
+    if (_routeZoomRaf) return;
+    _routeZoomRaf = requestAnimationFrame(() => {
+      _routeZoomRaf = 0;
+      if (busy || !$('route-on').checked) return;
+      if (_routeUntrimmed && _routeUntrimmed.length >= 2) setRouteFull(trimArcEnd(_routeUntrimmed));
+      else if ($('route-dash').value === 'dash' && _lastRouteCoords.length) setRouteFull(_lastRouteCoords);
+    });
   });
 
   /* ── 직접 선 그리기 (수동 폴리라인, 카메라 경로와 무관) ── */
