@@ -1533,6 +1533,41 @@ function initRecorder(map) {
 
      `korea-admin1-lines.json` 은 우리 폴리곤에서 **맞닿은 변만** 뽑은 것이다(1MB, 전송 0.3MB).
      폴리곤 외곽선을 통째로 그리면 해안선까지 행정구역선이 되어 나라 둘레에 테두리가 생긴다. */
+  /* ── 스타일의 행정구역선에서 '우리가 직접 그리는 나라'를 빼는 장치 ──
+
+     우리 선을 얹기만 하면 같은 자리에 선이 두 겹이 된다. 두 데이터가 어긋나는 곳에서
+     선이 갈라졌다 합쳐지고, 점선으로 바꾸면 점선 두 줄로 보인다(국경선에서 겪었다).
+
+     **우리 선이 준비되기 전에는 절대 가리지 않는다** — 가려놓고 못 그리면(파일 404·
+     네트워크 실패) 행정구역선이 통째로 사라진다. 그래서 파일이 도착한 나라만 집합에
+     넣고, 넣을 때마다 필터를 다시 건다.
+
+     덧씌운 필터 위에 또 덧씌우면 안 되므로 **스타일 원본 필터를 따로 기억해** 매번
+     원본에서 다시 만든다. 스타일이 바뀌면 레이어가 원본 필터로 새로 생기니 기억을 비운다. */
+  const OUR_ADMIN1_ISO = new Set();     // 우리 선이 준비된 나라 (ISO2 — Mapbox 의 iso_3166_1 과 같은 표기)
+  const _origAdminFilter = new Map();   // 레이어 id → 스타일 원본 필터
+
+  function hideMapboxAdmin1() {
+    if (!styleReady || !OUR_ADMIN1_ISO.size) return;
+    const iso = [...OUR_ADMIN1_ISO];
+    for (const l of map.getStyle().layers || []) {
+      if (l['source-layer'] !== 'admin') continue;
+      try {
+        if (!_origAdminFilter.has(l.id)) _origAdminFilter.set(l.id, map.getFilter(l.id) ?? null);
+        const orig = _origAdminFilter.get(l.id);
+        if (!orig) continue;   // 필터가 없는 레이어는 건드리지 않는다
+        map.setFilter(l.id, ['all', orig,
+          ['any',
+            ['!=', ['get', 'admin_level'], 1],
+            // iso_3166_1 이 없는 피처는 어느 나라도 아니므로 남는다 (sentinel 은 목록에 없는 값)
+            ['!', ['in', ['coalesce', ['get', 'iso_3166_1'], '__none'], ['literal', iso]]]],
+        ]);
+      } catch (_) {}
+    }
+  }
+  // 스타일이 바뀌면 레이어가 원본 필터로 다시 생긴다. 아래 style.load 들보다 먼저 걸어 둔다.
+  map.on('style.load', () => _origAdminFilter.clear());
+
   const KA_LAYER = 'korea-admin1-lines';
   let KA_GEO = null;
 
@@ -1544,27 +1579,10 @@ function initRecorder(map) {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 1 },
     });
-    hideMapboxKoreanAdmin1();
+    OUR_ADMIN1_ISO.add('KR').add('KP');
+    hideMapboxAdmin1();
     applyBoundary('admin');     // 행정구역선 컨트롤(색·투명도·두께·점선)을 그대로 받는다
     raiseBoundaries();
-  }
-
-  /* 스타일의 행정구역선에서 남·북한 구간만 뺀다. 우리 선이 준비되기 전에는 가리지 않는다 —
-     가려놓고 못 그리면 행정구역선이 통째로 사라진다. */
-  function hideMapboxKoreanAdmin1() {
-    if (!KA_GEO || !styleReady) return;
-    for (const l of map.getStyle().layers || []) {
-      if (l['source-layer'] !== 'admin') continue;
-      try {
-        const f = map.getFilter(l.id);
-        if (!f || JSON.stringify(f).includes('__kr-admin1')) continue;   // 이미 처리한 레이어
-        map.setFilter(l.id, ['all', f,
-          ['any',
-            ['!=', ['get', 'admin_level'], 1],
-            ['!', ['in', ['coalesce', ['get', 'iso_3166_1'], '__kr-admin1'], ['literal', ['KR', 'KP']]]]],
-        ]);
-      } catch (_) {}
-    }
   }
 
   fetch(dataURL('./recorder/js/data/korea-admin1-lines.json'))
@@ -1573,6 +1591,53 @@ function initRecorder(map) {
     .catch(() => {});   // 못 받으면 스타일의 행정구역선이 그대로 쓰인다
 
   map.on('style.load', addKoreaAdmin1Lines);
+
+  /* ── 영국 행정구역선도 우리 데이터로 ──
+
+     Mapbox 의 1급 행정구역은 영국을 **넷**(잉글랜드·스코틀랜드·웨일스·북아일랜드)으로만
+     나눈다. 그런데 우리 `admin1/GBR.json` 에는 카운티·단일자치체·런던 자치구까지 232개가
+     들어 있어서, 영국을 색칠하면 232개로 칠해지는데 선은 4개만 그어져 있었다.
+
+     `admin1-lines/GBR.json` 은 그 232개 폴리곤에서 **맞닿은 변만** 뽑은 것이다
+     (220줄 · 0.14MB, 전송 0.04MB). 남·북한과 같은 방법이다 —
+     만드는 도구는 `recorder/tools/build-admin1-lines.mjs`.
+
+     **나라를 늘리려면** 도구를 그 ISO3 로 한 번 돌리고 아래 목록에 한 줄 넣으면 된다.
+     다만 이웃 폴리곤이 꼭짓점을 공유하는 출처여야 한다(도구가 공유율로 막는다). */
+  const ADMIN1_LINE_COUNTRIES = [{ iso3: 'GBR', iso2: 'GB' }];
+  const admin1LineLayer = (iso3) => `admin1-lines-${iso3}`;
+  const ADMIN1_LINE_GEO = new Map();   // ISO3 → GeoJSON (받아온 것만)
+
+  function addAdmin1LineLayers() {
+    if (!styleReady) return;
+    let added = false;
+    for (const { iso3, iso2 } of ADMIN1_LINE_COUNTRIES) {
+      const geo = ADMIN1_LINE_GEO.get(iso3);
+      const id = admin1LineLayer(iso3);
+      if (!geo || map.getLayer(id)) continue;
+      if (!map.getSource(id)) map.addSource(id, { type: 'geojson', tolerance: GEO_TOLERANCE, data: geo });
+      map.addLayer({
+        id, type: 'line', source: id,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': 1, 'line-opacity': 1 },
+      });
+      OUR_ADMIN1_ISO.add(iso2);
+      added = true;
+    }
+    if (!added) return;
+    hideMapboxAdmin1();
+    applyBoundary('admin');
+    raiseBoundaries();
+  }
+
+  ADMIN1_LINE_COUNTRIES.forEach(({ iso3 }) => {
+    fetch(dataURL(`./recorder/js/data/admin1-lines/${iso3}.json`))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((geo) => { if (!geo) return; ADMIN1_LINE_GEO.set(iso3, geo); addAdmin1LineLayers(); })
+      .catch(() => {});   // 못 받으면 스타일의 행정구역선(4개)이 그대로 쓰인다
+  });
+
+  map.on('style.load', addAdmin1LineLayers);
 
   /* ── 경계선 (국경선 / 분쟁지역 / 행정구역선) ── */
 
@@ -1617,7 +1682,11 @@ function initRecorder(map) {
   }
 
   // 우리가 직접 그리는 경계선 — 소스가 geojson 이라 필터로는 안 잡힌다
-  const OUR_BOUNDARY_LAYERS = { country: [KR_BORDER_LAYER], disputed: [], admin: [KA_LAYER] };
+  const OUR_BOUNDARY_LAYERS = {
+    country: [KR_BORDER_LAYER],
+    disputed: [],
+    admin: [KA_LAYER, ...ADMIN1_LINE_COUNTRIES.map(c => admin1LineLayer(c.iso3))],
+  };
 
   function boundaryKindOf(l) {
     if (l.type !== 'line' || !BOUNDARY_SOURCE_LAYERS.has(l['source-layer'])) return null;
@@ -1633,8 +1702,8 @@ function initRecorder(map) {
        그래서 '표시' 체크를 끌 때도 visibility 가 아니라 불투명도로 끈다(아래). */
     if ((l.layout || {}).visibility === 'none') return null;
     if (l['source-layer'] === 'country_boundaries') return 'country';
-    /* 스타일 원본이 아니라 **지금 걸린** 필터를 읽는다. hideMapboxKoreanAdmin1 이
-       남·북한을 빼려고 필터를 덧씌우는데, 덧씌운 절은 admin_level 을 0 으로 고정하지도
+    /* 스타일 원본이 아니라 **지금 걸린** 필터를 읽는다. hideMapboxAdmin1 이
+       우리가 직접 그리는 나라를 빼려고 필터를 덧씌우는데, 덧씌운 절은 admin_level 을 0 으로 고정하지도
        disputed 를 true 로 고정하지도 않으므로 판정은 그대로다. */
     let f = l.filter;
     try { f = map.getFilter(l.id) ?? l.filter; } catch (_) {}

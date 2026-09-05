@@ -433,6 +433,58 @@ test('행정구역선에 해안선이 섞이지 않았다', () => {
   assert.ok(near > 30, `제주에서 ${near.toFixed(1)}km 떨어진 곳에 행정구역선이 있다 — 해안선이 섞였다`);
 });
 
+/* ── 나라별 행정구역선 (admin1-lines/) ──
+   Mapbox 의 1급 행정구역 정의가 우리 데이터와 다른 나라를 우리 폴리곤에서 다시 뽑은 것.
+   영국은 Mapbox 가 넷(잉글랜드·스코틀랜드·웨일스·북아일랜드)으로만 나누는데 우리는 232개다.
+   만드는 도구는 recorder/tools/build-admin1-lines.mjs. */
+
+const ADMIN1_LINE_ISO = [{ iso3: 'GBR', iso2: 'GB', minPts: 3000, coast: { name: '실리 제도', at: [-6.2967, 49.92455], km: 30 } }];
+
+for (const { iso3, iso2, minPts } of ADMIN1_LINE_ISO) {
+  test(`${iso3} 행정구역선이 있고 ISO2 표기가 맞다`, () => {
+    const lines = readJSON(`recorder/js/data/admin1-lines/${iso3}.json`);
+    const pts = lines.features.reduce((s, f) => s + f.geometry.coordinates.length, 0);
+    assert.ok(pts > minPts, `${iso3} 행정구역선이 ${pts}점뿐 — 뽑기가 실패했다`);
+    /* Mapbox admin 소스의 iso_3166_1 과 맞아야 화면에서 그 나라 선만 골라 뺄 수 있다.
+       ISO3 앞 두 글자를 그대로 쓰면 엉뚱한 나라가 된다(AUT→AU 는 호주). */
+    for (const f of lines.features) {
+      assert.equal(f.properties.iso, iso2, `${iso3} 선의 iso 가 ${f.properties.iso} — ISO2 여야 한다`);
+    }
+  });
+
+  test(`${iso3} 행정구역선 꼭짓점이 색칠 꼭짓점과 같다`, () => {
+    /* 선과 색칠이 같은 출처여야 어느 줌에서도 붙는다 — 남·북한과 같은 기준이다. */
+    const lines = readJSON(`recorder/js/data/admin1-lines/${iso3}.json`);
+    const geo = readJSON(`recorder/js/data/admin1/${iso3}.json`);
+    const r5 = (v) => Number(v.toFixed(5));
+    const pts = new Set();
+    for (const f of geo.features) for (const poly of ringsOf(f.geometry)) for (const r of poly)
+      for (const p of r) pts.add(r5(p[0]) + ',' + r5(p[1]));
+
+    let missing = 0, total = 0;
+    for (const f of lines.features) for (const p of f.geometry.coordinates) {
+      total++;
+      if (!pts.has(p[0] + ',' + p[1])) missing++;
+    }
+    assert.equal(missing, 0, `${iso3} 행정구역선 ${missing}/${total} 점이 색칠에 없는 좌표다`);
+  });
+}
+
+test('GBR 행정구역선에 해안선이 섞이지 않았다', () => {
+  /* 폴리곤 외곽선을 통째로 그리면 해안선까지 행정구역선이 되어 나라 둘레에 테두리가 생긴다.
+     맞닿은 변(두 번 나오는 변)만 골라야 한다. 실리 제도는 본토에서 45km 떨어진 섬이라
+     맞닿은 이웃이 없다 — 그 해안이 선에 들어 있으면 외곽선을 그리고 있다는 뜻이다. */
+  const lines = readJSON('recorder/js/data/admin1-lines/GBR.json');
+  const KM = (dx, dy, lat) => Math.hypot(dx * 111 * Math.cos(lat * Math.PI / 180), dy * 111);
+  const SCILLY = [-6.2967, 49.92455];
+  let near = Infinity;
+  for (const f of lines.features) for (const p of f.geometry.coordinates) {
+    const d = KM(p[0] - SCILLY[0], p[1] - SCILLY[1], p[1]);
+    if (d < near) near = d;
+  }
+  assert.ok(near > 30, `실리 제도에서 ${near.toFixed(1)}km 떨어진 곳에 행정구역선이 있다 — 해안선이 섞였다`);
+});
+
 test('국가 폴리곤과 행정구역 폴리곤에 핀치가 없다', () => {
   /* 한 링이 같은 점을 두 번 지나면 mapbox-gl 의 삼각분할이 그 점을 가로질러 이어,
      화면에 얇고 긴 삼각형이 뻗는다 — 충남 해안에서 실제로 그렇게 보였다.
