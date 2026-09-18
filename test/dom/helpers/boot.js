@@ -184,11 +184,13 @@ export function boot({
     accessToken: 'pk.test', maxParallelImageRequests: 16,
     /* 지도에 얹힌 핀이 정말 걷혔는지 봐야 해서 살아 있는 마커를 센다 —
        값만 초기화하고 마커를 안 지우면 화면에 핀이 그대로 남는다. */
+    /* element 옵션을 그대로 들고 있는다. 예전에는 getElement() 가 부를 때마다 **새 div** 를
+       돌려줘서, 핀 요소에 무엇이 붙었는지(라벨 · 지우기 ✕)를 테스트에서 볼 수 없었다. */
     Marker: class {
-      constructor() { markers.add(this); }
+      constructor(opt) { this.el = (opt && opt.element) || window.document.createElement('div'); markers.add(this); }
       setLngLat() { return this; } addTo() { return this; } on() {}
       remove() { markers.delete(this); }
-      getElement() { return window.document.createElement('div'); }
+      getElement() { return this.el; }
       getLngLat() { return { lng: 0, lat: 0 }; }
     },
   };

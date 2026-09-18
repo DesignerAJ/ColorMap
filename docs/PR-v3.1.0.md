@@ -2,7 +2,7 @@
 
 `main`의 이전 릴리스 `v3.0.0` 이후 커밋 61개, 파일 266개입니다.
 
-축은 요청서([`colormap-recorder-requests.md`](./colormap-recorder-requests.md)) 10개 항목입니다.
+축은 요청서(`colormap-recorder-requests.md` — 반영이 끝나 지웠습니다. 이력에 남아 있습니다) 10개 항목입니다.
 팀장님이 [`TO_GUHNZ_20260817.md`](./TO_GUHNZ_20260817.md)에 주신 지적사항, 팀원 피드백,
 자체 확인 버그를 한 문서로 취합한 것이라 이 순서로 정리했습니다.
 아래 표의 '출처' 에 **TO_GUHNZ** 라고 적힌 넷이 팀장님 지적사항이고, 나머지는 팀원 피드백과 자체 확인분입니다.

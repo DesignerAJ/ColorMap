@@ -456,6 +456,52 @@ test('되돌리기: 지도에 얹힌 핀도 걷는다', async () => {
   assert.equal(e.$('locpin-list').innerHTML, '', '위치 핀 목록이 남았다');
 });
 
+/* ── 개별 핀의 지우기 ✕ ──
+   검색할 때마다 핀이 쌓이는데, 목록의 ✕ 는 '핀·경로 설정' 과 '개별 핀 표시' 를 둘 다
+   열어야 나온다. 지도만 보고 있으면 지울 방법이 화면에 없었다. */
+const pinEls = (e) => [...e.markers].map((m) => m.getElement());
+const delBtns = (e) => pinEls(e).map((el) => el.querySelector('.pin-del')).filter(Boolean);
+
+test('개별 핀에만 지우기 ✕ 가 붙는다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  click(e, 'set-start');
+  click(e, 'set-end');
+  click(e, 'add-waypoint');
+  assert.equal(delBtns(e).length, 0,
+    '출발·도착·경유지에 ✕ 가 붙었다 — 출발·도착은 옮기는 핀이고 경유지는 자기 목록이 있다');
+
+  click(e, 'locpin-add');
+  assert.equal(delBtns(e).length, 1, '개별 핀에 ✕ 가 안 붙었다');
+});
+
+test('핀의 ✕ 를 누르면 지도와 목록에서 같이 사라진다', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+
+  click(e, 'locpin-add');
+  click(e, 'locpin-add');
+  assert.equal(e.markers.size, 2);
+  assert.equal(e.doc.querySelectorAll('#locpin-list .wp-row').length, 2);
+
+  delBtns(e)[0].dispatchEvent(new e.window.Event('click', { bubbles: true }));
+  await e.tick();
+  assert.equal(e.markers.size, 1, '지도에서 핀이 안 걷혔다');
+  assert.equal(e.doc.querySelectorAll('#locpin-list .wp-row').length, 1,
+    '목록이 안 줄었다 — 지우는 뒷정리가 목록 ✕ 쪽에만 적혀 있다');
+});
+
+test('핀의 ✕ 는 mousedown 을 삼킨다 (누르는 동안 핀이 끌려가지 않게)', async () => {
+  const e = boot();
+  await e.tick(); e.styleLoad(); await e.tick();
+  click(e, 'locpin-add');
+
+  const ev = new e.window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+  delBtns(e)[0].dispatchEvent(ev);
+  assert.ok(ev.defaultPrevented, '기본 동작을 안 막으면 마커가 드래그로 알아듣는다');
+});
+
 test('되돌리기: 색칠과 녹화 설정은 건드리지 않는다', async () => {
   /* 다른 칸이다. 색칠은 탭을 바꿔도 남기기로 한 것이라 여기서 지우면 안 된다. */
   const e = boot();
